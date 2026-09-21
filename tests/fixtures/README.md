@@ -1,0 +1,93 @@
+# Synthetic test fixtures
+
+Hand-authored ODB++ v8.1 jobs. They exist because `cases/` is real-world data
+that happens to miss the corners this parser must get right: there is no sample
+in `cases/` with a negative-polarity layer, a `T`/`B` record, a nested
+user-defined symbol, a resize factor, or a broken layer profile.
+
+Everything here is written by us, is tiny, and is deliberately *legal* ODB++
+except where a fixture is documenting a failure mode.
+
+## Byte stability
+
+`tests/fixtures/** -text -diff` in `.gitattributes` keeps git from normalising
+these files. That matters for two reasons: several fixtures exist to pin
+behaviour around line endings and BOMs, and a fixture that git silently rewrote
+would let a CRLF-tolerance test pass by accident.
+
+## The fixtures
+
+### `fx_negative_layer/` — polarity and matrix authority
+
+MM, one step `BOARD`, six matrix layers plus one unregistered directory.
+
+| Teaches | Where |
+|---|---|
+| Layer-level `POLARITY=NEGATIVE` | matrix `GND` layer |
+| Record-level `N` inside a positive layer | `f.cu` pad |
+| Matrix is authoritative, orphans are ignored | `layers/tenting_front/` (present on disk, absent from the matrix) |
+| Case-insensitive entity lookup | matrix `BOARD`/`F.CU` vs directories `board`/`f.cu` |
+| Layer profile beats step profile (constraint 3) | `layers/dielectric_1/profile` (9x9) vs `steps/board/profile` (20x10) |
+| Step profile is the fallback | every layer without its own profile |
+| Drill sizes use the size semantic, plating comes from the tool | `drill_1_2/tools` (300 µm PLATED, 1000 µm NON_PLATED) |
+
+### `fx_bad_layer_profile/` — constraint 3 failure mode
+
+Identical in shape to the above, except `layers/dielectric_1/profile` declares a
+surface that contains **no polygon**. A parser that fell back to the step profile
+would silently produce a dielectric 20x10 mm larger than it is, so the required
+behaviour is a hard error:
+
+```
+step.base_geometry(layer)  ->  LayerProfileError
+job.diagnostics            ->  layer_profile.invalid (error)
+```
+
+### `fx_nested_symbol/` — user-defined symbols and resize
+
+MM, one step. `symbols/` holds a three-deep chain
+`outer` -> `middle` -> `inner`, where only the innermost defines real geometry.
+
+| Teaches | Where |
+|---|---|
+| Recursive expansion, dependencies first | `expand_order("outer") == [inner, middle, outer]` |
+| Custom symbols appear in `$` lines like standard ones | `f.cu` `$0 outer` |
+| Resize form `-1 <sym> <factor>` | `P 12 5 -1 0 40 ...` |
+| A custom symbol may nest a *standard* symbol | `middle` uses `r100` |
+| Quoted attribute values | `f.cu` `;0=0` against `@0 .net_name` |
+
+### `fx_symbol_cycle/` — cycle detection
+
+`symbols/alpha` references `beta` and `beta` references `alpha`. Spec p.37
+forbids this; a parser must detect it instead of recursing until the stack
+overflows. Expected result: a `symbol.cycle` **error** diagnostic (so the CLI
+exits non-zero), and `SymbolCycleError` from an explicit `expand_order`.
+
+### `fx_text_barcode/` — `T` and `B` records
+
+INCH, one step. Six records on `F.SILKSCREEN`.
+
+| Teaches | Where |
+|---|---|
+| Legacy orientation codes | `orient_def` `0` and `1` |
+| Arbitrary-angle orientation | `8 30.0` and `9 45.0` (the `9` also mirrors) |
+| Text payload is not a comment | `'ROT#30;SEMI'` contains `#` and `;` |
+| Text sizes are in layer units | `xsize`/`ysize` convert via `coord_mm` |
+| `width_factor` is always 12-mil units | `1.00000` -> 0.3048 mm |
+| Both polarities | the `NEG90` record |
+| Barcode flags, including the second-string variant | the two `B` records, `astr_pos` `T` and `B` |
+| `;ID=` on a record with no attributes | `B ... 'BC67890';ID=77` |
+
+`fonts/standard` is a minimal stub: the parser records the font name and does not
+expand glyphs, so the stub only has to be present.
+
+## Adding a fixture
+
+1. Keep it minimal — a fixture that needs a paragraph to explain itself is
+   usually two fixtures.
+2. Give it a `misc/info` with an explicit `UNITS`; unit ambiguity is not what
+   most fixtures are testing.
+3. Mention it in the table above and in the module docstring of whichever test
+   uses it.
+4. Do not add a fixture to `cases/` for this purpose; `cases/` is reserved for
+   real boards (see `cases/README.md`).

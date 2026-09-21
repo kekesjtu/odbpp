@@ -1,0 +1,10 @@
+UNITS=MM
+F 1
+S P 0
+OB 0 0 I
+OS 0 10
+OS 10 10
+OS 10 0
+OS 0 0
+OE
+SE

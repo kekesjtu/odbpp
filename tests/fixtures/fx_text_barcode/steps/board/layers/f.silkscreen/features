@@ -1,0 +1,15 @@
+UNITS=INCH
+ID=500
+#
+#Num Features
+#
+F 6
+#
+#Layer features
+#
+T 0.1 0.1 standard P 0 0.05 0.05 1.00000 'REF1' 0
+T 0.1 0.3 standard P 8 30.0 0.05 0.05 2.00000 'ROT#30;SEMI' 0
+T 0.1 0.5 standard P 9 45.0 0.05 0.05 1.00000 'MIRROR45' 1
+T 0.1 0.7 standard N 1 0.05 0.05 1.00000 'NEG90' 0
+B 0.1 0.9 UPC39 standard P 0 E 0.008 0.2 Y N Y Y T 'BC12345'
+B 0.1 1.2 UPC39 standard N 1 E 0.008 0.2 Y Y N N B 'BC67890';ID=77

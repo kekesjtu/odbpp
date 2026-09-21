@@ -1,0 +1,24 @@
+UNITS=MM
+ID=102
+#
+#Num Features
+#
+F 2
+#
+#Feature symbol names
+#
+$0 r300.0
+$1 r1000.0
+#
+#Feature attribute names
+#
+@0 .drill
+#
+#Feature attribute text strings
+#
+&0 VIA
+#
+#Layer features
+#
+P 5 5 0 P 1 0
+P 15 5 1 P 2 0

@@ -1,0 +1,17 @@
+UNITS=MM
+ID=303
+#
+#Num Features
+#
+F 3
+#
+#Feature symbol names
+#
+$0 middle
+$1 r200
+#
+#Layer features
+#
+P 0 0 -1 0 25 P 0 0
+P 3 0 1 P 0 0
+P -3 0 -1 0 0.5 P 0 0

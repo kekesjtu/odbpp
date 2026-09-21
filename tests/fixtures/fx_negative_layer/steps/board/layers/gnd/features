@@ -1,0 +1,16 @@
+UNITS=MM
+ID=101
+#
+#Num Features
+#
+F 2
+#
+#Feature symbol names
+#
+$0 r2000
+$1 rect3000x1500
+#
+#Layer features
+#
+P 5 5 0 P 0 0
+P 15 5 1 P 0 0

@@ -1,0 +1,26 @@
+UNITS=MM
+ID=400
+#
+#Num Features
+#
+F 4
+#
+#Feature symbol names
+#
+$0 outer
+$1 r150
+#
+#Feature attribute names
+#
+@0 .net_name
+#
+#Feature attribute text strings
+#
+&0 GND
+#
+#Layer features
+#
+P 5 5 0 P 0 0;0=0
+P 12 5 -1 0 40 P 0 0
+P 18 5 -1 1 40 P 0 0
+P 24 5 1 P 0 8 30.0
