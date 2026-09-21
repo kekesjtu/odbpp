@@ -14,6 +14,8 @@ Release 8.1 Update 4, Siemens, 2024-07-16）为**唯一权威依据**。
 
 ## 复现调研结论的工具
 
+当前项目审阅与四例完整导出的结果见 [06-project-review-2026-09-21.md](06-project-review-2026-09-21.md)，包含七项已确认问题、复现方法与验证范围。
+
 ```bash
 # 把 515 页 PDF 转成可 grep 的带页码文本（输出到 build/，不入库）
 python tools/extract_spec_text.py
