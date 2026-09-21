@@ -27,4 +27,7 @@ cases/**/*.md text eol=lf diff
 # Generated / third-party content that should not inflate diffs.
 *.svg  -diff
 *.png  -diff
+# Synthetic test fixtures: authored with LF and byte-stable. git must not
+# normalise them, otherwise a CRLF-tolerance test could pass by accident.
+tests/fixtures/** -text -diff
 docs/Flotherm_reference_MaterialMap.csv filter=lfs diff=lfs merge=lfs -text
