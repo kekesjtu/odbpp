@@ -143,3 +143,20 @@ LAYER_PROFILE_INVALID = "layer_profile.invalid"
 # tools
 TOOLS_NO_UNITS = "tools.no_units"
 TOOLS_DUPLICATE_NUM = "tools.duplicate_num"
+
+# geometry expansion (research 05 §12: sweeps, polarity, missing symbols)
+GEOMETRY_SYMBOL_UNDEFINED = "geometry.symbol_undefined"
+GEOMETRY_SYMBOL_UNSUPPORTED = "geometry.symbol_unsupported"
+GEOMETRY_SWEEP_ASYMMETRIC = "geometry.sweep_asymmetric"
+GEOMETRY_ARC_DEGENERATE = "geometry.arc_degenerate"
+GEOMETRY_EMPTY_RESULT = "geometry.empty_result"
+GEOMETRY_RESIZE_UNVERIFIED = "geometry.resize_unverified"
+GEOMETRY_SYMBOL_RECURSION = "geometry.symbol_recursion"
+GEOMETRY_ZERO_WIDTH_STROKE = "geometry.zero_width_stroke"
+
+# export
+EXPORT_NO_GEOMETRY = "export.no_geometry"
+EXPORT_LAYER_SELECTION_EMPTY = "export.layer_selection_empty"
+EXPORT_LAYER_FAILED = "export.layer_failed"
+EXPORT_LAYER_SKIPPED = "export.layer_skipped"
+EXPORT_UNKNOWN_LAYER = "export.unknown_layer"
