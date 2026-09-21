@@ -33,9 +33,13 @@ Two further traps, handled explicitly rather than with a generic helper:
 ``copper weight``
     The *physical quantity* changes with the directive (p.24): micrometres of
     thickness when metric, ounces per square foot (an areal density) when
-    imperial.  These are not interconvertible by a constant, so
-    :func:`copper_weight` refuses to produce a millimetre value for imperial
-    input.
+    imperial.  An areal density is not a length, so :func:`copper_weight` keeps
+    both meanings on :class:`CopperWeight` and states which one it holds.  For
+    the imperial form it additionally derives a millimetre thickness from an
+    assumed copper density (:data:`DEFAULT_COPPER_DENSITY_G_CM3`), because the
+    stack's absolute Z needs a copper thickness and the format does not carry
+    one.  That conversion is an assumption, so the density used is part of the
+    result rather than a constant buried in the arithmetic.
 """
 
 from __future__ import annotations
@@ -55,6 +59,8 @@ __all__ = [
     "MM_PER_INCH",
     "MM_PER_MIL",
     "WIDTH_FACTOR_MIL",
+    "DEFAULT_COPPER_DENSITY_G_CM3",
+    "OUNCE_PER_SQ_FT_TO_G_PER_CM2",
 ]
 
 MM_PER_INCH = 25.4
@@ -62,6 +68,17 @@ MM_PER_MIL = MM_PER_INCH / 1000.0  # 0.0254
 
 #: ``width_factor`` is expressed in multiples of 12 mil (spec p.174).
 WIDTH_FACTOR_MIL = 12.0
+
+#: Density of electrodeposited copper in g/cm^3, used only to turn an imperial
+#: ``.copper_weight`` (an areal density in oz/ft^2) into a thickness.  The
+#: format stores neither the density nor the foil construction, so this is a
+#: documented default -- 1 oz/ft^2 becomes ~34.1 um, which is the figure the
+#: industry quotes for 1 oz copper.
+DEFAULT_COPPER_DENSITY_G_CM3 = 8.96
+
+#: 1 oz/ft^2 expressed as a mass per area.  1 oz = 28.349523125 g and
+#: 1 ft^2 = 929.0304 cm^2.
+OUNCE_PER_SQ_FT_TO_G_PER_CM2 = 28.349523125 / 929.0304
 
 
 class UnitSystem(str, Enum):
@@ -210,19 +227,34 @@ class CopperWeight:
     """A copper weight/copper thickness value with its physical meaning pinned.
 
     The JSON intermediate format must carry this distinction, because a consumer
-    cannot tell 1 oz/ft^2 from 1 um by looking at the number alone.
+    cannot tell 1 oz/ft^2 from 1 um by looking at the number alone.  For the
+    imperial form a thickness is also offered, derived from
+    :attr:`density_g_cm3`; it is an assumption and the field names say so.
     """
 
     raw: float
     kind: CopperWeightKind
     system: UnitSystem
+    #: Density assumed when translating an areal density into a thickness.
+    density_g_cm3: float = DEFAULT_COPPER_DENSITY_G_CM3
 
     @property
-    def thickness_mm(self) -> Optional[float]:
-        """Thickness in millimetres, or ``None`` when the value is a density."""
+    def thickness_mm(self) -> float:
+        """Thickness in millimetres.
+
+        Metric values are already a thickness (micrometres).  Imperial values
+        are an areal density, so the thickness is ``density / copper density``
+        -- 1 oz/ft^2 is about 0.0341 mm at 8.96 g/cm^3.
+        """
         if self.kind is CopperWeightKind.THICKNESS_UM:
             return self.raw * 0.001
-        return None
+        return (self.raw * OUNCE_PER_SQ_FT_TO_G_PER_CM2
+                / self.density_g_cm3 * 10.0)
+
+    @property
+    def is_thickness_derived(self) -> bool:
+        """True when :attr:`thickness_mm` came from an assumed density."""
+        return self.kind is CopperWeightKind.AREAL_DENSITY_OZ_FT2
 
     @property
     def ounces_per_square_foot(self) -> Optional[float]:
@@ -236,22 +268,31 @@ class CopperWeight:
             "value": self.raw,
             "kind": self.kind.value,
             "unit": "um" if self.kind is CopperWeightKind.THICKNESS_UM else "oz/ft2",
+            "thickness_mm": self.thickness_mm,
         }
-        if self.thickness_mm is not None:
-            out["thickness_mm"] = self.thickness_mm
+        if self.kind is CopperWeightKind.AREAL_DENSITY_OZ_FT2:
+            # Spelled out rather than implied: the density is not in the file,
+            # so a consumer auditing the number has to see which one was used.
+            out["thickness_source"] = "assumed_density"
+            out["assumed_density_g_cm3"] = self.density_g_cm3
         return out
 
 
-def copper_weight(value: float, system: UnitSystem) -> CopperWeight:
+def copper_weight(value: float, system: UnitSystem,
+                  density_g_cm3: float = DEFAULT_COPPER_DENSITY_G_CM3) -> CopperWeight:
     """Interpret a copper weight field according to the active unit system.
 
     Spec p.24: "In metric units, copper weight is actually copper thickness."
-    There is intentionally no conversion helper between the two kinds: they are
-    different physical quantities (thickness vs. areal density) and converting
-    requires knowing the copper density *and* the foil construction.
+    The two kinds are still kept apart -- :attr:`CopperWeight.kind` and
+    :attr:`CopperWeight.unit` say which quantity the authored number is -- but
+    an imperial density now also yields a thickness through *density_g_cm3*,
+    which the caller may override.  The default is not a measurement: it is the
+    standard density of copper, and the result records that it was assumed.
     """
     kind = (CopperWeightKind.THICKNESS_UM if system is UnitSystem.MM
             else CopperWeightKind.AREAL_DENSITY_OZ_FT2)
     if float(value) < 0.0:
         raise ValueError(f"copper weight cannot be negative: {value!r}")
-    return CopperWeight(float(value), kind, system)
+    if float(density_g_cm3) <= 0.0:
+        raise ValueError(f"copper density must be positive: {density_g_cm3!r}")
+    return CopperWeight(float(value), kind, system, float(density_g_cm3))

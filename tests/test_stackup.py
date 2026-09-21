@@ -201,15 +201,16 @@ class TestThickness:
 
 
 class TestCopperWeight:
-    def test_imperial_weight_stays_an_areal_density(self):
+    def test_imperial_weight_is_a_density_with_a_derived_thickness(self):
         step = stacked_step(units=UnitSystem.INCH)
         copper = step.layer("SIGNAL_1")
         copper.attributes[".copper_weight"] = "0.875563"
         copper.attribute_scope = UnitScope.imperial()
         weight = Stackup(step).weight(copper)
         assert weight.ounces_per_square_foot == pytest.approx(0.875563)
-        assert weight.thickness_mm is None
         assert weight.as_dict()["unit"] == "oz/ft2"
+        assert weight.thickness_mm == pytest.approx(0.029819, abs=1e-6)
+        assert weight.as_dict()["thickness_source"] == "assumed_density"
 
     def test_metric_weight_is_a_thickness_in_micrometres(self):
         step = stacked_step()
@@ -222,3 +223,81 @@ class TestCopperWeight:
     def test_absent_weight_is_none(self):
         step = stacked_step()
         assert Stackup(step).weight(step.layer("SIGNAL_1")) is None
+
+
+class TestAbsoluteZ:
+    """Millimetre Z for every board layer, from the thicknesses above it."""
+
+    def _sized_step(self, *, units=UnitSystem.MM) -> Step:
+        step = stacked_step(units=units)
+        step.layer("SIGNAL_1").attributes[".copper_weight"] = "35"
+        step.layer("DIELECTRIC_A").attributes[".layer_dielectric"] = "1.5"
+        step.layer("SIGNAL_2").attributes[".copper_weight"] = "35"
+        step.layer("DIELECTRIC_B").attributes[".layer_dielectric"] = "1.5"
+        step.layer("SIGNAL_3").attributes[".copper_weight"] = "35"
+        return step
+
+    def test_z_accumulates_down_from_the_top(self):
+        step = self._sized_step()
+        stackup = Stackup(step)
+        assert stackup.z_extent(step.layer("SIGNAL_1")).as_dict() == {
+            "start_mm": 0.0, "end_mm": pytest.approx(0.035),
+            "thickness_mm": pytest.approx(0.035),
+            "thickness_known": True, "source": ".copper_weight",
+        }
+        dialectric = stackup.z_extent(step.layer("DIELECTRIC_A"))
+        assert dialectric.start_mm == pytest.approx(0.035)
+        assert dialectric.end_mm == pytest.approx(1.535)
+        assert stackup.z_extent(step.layer("SIGNAL_3")).end_mm == \
+            pytest.approx(3.105)
+
+    def test_a_drill_spans_the_planes_it_connects(self):
+        step = self._sized_step()
+        stackup = Stackup(step)
+        # D_1_2 starts at the top of SIGNAL_1 and ends at the bottom of SIGNAL_2.
+        extent = stackup.z_extent(step.layer("D_1_2"))
+        assert extent.start_mm == pytest.approx(0.0)
+        assert extent.end_mm == pytest.approx(1.57)
+        assert extent.thickness_known is True
+        assert "drill span" in extent.source
+
+    def test_an_unstated_structural_thickness_marks_the_stack_uncertain(self):
+        step = self._sized_step()
+        del step.layer("DIELECTRIC_A").attributes[".layer_dielectric"]
+        stackup = Stackup(step)
+        # Above the gap every position is measured; from the unknown dielectric
+        # down, the extent is only a best estimate.
+        assert stackup.z_extent(step.layer("SIGNAL_1")).thickness_known is True
+        assert stackup.z_extent(step.layer("DIELECTRIC_A")).thickness_known is False
+        assert stackup.z_extent(step.layer("SIGNAL_2")).thickness_known is False
+
+    def test_a_decorative_layer_does_not_take_the_stack_down_with_it(self):
+        # Silkscreen and solder paste are printed on the board, not part of its
+        # laminate; their absent thickness must not invalidate the copper Z.
+        step = self._sized_step()
+        step.layers.insert(0, layer("F.SILK", LayerType.SILK_SCREEN, 0))
+        step.layers.insert(1, layer("F.PASTE", LayerType.SOLDER_PASTE, 0))
+        stackup = Stackup(step)
+        assert stackup.z_extent(step.layer("F.SILK")).thickness_known is True
+        assert stackup.z_extent(step.layer("SIGNAL_1")).thickness_known is True
+        assert stackup.z_extent(step.layer("SIGNAL_1")).start_mm == pytest.approx(0.0)
+
+    def test_a_document_layer_has_no_z(self):
+        step = self._sized_step()
+        step.layers.append(layer("DOC", LayerType.DOCUMENT, 99,
+                                 context=LayerContext.MISC))
+        assert Stackup(step).z_extent(step.layer("DOC")) is None
+
+    def test_an_imperial_copper_weight_becomes_a_thickness(self):
+        step = self._sized_step(units=UnitSystem.INCH)
+        copper = step.layer("SIGNAL_1")
+        copper.attributes[".copper_weight"] = "1"
+        copper.attribute_scope = UnitScope.imperial()
+        extent = Stackup(step).z_extent(copper)
+        assert extent.end_mm == pytest.approx(0.034058, abs=1e-6)
+        assert extent.source == ".copper_weight"
+
+    def test_z_is_cached_and_stable(self):
+        step = self._sized_step()
+        stackup = Stackup(step)
+        assert stackup.z_table() is stackup.z_table()

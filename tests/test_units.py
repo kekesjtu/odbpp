@@ -119,16 +119,37 @@ class TestCopperWeight:
         weight = copper_weight(1.0, UnitSystem.INCH)
         assert weight.kind is CopperWeightKind.AREAL_DENSITY_OZ_FT2
         assert weight.ounces_per_square_foot == 1.0
-        assert weight.thickness_mm is None
+        assert weight.as_dict()["unit"] == "oz/ft2"
+        # The authored number is still an areal density, but a thickness is
+        # derived through the copper density so the absolute Z walk has a
+        # length to accumulate.  1 oz/ft^2 at 8.96 g/cm^3 is ~34.06 um.
+        assert weight.thickness_mm == pytest.approx(0.034058, abs=1e-6)
+        assert weight.is_thickness_derived is True
+        payload = weight.as_dict()
+        assert payload["thickness_source"] == "assumed_density"
+        assert payload["assumed_density_g_cm3"] == pytest.approx(8.96)
 
-    def test_the_two_are_not_interconvertible(self):
-        # There is deliberately no conversion: oz/ft^2 -> thickness needs the
-        # density of the deposited copper, which the format does not carry.
+    def test_the_imperial_thickness_follows_the_assumed_density(self):
+        # The density is an assumption, not a constant of the format, so the
+        # caller can override it and the result says which one was used.
+        doubled = copper_weight(1.0, UnitSystem.INCH, density_g_cm3=17.92)
+        standard = copper_weight(1.0, UnitSystem.INCH)
+        assert doubled.thickness_mm == pytest.approx(standard.thickness_mm / 2)
+        assert doubled.as_dict()["assumed_density_g_cm3"] == pytest.approx(17.92)
+        with pytest.raises(ValueError):
+            copper_weight(1.0, UnitSystem.INCH, density_g_cm3=0.0)
+
+    def test_the_two_kinds_are_kept_apart(self):
+        # Both expose a thickness, but the *authored* quantity is different: a
+        # metric value already is a thickness in microns while an imperial one
+        # is a density.  A consumer that only reads thickness_mm would miss that.
         metric = copper_weight(35.0, UnitSystem.MM)
         imperial = copper_weight(1.0, UnitSystem.INCH)
         assert metric.kind is not imperial.kind
         assert metric.as_dict()["unit"] == "um"
         assert imperial.as_dict()["unit"] == "oz/ft2"
+        assert metric.is_thickness_derived is False
+        assert imperial.is_thickness_derived is True
         with pytest.raises(TypeError):
             float(metric)  # type: ignore[arg-type]
 

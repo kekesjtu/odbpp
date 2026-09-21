@@ -63,7 +63,7 @@ from .export import (
     step_to_json,
 )
 from .job import LoadOptions, load_job
-from .stackup import Stackup, ZSpan
+from .stackup import Stackup, ZExtent, ZSpan
 from .model import (
     Job,
     Layer,
@@ -76,6 +76,7 @@ from .model import (
 from .symbols import SymbolLibrary, is_standard_symbol, parse_standard_symbol
 from .svg import SvgOptions, render_html, render_svg, write_outputs
 from .units import UnitScope, UnitSystem, copper_weight
+from .units import DEFAULT_COPPER_DENSITY_G_CM3
 
 __version__ = "0.1.0"
 
@@ -97,6 +98,7 @@ __all__ = [
     "UnitScope",
     "UnitSystem",
     "copper_weight",
+    "DEFAULT_COPPER_DENSITY_G_CM3",
     # symbols
     "SymbolLibrary",
     "is_standard_symbol",
@@ -119,6 +121,7 @@ __all__ = [
     # stackup (layer order, dielectric/drill Z spans, thicknesses)
     "Stackup",
     "ZSpan",
+    "ZExtent",
     # rendering (stage 3)
     "SvgOptions",
     "render_svg",

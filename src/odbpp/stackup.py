@@ -28,6 +28,15 @@ whole board" from a missing field would silently punch 9 unnecessary holes in a
 Thickness comes from ``.layer_dielectric``, interpreted with the unit scope of
 the file that declared it.  That scope is the part the old export dropped: the
 value ``0.00255906`` is 65 um in an ``INCH`` attrlist and 2.6 nm in an ``MM`` one.
+
+**Absolute Z.**  Copper-plane indices order the stack but do not give it a
+length.  :meth:`Stackup.z_extent` adds millimetres on top of that ordering by
+walking the board layers top-down and accumulating each layer's thickness:
+``.copper_weight`` for copper (an areal density in an imperial job, converted
+with an assumed copper density), ``.layer_dielectric`` for dielectric and
+solder mask.  A structural layer whose thickness the format does not state
+marks every Z below it ``thickness_known=False``, so the reader can tell a
+measured stack from a partially assumed one.
 """
 
 from __future__ import annotations
@@ -45,7 +54,7 @@ from .diagnostics import (
 from .model import Layer, LayerContext, LayerType, Step
 from .units import CopperWeight, UnitScope, copper_weight
 
-__all__ = ["ZSpan", "Thickness", "Stackup"]
+__all__ = ["ZSpan", "ZExtent", "Thickness", "Stackup"]
 
 
 @dataclass(frozen=True)
@@ -69,6 +78,39 @@ class ZSpan:
 
     def as_dict(self) -> list[int]:
         return [self.start, self.end]
+
+
+@dataclass(frozen=True)
+class ZExtent:
+    """A layer's extent on the board's Z axis, in millimetres.
+
+    ``Z`` grows *downward* from the top of the stack (the top of the first board
+    layer in matrix order), which is the convention CAM tools use and the
+    opposite of the model's Y axis.  The origin is the top surface, so a copper
+    layer's ``start_mm`` is where its copper begins, not where its centre is.
+
+    ``thickness_known`` is false when the value rests on a layer above (or the
+    layer itself) whose thickness the format does not state; the position is
+    then a best estimate rather than a measurement, and saying so is the point.
+    """
+
+    start_mm: float
+    end_mm: float
+    thickness_known: bool
+    source: str
+
+    @property
+    def thickness_mm(self) -> float:
+        return self.end_mm - self.start_mm
+
+    def as_dict(self) -> dict:
+        return {
+            "start_mm": self.start_mm,
+            "end_mm": self.end_mm,
+            "thickness_mm": self.thickness_mm,
+            "thickness_known": self.thickness_known,
+            "source": self.source,
+        }
 
 
 @dataclass(frozen=True)
@@ -128,6 +170,8 @@ class Stackup:
             l.name.casefold(): index for index, l in enumerate(self.board_layers)
         }
         self._warned: set[str] = set()
+        #: Lazily built absolute-Z table, keyed by layer name.
+        self._z_table: Optional[dict[str, ZExtent]] = None
 
     # ------------------------------------------------------------ primitives
 
@@ -317,7 +361,12 @@ class Stackup:
         )
 
     def weight(self, layer: Layer) -> Optional[CopperWeight]:
-        """Interpreted ``.copper_weight``; ``None`` when absent or unusable."""
+        """Interpreted ``.copper_weight``; ``None`` when absent or unusable.
+
+        An imperial value stays an areal density (:meth:`CopperWeight.kind`) but
+        now also carries a thickness derived with an assumed copper density, so
+        the absolute Z walk has a number to use.
+        """
         raw = layer.attributes.get(".copper_weight")
         if raw is None or str(raw).strip() == "":
             return None
@@ -333,6 +382,111 @@ class Stackup:
                 layer.dir_name or None,
             )
             return None
+
+    # ------------------------------------------------------------- absolute Z
+
+    def _material_thickness(self, layer: Layer) -> tuple[float, bool, str]:
+        """Best available thickness for *layer*: ``(mm, stated, source)``.
+
+        Copper prefers ``.copper_weight`` (its own physical quantity) and falls
+        back to ``.layer_dielectric`` when a CAM tool wrote one; the non-copper
+        materials use ``.layer_dielectric``.  *stated* says whether the format
+        actually carried the number, which is what decides whether the stack
+        position is a measurement or an assumption.
+        """
+        if layer.is_copper:
+            weight = self.weight(layer)
+            if weight is not None:
+                return weight.thickness_mm, True, ".copper_weight"
+            thickness = self.thickness(layer)
+            if thickness is not None:
+                return thickness.thickness_mm, True, thickness.source
+            return 0.0, False, "unknown"
+
+        if layer.type is not None and layer.type.is_non_copper_material:
+            thickness = self.thickness(layer)
+            if thickness is not None:
+                return thickness.thickness_mm, True, thickness.source
+            return 0.0, False, "unknown"
+
+        return 0.0, False, "not_a_material"
+
+    @staticmethod
+    def _is_structural(layer: Layer) -> bool:
+        """True for layers that physically separate or carry copper.
+
+        Only these can make the stack's absolute Z uncertain.  Solder paste,
+        silkscreen, stiffeners, component outlines and documentation are printed
+        on or added to the board rather than part of its laminate, so a missing
+        thickness on one of them leaves the copper plane positions intact
+        instead of invalidating the whole stack.
+        """
+        if layer.is_copper:
+            return True
+        return layer.type in (LayerType.DIELECTRIC, LayerType.SOLDER_MASK)
+
+    def _build_z_table(self) -> dict[str, ZExtent]:
+        out: dict[str, ZExtent] = {}
+        plane_top: dict[int, float] = {}
+        plane_bottom: dict[int, float] = {}
+        z = 0.0
+        known = True
+
+        # Drills are holes, not slabs: they take their Z from the copper planes
+        # they connect, so they are skipped in the cumulative walk.
+        for layer in self.board_layers:
+            if layer.type is LayerType.DRILL:
+                continue
+            value, stated, source = self._material_thickness(layer)
+            start = z
+            end = z + value
+            z = end
+            # A decorative layer with no stated thickness is a zero-height film
+            # on a surface whose position is still known; only a structural gap
+            # makes the plane positions below it uncertain.
+            if not stated and self._is_structural(layer):
+                known = False
+            out[layer.name] = ZExtent(start, end, known, source)
+            index = self.copper_index(layer.name)
+            if layer.is_copper and index is not None:
+                plane_top[index] = start
+                plane_bottom[index] = end
+
+        for layer in self.board_layers:
+            if layer.type is not LayerType.DRILL:
+                continue
+            span = self.drill_span(layer)
+            if span is None:
+                continue
+            if span.start not in plane_top or span.end not in plane_bottom:
+                continue
+            end_plane = self.copper_layers[span.end]
+            reference = out.get(end_plane.name)
+            out[layer.name] = ZExtent(
+                plane_top[span.start],
+                plane_bottom[span.end],
+                bool(reference is not None and reference.thickness_known),
+                f"drill span {self.copper_layers[span.start].name}"
+                f"..{end_plane.name}",
+            )
+        return out
+
+    def z_table(self) -> dict[str, ZExtent]:
+        if self._z_table is None:
+            self._z_table = self._build_z_table()
+        return self._z_table
+
+    def z_extent(self, layer: Layer) -> Optional[ZExtent]:
+        """Absolute Z extent of a board layer, or ``None``.
+
+        ``None`` for layers outside the board context (documentation,
+        component outlines) and for a ``ROUT`` contour, which has no Z span in
+        this model.  The result is a position in millimetres measured from the
+        top of the stack; see :class:`ZExtent`.
+        """
+        if layer.ref.context is not LayerContext.BOARD:
+            return None
+        return self.z_table().get(layer.name)
 
 
     def scope_of(self, layer: Layer) -> UnitScope:
