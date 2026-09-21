@@ -1,0 +1,31 @@
+# Runtime dependencies for the ODB++ v8.1 -> JSON / SVG pipeline.
+#
+# Environment: conda env `odbpp` (Python 3.12), per AGENTS.md.
+#   conda activate odbpp && pip install -r requirements.txt
+
+# --- geometry -------------------------------------------------------------
+# pyclipper: Clipper bindings. Integer-coordinate polygon boolean ops
+# (union / difference / intersection) used to resolve feature polarity and to
+# build the fully-positive polygon set required by AGENTS constraint 2.
+# Chosen because OdbDesign (the main reference) does NOT ship boolean geometry.
+pyclipper>=1.3.0.post6
+
+# shapely: GEOS bindings. Used for validation and topology analysis:
+# self-intersection detection (spec forbids SIPs), containment checks between
+# islands and holes, area/bbox sanity checks in tests.
+shapely>=2.0
+
+# --- numerics -------------------------------------------------------------
+numpy>=1.26
+
+# --- io / parsing ---------------------------------------------------------
+# XML sidecars (matrix/stackup.xml, metadata.xml). Not required yet -- listed
+# so the parser can adopt them without a dependency change later.
+lxml>=5.0
+
+# --- tooling --------------------------------------------------------------
+# tools/extract_spec_text.py: PDF -> page-tagged text for spec citation.
+pypdf>=4.0
+
+# --- testing --------------------------------------------------------------
+pytest>=8.0

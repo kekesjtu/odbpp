@@ -1,0 +1,36 @@
+# Derived artifacts / scratch space
+build/
+.tmp_research/
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Reference checkouts: cloned on demand, never committed.
+# See "external/README.md" for the fetch commands.
+external/*/
+
+# ODB++ sidecar checksums (`.features.sum`, `.profile.sum`, ...) emitted by some CAM
+# tools. Deliberately NOT ignored globally: when a case ships them they are part of
+# the sample and must be preserved byte-for-byte. Only derived copies are ignored.
+out/**/*.sum
+
+# Vendor specification PDF: 7.9 MB binary, Siemens copyright. Kept in the working
+# tree but not versioned; re-fetch and verify with `python tools/fetch_spec.py`.
+docs/ODB++_Format_User_Guide.pdf
+docs/*.pdf
