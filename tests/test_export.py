@@ -313,3 +313,135 @@ def test_layer_summary_lines_mentions_every_layer():
     text = layer_summary_lines(preview)
     for layer in preview.layers:
         assert layer.name in text
+
+
+# ---------------------------------------------------------------------------
+# stackup and attribute semantics in the document
+# ---------------------------------------------------------------------------
+
+class TestStackupJson:
+    """AGENTS constraint 3, and AGENTS note 4's two unit semantics.
+
+    The JSON is the contract: it has to carry enough to rebuild the stack, and
+    every attribute-derived number has to state what it was interpreted as.
+    """
+
+    def test_every_layer_states_the_scope_of_its_attributes(self):
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview)
+        for layer in document["steps"][0]["layers"]:
+            units = layer["attribute_units"]
+            assert units is not None
+            assert units["system"] in ("MM", "INCH")
+            assert units["origin"]
+
+    def test_the_stack_indexes_copper_and_spans_dielectrics(self):
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview)
+        layers = {l["name"]: l for l in document["steps"][0]["layers"]}
+        assert layers["F.CU"]["copper_index"] == 0
+        assert layers["B.CU"]["copper_index"] == 1
+        dielectric = layers["DIELECTRIC_1"]
+        assert dielectric["z_span"] == {"from_layer": "F.CU", "to_layer": "B.CU",
+                                        "copper_index": [0, 1]}
+        # The step-level summary lists the same stack in row order.
+        stackup = document["steps"][0]["stackup"]
+        assert [s["name"] for s in stackup][:7] == [
+            "COMP_+_TOP", "F.SILKSCREEN", "F.PASTE", "F.MASK", "F.CU",
+            "DIELECTRIC_1", "B.CU"]
+        assert stackup[4]["copper_index"] == 0
+
+    def test_a_drill_states_its_endpoints_and_span(self):
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview)
+        drill = next(l for l in document["steps"][0]["layers"]
+                     if l["type"] == "DRILL")
+        assert drill["start_layer"] == "F.CU"
+        assert drill["end_layer"] == "B.CU"
+        assert drill["z_span"]["copper_index"] == [0, 1]
+
+    def test_a_metric_thickness_is_millimetres(self):
+        # kicad-kitchen-sink is an MM job: 1.51 is 1.51 mm, not 38 um.
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview)
+        dielectric = next(l for l in document["steps"][0]["layers"]
+                          if l["name"] == "DIELECTRIC_1")
+        assert dielectric["thickness_mm"] == pytest.approx(1.51)
+        assert dielectric["thickness"]["attribute_units"] == "MM"
+
+    def test_an_imperial_thickness_is_converted_to_millimetres(self):
+        # The review's exact example: designodb-rigidflex DIELECTRIC_3 declares
+        # UNITS=INCH and .layer_dielectric=0.00255906, i.e. 65 um.  Under the
+        # old export the string travelled through untouched next to units: mm.
+        diagnostics = Diagnostics()
+        job = load_job(str(sample_path("designodb-rigidflex.tgz")),
+                       diagnostics=diagnostics)
+        preview = build_step_preview(
+            job, options=PreviewOptions(layers=["DIELECTRIC_3"]),
+            diagnostics=diagnostics)
+        document = step_to_json(job, preview)
+        dielectric = document["steps"][0]["layers"][0]
+        assert dielectric["attribute_units"]["system"] == "INCH"
+        assert dielectric["thickness_mm"] == pytest.approx(0.065, abs=1e-6)
+        provenance = dielectric["thickness"]
+        assert provenance["raw"] == pytest.approx(0.00255906)
+        assert provenance["value_mm"] == pytest.approx(0.065000124)
+
+    def test_the_dielectric_no_longer_covers_the_crossing_drill(self):
+        # The whole point of constraint 3: the drill layer is a separate layer,
+        # but the dielectric between the planes it crosses has its holes.
+        from odbpp import clipper
+
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview)
+        layers = {l["name"]: l for l in document["steps"][0]["layers"]}
+        dielectric = layers["DIELECTRIC_1"]
+        drill = next(l for l in layers.values() if l["type"] == "DRILL")
+
+        assert dielectric["drills_subtracted"] == [drill["name"]]
+        assert dielectric["drill_cut_mm2"] > 0.0
+
+        def region(layer):
+            return clipper.region_from_rings(
+                [(p["points"], not p["island"]) for p in layer["polygons"]])
+
+        assert clipper.intersection(region(dielectric), region(drill)).area \
+            == pytest.approx(0.0, abs=1e-9)
+
+
+class TestSerialisedTopology:
+    """Coordinates are written only after the geometry was validated at them."""
+
+    def test_every_written_ring_is_a_valid_non_degenerate_polygon(self):
+        from shapely.geometry import Polygon
+
+        for case in ("minimal-test-odb", "kicad-kitchen-sink"):
+            _job, preview, _diag = preview_of(case)
+            document = step_to_json(_job, preview)
+            for layer in document["steps"][0]["layers"]:
+                for points in (p["points"] for p in layer["polygons"]):
+                    polygon = Polygon(points)
+                    assert polygon.is_valid, (case, layer["name"])
+                    assert polygon.area > 0.0, (case, layer["name"])
+
+    def test_serialised_coordinates_are_exact_multiples_of_the_resolution(self):
+        _job, preview, _diag = preview_of("minimal-test-odb")
+        document = step_to_json(_job, preview, round_digits=4)
+        for layer in document["steps"][0]["layers"]:
+            for polygon in layer["polygons"]:
+                for x, y in polygon["points"]:
+                    assert abs(x * 10_000 - round(x * 10_000)) < 1e-6
+                    assert abs(y * 10_000 - round(y * 10_000)) < 1e-6
+
+    def test_reported_area_is_computed_from_the_written_coordinates(self):
+        from shapely.geometry import Polygon
+
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview)
+        for layer in document["steps"][0]["layers"]:
+            net = 0.0
+            for polygon in layer["polygons"]:
+                area = Polygon(polygon["points"]).area
+                net += area if polygon["island"] else -area
+            if layer["polygons"]:
+                assert layer["area_mm2"] == pytest.approx(net, abs=0.01), layer["name"]

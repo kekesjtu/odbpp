@@ -30,8 +30,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Iterator, Optional, Sequence
-from .clipper import Ring
+from .clipper import Ring, snap_to_grid
 from .diagnostics import (
+    EXPORT_DEGENERATE_RING,
     EXPORT_LAYER_FAILED,
     EXPORT_LAYER_SKIPPED,
     EXPORT_NO_GEOMETRY,
@@ -43,6 +44,7 @@ from .errors import LayerProfileError
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
 from .model import Job, Layer, Polygon, Step
+from .stackup import Stackup, describe_span
 
 
 __all__ = [
@@ -80,8 +82,13 @@ class PreviewOptions:
     #: so by default they vanish.  That is honest but not useful, so the width is
     #: adjustable *and* the fact is reported rather than silently normalised.
     minimum_stroke_mm: float = 0.0
-    #: Decimal places for coordinates in the JSON and SVG.  4 is 0.1 um, far
-    #: finer than any fabrication tolerance and much smaller on disk.
+    #: Decimal places for coordinates in the JSON and SVG.
+    #:
+    #: This is also the model's **resolution**, not merely a printing choice:
+    #: composed geometry is snapped to the ``10**-round_digits`` mm grid and
+    #: re-regularised before it leaves the pipeline, so the polygons a consumer
+    #: reads back are the ones that were validated.  4 is 0.1 um, far finer than
+    #: any fabrication tolerance and much smaller on disk.
     round_digits: int = 4
     #: Report user-defined symbols used to sweep lines/arcs (spec p.38).
     warn_unsupported_strokes: bool = True
@@ -104,6 +111,9 @@ class LayerPreview:
 
     layer: Layer
     geometry: LayerGeometry
+    #: The step's stack model, when the preview came from the export pipeline.
+    #: ``None`` for hand-built previews; every accessor below tolerates that.
+    stackup: Optional[Stackup] = None
 
     @property
     def name(self) -> str:
@@ -142,8 +152,11 @@ class LayerPreview:
 
         ``.layer_dielectric`` is a *Layer*-class field and is meaningful only for
         non-copper layers; ``.copper_weight`` changes physical meaning with the
-        unit system (spec p.24), so both are reported as authored and left for
-        the consumer to interpret.
+        unit system (spec p.24), so both are reported as authored here.  The
+        *interpreted* values are separate fields -- see
+        :meth:`normalised_attributes` -- because a single number cannot carry
+        both the raw file text and the millimetre value without inviting
+        exactly the confusion AGENTS note 4 warns about.
         """
         wanted = (".layer_dielectric", ".copper_weight", ".layer_sequence",
                   ".dielectric_name", ".polarity")
@@ -152,6 +165,41 @@ class LayerPreview:
             if key.casefold() in wanted:
                 out[key] = value
         return out
+
+    def attribute_units(self) -> Optional[dict]:
+        """Unit scope the layer's ``attrlist`` was written under.
+
+        Without this a consumer cannot tell ``.layer_dielectric = 0.00255906``
+        (65 um in an INCH job) from the same number in an MM job, because the
+        document's top-level ``units: mm`` describes the polygons, not the
+        attributes they came from.
+        """
+        scope = getattr(self.layer, "attribute_scope", None)
+        if scope is None:
+            return None
+        return {
+            "system": scope.system.value,
+            "origin": scope.origin,
+        }
+
+    def thickness(self):
+        """Interpreted ``.layer_dielectric`` as a :class:`~odbpp.stackup.Thickness`."""
+        if self.stackup is None:
+            return None
+        from .stackup import Thickness  # noqa: F401 - documents the return type
+        return self.stackup.thickness(self.layer)
+
+    def copper_weight(self):
+        """Interpreted ``.copper_weight``; a density in imperial, a thickness in metric."""
+        if self.stackup is None:
+            return None
+        return self.stackup.weight(self.layer)
+
+    def z_span(self) -> Optional[dict]:
+        """Which copper planes this layer sits between, or ``None``."""
+        if self.stackup is None:
+            return None
+        return describe_span(self.stackup, self.stackup.span_of(self.layer))
 
 
 @dataclass
@@ -172,6 +220,9 @@ class StepPreview:
     #: (AGENTS constraint 3).  Their absence from the drawing is a bug or a data
     #: problem, not a property of the board.
     failed_layers: list[str] = field(default_factory=list)
+    #: The step's resolved layer stack (copper order, dielectric/drill Z spans,
+    #: thicknesses).  ``None`` only for hand-built previews.
+    stackup: Optional[Stackup] = None
 
     @property
     def bounds(self) -> Optional[tuple[float, float, float, float]]:
@@ -245,6 +296,9 @@ def iter_step_previews(
     opts = options or PreviewOptions()
     diags = diagnostics if diagnostics is not None else Diagnostics()
     expander = expander or _make_expander(job, opts, diags)
+    # One stack model per step, shared with the expander so the drill spans that
+    # decided the dielectric holes and the ones written to the JSON are the same.
+    stackup = expander.stackup(step)
 
     for layer in _selected_layers(step, opts, diags):
         if layer.features is None and layer.profile is None and step.profile is None:
@@ -269,7 +323,20 @@ def iter_step_previews(
                         f"{type(exc).__name__}: {exc}",
                         layer.dir_name or None)
             continue
-        yield LayerPreview(layer=layer, geometry=geometry)
+
+        # Quantise to the output grid and re-validate *before* the geometry is
+        # called a result.  Areas and bounds below are recomputed from these
+        # coordinates, so what the JSON reports is what the JSON contains.
+        geometry.region, collapsed = snap_to_grid(geometry.region, opts.round_digits)
+        if collapsed:
+            diags.warn(
+                EXPORT_DEGENERATE_RING,
+                f"layer {layer.name!r}: {collapsed} ring(s) had no area left at "
+                f"the {opts.round_digits}-decimal output grid and were dropped; "
+                f"the remaining geometry was re-regularised at that resolution",
+                layer.dir_name or None,
+            )
+        yield LayerPreview(layer=layer, geometry=geometry, stackup=stackup)
 
 
 def _make_expander(job: Job, options: PreviewOptions,
@@ -301,6 +368,7 @@ def build_step_preview(
     step = step or job.single_step
 
     expander = _make_expander(job, opts, diags)
+    stackup = expander.stackup(step)
     layers = list(iter_step_previews(job, step, options=opts,
                                      diagnostics=diags, expander=expander))
 
@@ -327,6 +395,7 @@ def build_step_preview(
         # that raised did not.  That difference is what separates "empty" from
         # "missing".
         failed_layers=[name for name in unavailable if name not in empty],
+        stackup=stackup,
     )
 
 
@@ -350,27 +419,55 @@ def layer_to_json(preview: LayerPreview, *, round_digits: int = 4) -> dict:
     than as path strings, so a consumer can do geometry with them.  Nesting is
     *stated* by the flag and not inferred from winding, even though the winding
     is also correct.
+
+    Everything an attribute-derived number means is spelled out next to it: the
+    unit scope of the ``attrlist`` it came from (``attribute_units``), the
+    millimetre thickness (``thickness_mm``) with its provenance
+    (``thickness``), the copper weight *as its own physical quantity*
+    (``copper_weight``), and the layer's place in the stack (``copper_index``,
+    ``z_span``, ``start_layer``/``end_layer``).  A consumer must be able to
+    rebuild the stackup from this document alone -- it must not have to know
+    that an imperial file's dielectric value is inches.
     """
     geometry = preview.geometry
     bounds = preview.bounds
+    thickness = preview.thickness()
+    weight = preview.copper_weight()
+    stackup = preview.stackup
+    ref = preview.layer.ref
 
     return {
         "name": preview.name,
         "type": preview.type_name,
-        "context": preview.layer.ref.context.value,
-        "polarity": preview.layer.ref.polarity.value,
-        "form": preview.layer.ref.form.value,
+        "context": ref.context.value,
+        "polarity": ref.polarity.value,
+        "form": ref.form.value,
         # How firm that answer is. Spec p.66 defaults FORM to RIGID, so is_flex is
         # always a real boolean; form_source says whether the exporter declared
         # it, a FLEX subtype implied it, or the RIGID default supplied it.
-        "form_source": preview.layer.ref.form_source.value,
-        "is_flex": preview.layer.ref.is_flex,
+        "form_source": ref.form_source.value,
+        "is_flex": ref.is_flex,
         "is_copper": preview.is_copper,
-        "row": preview.layer.ref.row,
+        "row": ref.row,
         "attributes": preview.layer_attributes(),
+        "attribute_units": preview.attribute_units(),
+        "thickness_mm": None if thickness is None
+        else _round(thickness.thickness_mm, round_digits + 3),
+        "thickness": None if thickness is None else thickness.as_dict(),
+        "copper_weight": None if weight is None else weight.as_dict(),
+        # Drill/stiffener span endpoints as authored, then resolved.
+        "start_layer": ref.start_name or None,
+        "end_layer": ref.end_name or None,
+        "copper_index": None if stackup is None
+        else stackup.copper_index(preview.name),
+        "z_span": preview.z_span(),
         "base_from_profile": geometry.used_base,
         "feature_records": geometry.records,
         "polarity_runs": geometry.polarity_runs,
+        # AGENTS constraint 3: the dielectric's own Z interval decided which
+        # drills were projected out of it, and how much area that removed.
+        "drills_subtracted": list(geometry.drills_subtracted),
+        "drill_cut_mm2": _round(geometry.drill_cut_mm2, round_digits + 2),
         "area_mm2": _round(preview.area_mm2, round_digits + 2),
         "bounds_mm": None if bounds is None
         else [_round(b, round_digits) for b in bounds],
@@ -416,6 +513,7 @@ def step_to_json(job: Job, preview: StepPreview, *,
             "bounds_mm": None if bounds is None
             else [_round(b, round_digits) for b in bounds],
             "profile": _profile_json(preview.step, round_digits),
+            "stackup": _stackup_json(preview, round_digits),
             "layers": [layer_to_json(l, round_digits=round_digits)
                        for l in preview.layers],
         }],
@@ -431,6 +529,35 @@ def step_to_json(job: Job, preview: StepPreview, *,
         document["diagnostics"] = [_diagnostic_json(d) for d in preview.diagnostics]
 
     return document
+
+
+def _stackup_json(preview: StepPreview, round_digits: int) -> Optional[list[dict]]:
+    """The ordered board stack: position, span and thickness per layer.
+
+    This is what makes the document rebuildable without re-deriving the matrix:
+    copper planes are indexed top-down, a dielectric or drill states the two
+    planes it spans, and every thickness is already in millimetres with the unit
+    scope it was converted from.  ``None`` when the preview has no stack model.
+    """
+    stackup = preview.stackup
+    if stackup is None:
+        return None
+
+    out: list[dict] = []
+    for layer in stackup.board_layers:
+        thickness = stackup.thickness(layer)
+        out.append({
+            "row": layer.ref.row,
+            "name": layer.name,
+            "type": layer.type.value if layer.type is not None else "UNKNOWN",
+            "copper_index": stackup.copper_index(layer.name),
+            "thickness_mm": None if thickness is None
+            else _round(thickness.thickness_mm, round_digits + 3),
+            "z_span": describe_span(stackup, stackup.span_of(layer)),
+            "start_layer": layer.ref.start_name or None,
+            "end_layer": layer.ref.end_name or None,
+        })
+    return out
 
 
 def _profile_json(step: Step, round_digits: int) -> Optional[dict]:
