@@ -60,6 +60,7 @@ from .export import (
     StepPreview,
     build_step_preview,
     layer_to_json,
+    regularise_preview,
     step_to_json,
 )
 from .job import LoadOptions, load_job
@@ -116,6 +117,7 @@ __all__ = [
     "PreviewOptions",
     "StepPreview",
     "build_step_preview",
+    "regularise_preview",
     "step_to_json",
     "layer_to_json",
     # stackup (layer order, dielectric/drill Z spans, thicknesses)

@@ -120,6 +120,33 @@ class TestSerialisationResolution:
         assert written["area_mm2"] == 0.0
         assert written["bounds_mm"] is None
 
+    def test_the_step_summary_describes_the_layers_that_were_written(self):
+        # A summary that counted rings the layer array no longer holds, or kept
+        # the pre-regularisation bounds, sends a consumer looking for geometry
+        # that is not in the file.
+        job, preview = self._six_digit_preview()
+        document = step_to_json(job, preview, round_digits=4)
+        step = document["steps"][0]
+        assert step["layers"][0]["polygons"] == []
+        assert step["bounds_mm"] is None
+        assert document["summary"]["polygon_count"] == 0
+        assert document["summary"]["empty_layers"] == ["top"]
+
+    def test_the_summary_and_step_bounds_match_after_a_finer_request(self):
+        # The same invariant in the other direction: re-regularising finer must
+        # not leave the summary describing the coarser model.
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview, round_digits=6)
+        layers = document["steps"][0]["layers"]
+        assert document["summary"]["polygon_count"] == \
+            sum(len(l["polygons"]) for l in layers)
+        assert document["summary"]["empty_layers"] == \
+            [l["name"] for l in layers if not l["polygons"]]
+        boxes = [l["bounds_mm"] for l in layers if l["bounds_mm"]]
+        step_bounds = document["steps"][0]["bounds_mm"]
+        assert step_bounds == [min(b[0] for b in boxes), min(b[1] for b in boxes),
+                               max(b[2] for b in boxes), max(b[3] for b in boxes)]
+
 
 # ---------------------------------------------------------------------------
 # layer content
@@ -399,6 +426,22 @@ class TestStackupJson:
             "COMP_+_TOP", "F.SILKSCREEN", "F.PASTE", "F.MASK", "F.CU",
             "DIELECTRIC_1", "B.CU"]
         assert stackup[4]["copper_index"] == 0
+
+    def test_a_decorative_layer_with_geometry_but_no_thickness_says_so(self):
+        # AGENTS note 8: solder paste carries real geometry yet no stated
+        # thickness, so its absolute Z is a best-effort zero that must be
+        # marked unknown -- while the copper plane below it stays known.
+        _job, preview, _diag = preview_of(
+            "kicad-kitchen-sink",
+            options=PreviewOptions(layers=["F.PASTE", "F.CU"]))
+        document = step_to_json(_job, preview)
+        layers = {l["name"]: l for l in document["steps"][0]["layers"]}
+        paste = layers["F.PASTE"]
+        assert paste["polygons"]
+        assert paste["thickness_mm"] is None
+        assert paste["z_mm"]["thickness_known"] is False
+        assert paste["z_mm"]["source"] == "unknown"
+        assert layers["F.CU"]["z_mm"]["thickness_known"] is True
 
     def test_a_drill_states_its_endpoints_and_span(self):
         _job, preview, _diag = preview_of("kicad-kitchen-sink")

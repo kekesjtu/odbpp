@@ -28,7 +28,7 @@ layer after writing it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Iterator, Optional, Sequence
 from .clipper import Ring, snap_to_grid
 from .diagnostics import (
@@ -54,6 +54,7 @@ __all__ = [
     "StepPreview",
     "build_step_preview",
     "iter_step_previews",
+    "regularise_preview",
     "layer_to_json",
     "step_to_json",
     "layer_summary_lines",
@@ -367,6 +368,56 @@ def iter_step_previews(
                            round_digits=opts.round_digits)
 
 
+def regularise_preview(
+    preview: StepPreview,
+    round_digits: int,
+    *,
+    diagnostics: Optional[Diagnostics] = None,
+) -> StepPreview:
+    """Return *preview* re-regularised onto the ``10**-round_digits`` mm grid.
+
+    Every artefact derived from the model -- JSON, SVG, HTML -- has to describe
+    the geometry it actually contains.  Printing live coordinates at a coarser
+    precision is not the same thing: vertices merge, a sliver collapses onto a
+    line, and the reported area, ring count and bounds keep describing the shape
+    that was thrown away.  Re-quantising the *region* (which also resolves
+    crossings and re-derives island/hole nesting) is what makes the written
+    polygons, and the numbers that describe them, one geometry again.
+
+    A preview already at the requested resolution is returned unchanged, so the
+    common path costs nothing.  Layers that lose their last ring are dropped and
+    reported, exactly as during composition; ``empty_layers`` is recomputed from
+    the result rather than copied, because it is a statement about the geometry
+    that will be written.
+    """
+    digits = max(0, int(round_digits))
+    own = getattr(preview, "round_digits", None)
+    if own is not None and int(own) == digits:
+        return preview
+
+    diags = diagnostics if diagnostics is not None else preview.diagnostics
+    layers: list[LayerPreview] = []
+    for layer in preview.layers:
+        region, collapsed = snap_to_grid(layer.geometry.region, digits)
+        if collapsed:
+            diags.warn(
+                EXPORT_DEGENERATE_RING,
+                f"layer {layer.name!r}: {collapsed} ring(s) had no area left at "
+                f"the {digits}-decimal output grid and were dropped; "
+                f"the remaining geometry was re-regularised at that resolution",
+                layer.layer.dir_name or None,
+            )
+        geometry = replace(layer.geometry, region=region)
+        layers.append(replace(layer, geometry=geometry, round_digits=digits))
+
+    return replace(
+        preview,
+        layers=layers,
+        empty_layers=[l.name for l in layers if l.is_empty],
+        round_digits=digits,
+    )
+
+
 def _make_expander(job: Job, options: PreviewOptions,
                    diagnostics: Diagnostics) -> Expander:
     """Build the expander for *job*.
@@ -563,13 +614,23 @@ def step_to_json(job: Job, preview: StepPreview, *,
 
     ``round_digits`` defaults to the resolution the preview was composed at, so
     the document describes the geometry that was validated.  Passing a different
-    value re-regularises every layer at that resolution and recomputes areas and
-    bounds accordingly (see :func:`layer_to_json`).
+    value re-regularises every layer at that resolution *once*, and the step
+    bounds and summary are derived from the layers that were actually written --
+    a summary that counted rings the layer array no longer holds would send a
+    consumer looking for geometry that is not there.
     """
     from . import __version__
 
     digits = _preview_digits(preview, round_digits)
-    bounds = preview.bounds
+    view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
+    layers = [layer_to_json(l, round_digits=digits) for l in view.layers]
+    # Derived from the written layers, not from the pre-regularisation model, so
+    # the summary, the step bounds and the layer array cannot disagree.
+    boxes = [l["bounds_mm"] for l in layers if l["bounds_mm"] is not None]
+    bounds = None if not boxes else (
+        min(b[0] for b in boxes), min(b[1] for b in boxes),
+        max(b[2] for b in boxes), max(b[3] for b in boxes),
+    )
     document = {
         "schema": SCHEMA,
         "generator": {"name": "odbpp", "version": __version__},
@@ -598,15 +659,14 @@ def step_to_json(job: Job, preview: StepPreview, *,
             "bounds_mm": None if bounds is None
             else [_round(b, digits) for b in bounds],
             "profile": _profile_json(preview.step, digits),
-            "stackup": _stackup_json(preview, digits),
-            "layers": [layer_to_json(l, round_digits=digits)
-                       for l in preview.layers],
+            "stackup": _stackup_json(view, digits),
+            "layers": layers,
         }],
         "summary": {
-            "layer_count": len(preview.layers),
-            "polygon_count": preview.total_polygons,
-            "empty_layers": preview.empty_layers,
-            "failed_layers": preview.failed_layers,
+            "layer_count": len(layers),
+            "polygon_count": sum(len(l["polygons"]) for l in layers),
+            "empty_layers": [l["name"] for l in layers if not l["polygons"]],
+            "failed_layers": list(preview.failed_layers),
         },
     }
 
