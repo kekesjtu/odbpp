@@ -39,9 +39,20 @@ def main():
     }
     narrow = clipper.Ring(((0, 0), (0, 1), (0.00002, 1), (0.00002, 0)), False)
     rounded = Polygon(_points_json(narrow, 4))
-    output["rounding"] = {"before_valid": Polygon(narrow.points).is_valid,
-                          "before_area": narrow.area,
-                          "after_valid": rounded.is_valid, "after_area": rounded.area}
+    snapped, collapsed = clipper.snap_to_grid(clipper.Region([narrow]), 4)
+    output["rounding"] = {
+        # Per-point rounding in isolation is still unsafe -- that is *why* the
+        # pipeline no longer feeds it unsnapped geometry.
+        "before_valid": Polygon(narrow.points).is_valid,
+        "before_area": narrow.area,
+        "after_valid": rounded.is_valid,
+        "after_area": rounded.area,
+        # The fix: quantise as geometry, then serialise.  A ring with no area at
+        # the target resolution is dropped and counted instead of written out.
+        "pipeline_region_empty": not snapped,
+        "pipeline_collapsed_rings": collapsed,
+        "pipeline_rings": len(snapped.rings),
+    }
     with TemporaryDirectory(prefix="review-cli-", dir="build") as temporary:
         exit_code = cli_main(["export", "cases/minimal-test-odb", "-o", temporary,
                               "--only-json", "--no-diagnostics"])
@@ -73,22 +84,45 @@ def main():
         def region(layer):
             return clipper.region_from_rings([(p["points"], not p["island"])
                                               for p in layer["polygons"]])
+
+        def span(layer):
+            z = layer.get("z_span")
+            return z["copper_index"] if z else None
+
+        def overlaps(a, b):
+            return a is not None and b is not None and a[0] < b[1] and b[0] < a[1]
+
         drills = [layer for layer in layers if layer["type"] == "DRILL"]
-        overlaps = []
+        overlaps_out = []
         for layer in layers:
             if layer["type"] == "DIELECTRIC":
-                overlaps.append({"layer": layer["name"], "area_mm2": layer["area_mm2"],
-                                 "attributes": layer["attributes"],
-                                 "drill_xy_overlap_mm2": {
-                                     drill["name"]: clipper.intersection(region(layer), region(drill)).area
-                                     for drill in drills if drill["polygons"] and layer["polygons"]}})
+                # ``drill_xy_overlap_mm2`` is every drill whose *projection*
+                # overlaps, ignoring Z; ``crossing_*`` restricts the same
+                # measurement to the drills the stackup says actually pass
+                # through this dielectric (AGENTS constraint 3).
+                xy = {drill["name"]: clipper.intersection(region(layer), region(drill)).area
+                      for drill in drills if drill["polygons"] and layer["polygons"]}
+                crossing = {name: value for name, value in xy.items()
+                            if overlaps(span(layer),
+                                        span(next(d for d in drills
+                                                  if d["name"] == name)))}
+                overlaps_out.append({
+                    "layer": layer["name"],
+                    "area_mm2": layer["area_mm2"],
+                    "attributes": layer["attributes"],
+                    "thickness_mm": layer["thickness_mm"],
+                    "z_span": layer["z_span"],
+                    "drills_subtracted": layer["drills_subtracted"],
+                    "drill_xy_overlap_mm2": xy,
+                    "crossing_drill_overlap_mm2": crossing,
+                })
         cases[folder.name] = {
             "summary": doc["summary"],
             "diagnostic_levels": dict(Counter(d["level"] for d in doc.get("diagnostics", []))),
             "diagnostic_codes": dict(Counter(d["code"] for d in doc.get("diagnostics", []))),
             "invalid_ring_count": len(errors), "invalid_ring_examples": errors[:10],
             "invalid_rings_by_layer": dict(Counter(e["layer"] for e in errors)),
-            "dielectrics": overlaps,
+            "dielectrics": overlaps_out,
             "svg_count": len(svg_paths),
             "svg_xml_valid": True,
         }

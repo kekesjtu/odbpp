@@ -19,13 +19,16 @@ ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**�
 ```
 
 四个真实样本均已跑通，含 520k 图元 / 43 层的 INCH 刚挠结合板
-（导出约 62 s，排除 `DOCUMENT` 层）。
+（导出约 150 s，含 DOCUMENT 层）。介质层按 AGENTS 约束 3 扣除与其 Z 区间相交的钻孔投影，
+输出坐标在目标分辨率下重新量化与布尔规整后才写出。
 
 ## 快速开始
 
 ```bash
 conda activate odbpp
-pip install -e .
+pip install -e .            # 运行时依赖（pyclipper）随包安装
+pip install -e ".[test]"    # 追加 pytest
+pip install -e ".[test,geometry]"   # 再追加 shapely/numpy（测试拓扑校验、工具用）
 
 # 结构总览（层清单、图元类型统计、诊断）
 python -m odbpp summarize cases/kicad-kitchen-sink
@@ -51,7 +54,7 @@ python -m odbpp export <path> --layer top --layer bottom --only-json
 |---|---|
 | `--layer NAME` / `--exclude-type TYPE` | 选择要合成的层（可重复） |
 | `--sagitta MM` | 圆弧离散化容差，默认 0.005 mm |
-| `--digits N` | 坐标小数位，默认 4（0.1 µm） |
+| `--digits N` | 坐标小数位，默认 4（0.1 µm）；同时是模型的**输出分辨率**：几何会先量化到该网格、布尔规整并复验拓扑，再序列化 |
 | `--minimum-stroke MM` | 把零宽（`r0`）图元按发丝线绘制；默认 0，即几何精确因而不可见 |
 | `--only-json` / `--per-layer-svg` | 只要 JSON / 额外每层一个 SVG |
 
@@ -105,7 +108,8 @@ for layer in step.layers:
 | `geometry.py` | 圆弧离散化、环方向约定、变换，以及 `r`/`s`/`rect`/`oval` 等基础标准符号的原生展开 |
 | `job.py` | 编排：把上述内容组装成一个自洽的产品模型，并执行跨文件约束 |
 | **`clipper.py`** | **平面布尔运算 + Minkowski 扫掠**：整数量化（1e-6 mm）、环方向归一、并/差/交、`stroke_paths`（圆符号精确带宽）、`sweep_paths`（方符号精确拖拽） |
-| **`expand.py`** | **图元 → 实心区域**：符号解析与放置、`L`/`A` 扫掠、极性与基底合成、按极性段与 stroke 定义批处理 |
+| **`expand.py`** | **图元 → 实心区域**：符号解析与放置、`L`/`A` 扫掠、极性与基底合成、按极性段与 stroke 定义批处理；介质层扣除相交钻孔投影 |
+| **`stackup.py`** | **层叠模型**：铜层序号、介质/钻孔的 Z 区间（半开）、相交判定，以及 `.layer_dielectric`/`.copper_weight` 的单位规范化 |
 | **`export.py`** | **中间格式（数据流 2）**：逐层流式合成 `StepPreview`，输出公制 JSON |
 | **`svg.py`** | **渲染（数据流 3）**：SVG 与自包含 HTML 查看器 |
 | `cli.py` | `python -m odbpp` 子命令 |
@@ -134,6 +138,12 @@ for layer in step.layers:
 10. **降级只降一层。** 某一层不可用（如约束 3 的 profile 失败）只让**该层**
     缺席预览，其余各层照常输出，并在诊断里区分 `empty_layers`（合成为空）
     与 `failed_layers`（无法合成）。
+11. **Z 区间缺失就报错，不猜。** 钻孔的 `START_NAME`/`END_NAME` 解析不出来，
+    就不扣除并记 `stackup.drill_span_unknown`；把未知跨度当成“整板贯穿”
+    会在输出里造出与真实通孔无法区分的假孔。
+12. **写出的坐标就是验证过的坐标。** 序列化前先把几何量化到输出网格并
+    重新 union/Simplify，`area_mm2`、`bounds_mm` 均由最终坐标重算；
+    在目标分辨率下无面积的环被丢弃并记 `export.degenerate_ring`。
 
 ## 目录
 
@@ -145,12 +155,21 @@ for layer in step.layers:
 | `out/` | 导出结果（不入库） |
 | `src/odbpp/` | 解析器本体 |
 | `tests/` | 单元测试 + `tests/fixtures/` 合成样本 |
-| `tools/` | 规范 PDF 抽取/校验、case 普查 |
+| `tools/` | 规范 PDF 抽取/校验、case 普查、审阅证据收集（`review_current_project.py`） |
+
+## 中间 JSON 携带的层叠与属性语义
+
+`steps[].layers[]` 除多边形外还给出：`attribute_units`（该层 attrlist 的单位作用域）、
+`thickness_mm` 与 `thickness{raw,value_mm,source}`（`.layer_dielectric` 的规范化厚度）、
+`copper_weight{value,kind,unit}`（`MM` 为 µm 铜厚、`INCH` 为 oz/ft² 面密度）、
+`copper_index`/`z_span`/`start_layer`/`end_layer`（层叠位置），以及
+`drills_subtracted`/`drill_cut_mm2`（约束 3 实际扣除的钻孔与面积）。
+`steps[].stackup[]` 按行序汇总整叠层。
 
 ## 测试
 
 ```bash
-python -m pytest                       # 461 项，含真实样本（约 3 分钟）
+python -m pytest                       # 520 项，含真实样本（约 4 分钟）
 python -m pytest -k "not RealCases"    # 跳过真实样本，约 40 s
 ```
 
