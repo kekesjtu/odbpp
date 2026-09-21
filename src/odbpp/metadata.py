@@ -22,7 +22,9 @@ from .diagnostics import (
     INFO_MISSING_UNITS,
     MATRIX_DANGLING_CU_REF,
     MATRIX_DUPLICATE_LAYER,
+    MATRIX_FORM_UNDECLARED,
     MATRIX_UNKNOWN_ADD_TYPE,
+    MATRIX_UNKNOWN_FORM,
     MATRIX_UNKNOWN_LAYER_TYPE,
     STEP_NESTED_REPEAT,
     TOOLS_DUPLICATE_NUM,
@@ -174,8 +176,31 @@ def parse_matrix(
     matrix.steps.sort(key=lambda s: s.col)
 
     _check_cu_references(matrix, rel, diagnostics)
+    _check_form_declared(matrix, rel, diagnostics)
 
     return matrix
+
+
+def _check_form_declared(matrix: Matrix, path: str, diagnostics: Diagnostics) -> None:
+    """Warn once when the matrix never states ``FORM``.
+
+    Reported at the matrix level rather than per layer, because the cause is the
+    exporter and 43 identical warnings would bury everything else.  This is worth
+    a warning at all because ``FORM`` is what distinguishes rigid from flexible
+    laminate (spec p.66): a rigid-flex board with an undeclared form is exactly
+    the case where a reader would otherwise take our default for a fact.
+    """
+    if not matrix.layers:
+        return
+    if any(layer.form is not LayerForm.UNSPECIFIED for layer in matrix.layers):
+        return
+    diagnostics.warn(
+        MATRIX_FORM_UNDECLARED,
+        f"no LAYER block declares FORM; rigid/flex laminate is unknown for all "
+        f"{len(matrix.layers)} layers, and LayerRef.is_flex is None for each of "
+        f"them",
+        path,
+    )
 
 
 def _parse_layer_block(
@@ -213,19 +238,26 @@ def _parse_layer_block(
             line_no=block.line_no,
         )
 
-    form_raw = block.str_field("FORM", "RIGID").strip().upper()
-    if form_raw in ("FLEX",):
+    # An absent FORM is *not* the same as FORM=RIGID, and the difference matters:
+    # every layer of cases/designodb-rigidflex -- including the six that form the
+    # flex tail -- would otherwise be reported as rigid laminate.
+    form_raw = block.str_field("FORM", "").strip().upper()
+    if not form_raw:
+        form = LayerForm.UNSPECIFIED
+    elif form_raw == "FLEX":
         form = LayerForm.FLEX
-    elif form_raw in ("RIGID", ""):
+    elif form_raw == "RIGID":
         form = LayerForm.RIGID
     else:
+        # Not MATRIX_UNKNOWN_ADD_TYPE: FORM and ADD_TYPE are separate fields, and a
+        # code naming the wrong one sends the reader to the wrong spec table.
         diagnostics.warn(
-            MATRIX_UNKNOWN_ADD_TYPE,
+            MATRIX_UNKNOWN_FORM,
             f"layer {block.str_field('NAME')!r} has unrecognised FORM={form_raw!r}; "
-            f"treating as RIGID",
+            f"leaving the form unspecified",
             path,
         )
-        form = LayerForm.RIGID
+        form = LayerForm.UNSPECIFIED
 
     diel_raw = block.str_field("DIELECTRIC_TYPE", "NONE").strip().upper() or "NONE"
     try:

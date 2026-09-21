@@ -1,0 +1,10 @@
+UNITS=MM
+F 1
+#
+#Feature symbol names
+#
+$0 r500
+#
+#Layer features
+#
+L 2 8 18 8 0 P 0

@@ -1,0 +1,4 @@
+UNITS=MM
+.layer_dielectric=0.00492126
+.dielectric_constant=3.4
+.layer_hdi_type=Core

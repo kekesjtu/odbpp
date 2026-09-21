@@ -63,6 +63,28 @@ forbids this; a parser must detect it instead of recursing until the stack
 overflows. Expected result: a `symbol.cycle` **error** diagnostic (so the CLI
 exits non-zero), and `SymbolCycleError` from an explicit `expand_order`.
 
+### `fx_flex_form/` — declared vs undeclared `FORM`
+
+MM, one step, four matrix layers differing only in what they say about `FORM`.
+
+| Layer | `FORM` | `LayerRef.form` | `LayerRef.is_flex` |
+|---|---|---|---|
+| `SILK_1` | absent | `UNSPECIFIED` | `None` |
+| `RIGID_1` | `RIGID` | `RIGID` | `False` |
+| `POLYIMIDE_1` | absent | `UNSPECIFIED` | `None` |
+| `FLEX_1` | `FLEX` | `FLEX` | `True` |
+
+This exists because **all four real jobs in `cases/` omit `FORM`** — including
+`designodb-rigidflex`, a flip-phone board whose flex tail is the entire point. So
+the interesting contrast is declared-vs-undeclared, and the trap is answering
+`RIGID` when the file said nothing. Because at least one layer here does declare
+`FORM`, this fixture also pins that the job-level `matrix.form_undeclared`
+warning stays quiet when the field is present anywhere.
+
+`POLYIMIDE_1` additionally carries `.layer_dielectric`, `.dielectric_constant`
+and `.layer_hdi_type`, since a flex core is where those attributes actually
+matter (AGENTS note 4).
+
 ## Adding a fixture
 
 1. Keep it minimal — a fixture that needs a paragraph to explain itself is

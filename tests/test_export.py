@@ -142,6 +142,19 @@ class TestLayerJson:
         assert gnd["type"] == "POWER_GROUND"
         assert gnd["base_from_profile"] is True
 
+    def test_an_undeclared_form_reaches_json_as_null(self):
+        # The whole point of the three-valued field: a rigid-flex job that never
+        # states FORM must not come out of the exporter claiming "is_flex": false.
+        _job, preview, _diag = preview_of("fx_flex_form")
+        data = {layer["name"]: layer for layer in
+                step_to_json(_job, preview)["steps"][0]["layers"]}
+        assert data["FLEX_1"]["form"] == "FLEX"
+        assert data["FLEX_1"]["is_flex"] is True
+        assert data["RIGID_1"]["form"] == "RIGID"
+        assert data["RIGID_1"]["is_flex"] is False
+        assert data["SILK_1"]["form"] == "UNSPECIFIED"
+        assert data["SILK_1"]["is_flex"] is None
+
     def test_layer_attributes_are_filtered_to_the_meaningful_ones(self):
         # AGENTS note 4: .layer_dielectric is meaningful only for non-copper
         # layers, and .copper_weight changes physical meaning with the unit

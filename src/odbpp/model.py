@@ -113,10 +113,21 @@ class LayerContext(str, Enum):
 
 
 class LayerForm(str, Enum):
-    """``FORM`` field: rigid or flexible laminate (spec p.66)."""
+    """``FORM`` field: rigid or flexible laminate (spec p.66).
+
+    ``UNSPECIFIED`` is not a spec value: it means the matrix did not declare
+    ``FORM`` at all, which is what real exporters sometimes do.
+    ``cases/designodb-rigidflex`` (Xpedition / Valor NPI) omits the field from
+    every one of its 43 ``LAYER`` blocks, including the six layers that make up
+    the flex tail.  Defaulting those to ``RIGID`` would assert something the file
+    never said -- and assert it about the one property that makes a rigid-flex
+    board a rigid-flex board.  Consumers that need a boolean should use
+    :attr:`LayerRef.is_flex`, which is honest about the unknown case.
+    """
 
     RIGID = "RIGID"
     FLEX = "FLEX"
+    UNSPECIFIED = "UNSPECIFIED"
 
 
 class DielectricType(str, Enum):
@@ -254,6 +265,20 @@ class LayerRef:
     @property
     def is_copper(self) -> bool:
         return self.type is not None and self.type.is_copper
+
+    @property
+    def is_flex(self) -> Optional[bool]:
+        """``True``/``False`` when the matrix declared ``FORM``, else ``None``.
+
+        A three-valued answer rather than a boolean with a made-up default,
+        because "this layer is rigid" and "this file does not say" are different
+        claims and only one of them is supported by the data.
+        """
+        if self.form is LayerForm.FLEX:
+            return True
+        if self.form is LayerForm.RIGID:
+            return False
+        return None
 
 
 @dataclass

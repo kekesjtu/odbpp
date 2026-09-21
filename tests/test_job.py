@@ -18,10 +18,11 @@ import pytest
 from odbpp import LoadOptions, load_job
 from odbpp.errors import LayerProfileError, ParseError
 from odbpp.geometry import bounding_box, polygon_points
-from odbpp.model import LayerType, Polarity
+from odbpp.diagnostics import Diagnostics
+from odbpp.model import LayerForm, LayerType, Polarity
 from odbpp.units import UnitSystem
 
-from conftest import case_path, fixture_path
+from conftest import case_path, fixture_path, sample_path
 
 
 @pytest.fixture
@@ -345,3 +346,96 @@ class TestRealCases:
         mixed = [l for l in step.drill_layers
                  if l.tools and len({t.type for t in l.tools.tools.values()}) > 1]
         assert mixed, "expected at least one mixed-plating drill layer"
+
+
+def _lf(*lines: str) -> str:
+    """Join fixture lines with LF.
+
+    Spelled out rather than embedded as escape sequences so the fixture text
+    stays readable and does not depend on the source file's own line endings.
+    """
+    return "".join(line + chr(10) for line in lines)
+
+
+_PROFILE = _lf("UNITS=MM", "F 1", "S P 0", "OB 0 0 I", "OS 0 10",
+               "OS 20 10", "OS 20 0", "OS 0 0", "OE", "SE")
+
+
+def _minimal_job(matrix: str) -> dict:
+    return {
+        "matrix/matrix": matrix,
+        "misc/info": _lf("UNITS=MM"),
+        "steps/board/stephdr": _lf("UNITS=MM"),
+        "steps/board/profile": _PROFILE,
+    }
+
+
+class TestLayerForm:
+    """``FORM`` is rigid-vs-flex laminate (spec p.66), and exporters omit it.
+
+    All four real jobs in ``cases/`` leave it out -- including
+    ``designodb-rigidflex``, whose whole point is that part of it bends.  So the
+    interesting cases are "declared" and "not declared", and the failure to avoid
+    is answering RIGID when the file said nothing at all.
+    """
+
+    def test_a_declared_form_is_reported(self):
+        job = load_job(str(fixture_path("fx_flex_form")))
+        step = job.single_step
+        assert step.layer("RIGID_1").ref.form is LayerForm.RIGID
+        assert step.layer("FLEX_1").ref.form is LayerForm.FLEX
+
+    def test_an_absent_form_is_not_rigid(self):
+        step = load_job(str(fixture_path("fx_flex_form"))).single_step
+        for name in ("SILK_1", "POLYIMIDE_1"):
+            assert step.layer(name).ref.form is LayerForm.UNSPECIFIED
+
+    def test_is_flex_is_three_valued(self):
+        step = load_job(str(fixture_path("fx_flex_form"))).single_step
+        assert step.layer("FLEX_1").ref.is_flex is True
+        assert step.layer("RIGID_1").ref.is_flex is False
+        assert step.layer("SILK_1").ref.is_flex is None
+
+    def test_no_warning_when_at_least_one_layer_declares_form(self):
+        diagnostics = Diagnostics()
+        load_job(str(fixture_path("fx_flex_form")), diagnostics=diagnostics)
+        assert "matrix.form_undeclared" not in diagnostics.codes()
+
+    def test_a_matrix_that_declares_nothing_warns_once(self, tmp_path):
+        from conftest import write_tree
+        from odbpp.diagnostics import MATRIX_FORM_UNDECLARED
+
+        write_tree(tmp_path / "job", _minimal_job(_lf(
+            "LAYER {", "    ROW=1", "    NAME=A", "    TYPE=SIGNAL", "}",
+            "LAYER {", "    ROW=2", "    NAME=B", "    TYPE=SIGNAL", "}",
+        )))
+        diagnostics = Diagnostics()
+        job = load_job(str(tmp_path / "job"), diagnostics=diagnostics)
+        assert all(l.ref.form is LayerForm.UNSPECIFIED
+                   for l in job.single_step.layers)
+        # One warning for the matrix, not one per layer: the cause is the exporter.
+        assert [d.code for d in diagnostics].count(MATRIX_FORM_UNDECLARED) == 1
+
+    def test_an_unrecognised_form_is_reported_and_left_unspecified(self, tmp_path):
+        from conftest import write_tree
+
+        write_tree(tmp_path / "job", _minimal_job(_lf(
+            "LAYER {", "    ROW=1", "    NAME=A", "    TYPE=SIGNAL",
+            "    FORM=BENDABLE", "}",
+        )))
+        diagnostics = Diagnostics()
+        job = load_job(str(tmp_path / "job"), diagnostics=diagnostics)
+        assert job.single_step.layers[0].ref.form is LayerForm.UNSPECIFIED
+        assert job.single_step.layers[0].ref.is_flex is None
+        unknown = [d for d in diagnostics if d.code == "matrix.unknown_form"]
+        assert len(unknown) == 1
+        assert "BENDABLE" in unknown[0].message
+        # A FORM we cannot read must not be reported as an ADD_TYPE problem.
+        assert "matrix.unknown_add_type" not in diagnostics.codes()
+
+    def test_real_jobs_leave_the_form_undeclared(self):
+        diagnostics = Diagnostics()
+        job = load_job(str(sample_path("designodb-rigidflex.tgz")),
+                       diagnostics=diagnostics)
+        assert {l.ref.form for l in job.single_step.layers} == {LayerForm.UNSPECIFIED}
+        assert "matrix.form_undeclared" in diagnostics.codes()

@@ -111,6 +111,8 @@ MATRIX_DUPLICATE_LAYER = "matrix.duplicate_layer"
 MATRIX_UNKNOWN_LAYER_TYPE = "matrix.unknown_layer_type"
 MATRIX_UNKNOWN_ADD_TYPE = "matrix.unknown_add_type"
 MATRIX_DANGLING_CU_REF = "matrix.dangling_cu_ref"
+MATRIX_UNKNOWN_FORM = "matrix.unknown_form"
+MATRIX_FORM_UNDECLARED = "matrix.form_undeclared"
 
 # attribute definitions (misc/sysattr*, misc/userattr)
 ATTR_DUPLICATE_DEFINITION = "attr.duplicate_definition"
