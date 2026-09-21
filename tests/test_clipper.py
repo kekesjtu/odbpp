@@ -397,11 +397,45 @@ class TestRoundStroke:
     def test_no_paths_gives_nothing(self):
         assert not stroke_paths([], 0.5)
 
+    def test_a_closed_centreline_keeps_its_final_segment(self):
+        # The regression from the second review: a full-circle arc's centreline
+        # ends where it starts, so offsetting it as an *open* path dropped the
+        # last segment.  With a narrow stroke the two round caps no longer
+        # overlapped and the annulus lost its hole entirely.
+        radius, count = 5.0, 64
+        ring = [(radius * math.cos(2 * math.pi * i / count),
+                 radius * math.sin(2 * math.pi * i / count))
+                for i in range(count)]
+        closed = ring + [ring[0]]
+
+        result = stroke_paths([closed], 0.05)
+        assert len(result.holes) == 1
+        # The annulus between 4.95 and 5.05 mm has area pi.
+        assert result.area == pytest.approx(math.pi, rel=0.01)
+
+    def test_an_open_centreline_is_still_capped(self):
+        # The closure rule must not turn a genuine open trace into a loop.
+        assert stroke_paths([[(0, 0), (10, 0)]], 0.5).holes == []
+
 
 class TestSweepPaths:
     def test_matches_the_single_pattern_case(self):
         one = sweep_paths([square_ring(1.0)], [[(0, 0), (5, 0)]])
         assert one.area == pytest.approx(6.0)
+
+    def test_a_closed_path_is_swept_as_a_loop(self):
+        # Same closure rule as the round stroke: a square symbol swept along a
+        # closed centreline must cover the last segment too, or the loop has a
+        # gap where two sweeps should meet.
+        radius, count = 5.0, 64
+        ring = [(radius * math.cos(2 * math.pi * i / count),
+                 radius * math.sin(2 * math.pi * i / count))
+                for i in range(count)]
+        closed = sweep_paths([square_ring(0.2)], [ring + [ring[0]]])
+        open_path = sweep_paths([square_ring(0.2)], [ring])
+        assert len(closed.holes) == 1
+        assert open_path.holes == []
+        assert closed.area > open_path.area
 
     def test_two_pattern_sizes_union(self):
         result = sweep_paths([square_ring(1.0), square_ring(2.0)],
@@ -570,6 +604,24 @@ class TestSnapToGrid:
         b = square_region(0.00004, 0.0, 1.00004, 1.0)
         region, _collapsed = snap_to_grid(union(a, b), 4)
         assert len(region.islands) == 1
+
+    def test_a_non_adjacent_repeat_is_kept_so_lobes_do_not_weld(self):
+        # The regression from the second review: two lobes joined by a neck
+        # narrower than the grid.  Deleting the repeated vertex reconnected the
+        # edges around the neck and produced one 9 mm^2 rectangle instead of two
+        # 4 mm^2 lobes -- a shape that passed every validity check.
+        from shapely.geometry import Polygon
+
+        points = [(0, 0), (2, 0), (2, 2), (1.00002, 2), (1.00002, 3), (2, 3),
+                  (2, 5), (0, 5), (0, 3), (1, 3), (1, 2), (0, 2)]
+        region, collapsed = snap_to_grid(island(*points), 4)
+        assert collapsed == 0
+        assert region.area == pytest.approx(8.0)
+        assert len(region.islands) == 2
+        assert region.holes == []
+        for ring in region.rings:
+            assert Polygon(ring.points).is_valid
+            assert Polygon(ring.points).area > 0.0
 
 
 class TestGridSnapSerialisationRoundTrip:

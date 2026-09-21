@@ -465,6 +465,26 @@ class TestSweeps:
         assert not [d for d in expander.diagnostics
                     if d.code == "geometry.arc_degenerate"]
 
+    def test_a_narrow_full_circle_keeps_its_hole(self):
+        # A wide stroke hides a missing closing segment: the two round caps
+        # overlap and the seam is invisible.  At r100 (0.1 mm line) they no
+        # longer do, and the open arc band has no hole at all -- the topology is
+        # wrong even though the area still looks plausible.
+        from odbpp.features import ArcFeature
+        from odbpp.units import UnitScope
+
+        expander = Expander(None)
+        arc = ArcFeature(line_no=1, start_mm=(5.0, 0.0), end_mm=(5.0, 0.0),
+                         center_mm=(0.0, 0.0), symbol=SymbolRef(0, "r100"))
+        features = FeatureFile(path="review/full-circle-narrow",
+                               units=UnitScope.metric(), records=[arc])
+        region = expander.run_region(features.records, features, depth=0)
+        assert len(region.holes) == 1
+        # 0.05 mm radius on a 5 mm circle: pi*((5.05)^2 - (4.95)^2) = pi.
+        assert region.area == pytest.approx(math.pi, rel=0.01)
+        assert not [d for d in expander.diagnostics
+                    if d.code == "geometry.arc_degenerate"]
+
     def test_a_degenerate_arc_has_no_centreline(self):
         # start == end means a 360 degree turn (spec p.40), which is a zero-length
         # centreline: sweeping it would draw nothing, so it is expanded as a ring

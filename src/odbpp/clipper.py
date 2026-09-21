@@ -356,19 +356,20 @@ def intersection(*regions: Region) -> Region:
 def _to_grid(points: Sequence[Point], factor: float) -> list[tuple[int, int]]:
     """Quantise to an integer grid of *factor* steps per millimetre.
 
-    Repeated vertices are removed, *including non-adjacent repetitions*: two
-    distinct source points can snap onto the same grid vertex, and Clipper
-    rejects a path that visits a vertex twice (the rigid-flex ``SPT`` layer has
-    6100 such rings, the first at index 2183).
+    Only **consecutive** duplicates are removed, plus a repeated closing point.
+    A non-adjacent repeat is kept: it means the contour touches itself, and
+    deleting it reconnects two edges that only meet at a point, which changes
+    the filled area.  A two-lobe polygon joined by a neck narrower than the
+    grid used to lose the neck *and* gain a square millimetre, because the two
+    lobes were welded into one rectangle.  Clipper's nonzero fill resolves such
+    self-touching paths into their simple parts, which is what
+    :func:`snap_to_grid` emits.
     """
     out: list[tuple[int, int]] = []
-    seen: set[tuple[int, int]] = set()
     for x, y in points:
         point = (int(round(x * factor)), int(round(y * factor)))
-        if point in seen:
-            continue
-        seen.add(point)
-        out.append(point)
+        if not out or out[-1] != point:
+            out.append(point)
     while len(out) > 1 and out[0] == out[-1]:
         out.pop()
     return out
@@ -503,6 +504,10 @@ def sweep_polyline(pattern: Iterable[Point], path: Sequence[Point]) -> Region:
     path_pts = _to_clipper(list(path))
     if len(pattern_pts) < 3 or len(path_pts) < 2:
         return Region()
+    # A closed centreline must end where it started, or the Minkowski sweep
+    # misses the final segment exactly as the open round stroke used to.
+    if _is_closed_centreline(path) and len(path_pts) >= 3:
+        path_pts = path_pts + [path_pts[0]]
 
     # MinkowskiSum wants a positive-orientation pattern for a predictable result.
     from .geometry import signed_area
@@ -549,6 +554,20 @@ def _union_paths(paths: Iterable[Sequence[tuple[int, int]]]) -> Region:
     return _region_from_tree(engine.Execute2(pyclipper.CT_UNION, _FILL, _FILL))
 
 
+def _is_closed_centreline(points: Sequence[Point]) -> bool:
+    """True when *points* traces a closed loop (its first point is its last).
+
+    A full-circle arc (spec p.40: start == end) is the case this exists for.
+    The closing duplicate is compared on the quantised grid, so two endpoints
+    that differ by less than a nanometre still count as the same vertex.
+    """
+    if len(points) < 4:
+        return False
+    first = (int(round(points[0][0] * SCALE)), int(round(points[0][1] * SCALE)))
+    last = (int(round(points[-1][0] * SCALE)), int(round(points[-1][1] * SCALE)))
+    return first == last
+
+
 def stroke_paths(paths: Iterable[Sequence[Point]], radius_mm: float,
                  options=None) -> Region:
     """Round sweep of many centrelines in one pass.
@@ -560,6 +579,13 @@ def stroke_paths(paths: Iterable[Sequence[Point]], radius_mm: float,
     (an inscribed 10-gon is only 95% of the true diameter), which on a long thin
     trace is a 5% width error rather than a 5% area error.
 
+    A **closed** centreline (a full circle) is offset as a closed line, not as
+    an open one.  Treating it as open drops the segment from its last sample
+    back to its first: the result is an open arc band whose round caps hide the
+    gap when the stroke is wide and leave no hole at all when it is narrow.
+    ``ET_CLOSEDLINE`` joins the ends instead of capping them, so the band is a
+    genuine annulus.
+
     ``ArcTolerance`` is the sagitta of the generated round caps, so the same
     tessellation budget that governs arcs governs cap smoothness.
     """
@@ -569,11 +595,13 @@ def stroke_paths(paths: Iterable[Sequence[Point]], radius_mm: float,
 
     offsetter = pyclipper.PyclipperOffset()
     added = False
-    for path in paths:
-        quantised = _to_clipper(path)
-        if len(quantised) < 2:
+    for points in paths:
+        closed = _is_closed_centreline(points)
+        quantised = _to_clipper(points)
+        if len(quantised) < (3 if closed else 2):
             continue
-        offsetter.AddPath(quantised, pyclipper.JT_ROUND, pyclipper.ET_OPENROUND)
+        end_type = pyclipper.ET_CLOSEDLINE if closed else pyclipper.ET_OPENROUND
+        offsetter.AddPath(quantised, pyclipper.JT_ROUND, end_type)
         added = True
     if not added:
         return Region()
@@ -601,7 +629,15 @@ def sweep_paths(patterns: Iterable[Sequence[Point]],
     """
     from .geometry import signed_area
 
-    clipper_paths = [p for p in (_to_clipper(p) for p in paths) if len(p) >= 2]
+    clipper_paths: list[list[tuple[int, int]]] = []
+    for points in paths:
+        path = _to_clipper(points)
+        if len(path) < 2:
+            continue
+        # Close the loop so the sweep covers the last segment too.
+        if _is_closed_centreline(points) and len(path) >= 3:
+            path = path + [path[0]]
+        clipper_paths.append(path)
     if not clipper_paths:
         return Region()
 
