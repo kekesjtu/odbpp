@@ -119,6 +119,8 @@ MATRIX_FORM_MISSING_DIELECTRIC = "matrix.form_missing_dielectric"
 
 # attribute definitions (misc/sysattr*, misc/userattr)
 ATTR_DUPLICATE_DEFINITION = "attr.duplicate_definition"
+#: AGENTS note 5 / spec p.231: ``.layer_dielectric`` is a non-copper field.
+ATTR_LAYER_DIELECTRIC_ON_COPPER = "attr.layer_dielectric_on_copper"
 
 # features / profile records (research 01 §4.4)
 FEATURES_NO_UNITS = "features.no_units"
@@ -149,6 +151,12 @@ LAYER_PROFILE_INVALID = "layer_profile.invalid"
 TOOLS_NO_UNITS = "tools.no_units"
 TOOLS_DUPLICATE_NUM = "tools.duplicate_num"
 
+# stackup / Z intervals (AGENTS constraint 3: a dielectric is perforated by the
+# drills whose Z interval overlaps it)
+STACKUP_DIELECTRIC_SPAN_UNKNOWN = "stackup.dielectric_span_unknown"
+STACKUP_DRILL_SPAN_UNKNOWN = "stackup.drill_span_unknown"
+STACKUP_THICKNESS_UNKNOWN = "stackup.thickness_unknown"
+
 # geometry expansion (research 05 §12: sweeps, polarity, missing symbols)
 GEOMETRY_SYMBOL_UNDEFINED = "geometry.symbol_undefined"
 GEOMETRY_SYMBOL_UNSUPPORTED = "geometry.symbol_unsupported"
@@ -165,3 +173,6 @@ EXPORT_LAYER_SELECTION_EMPTY = "export.layer_selection_empty"
 EXPORT_LAYER_FAILED = "export.layer_failed"
 EXPORT_LAYER_SKIPPED = "export.layer_skipped"
 EXPORT_UNKNOWN_LAYER = "export.unknown_layer"
+#: Vertices collapsed onto one another at the output grid, so a ring lost all
+#: its area; the ring is dropped from the model rather than shipped invalid.
+EXPORT_DEGENERATE_RING = "export.degenerate_ring"

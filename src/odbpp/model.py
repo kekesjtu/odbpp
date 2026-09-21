@@ -544,6 +544,11 @@ class Layer:
     #: ``ref.name`` (research 03 R1).
     dir_name: str = ""
     attributes: dict[str, str] = field(default_factory=dict)
+    #: Unit scope of the layer's own ``attrlist`` (its ``UNITS`` when declared,
+    #: else the job default).  Kept so attribute values keep their unit after
+    #: the export normalises everything else to millimetres: ``.layer_dielectric``
+    #: is 65 um in an INCH job and 0.0026 mm in an MM one.
+    attribute_scope: Optional[UnitScope] = None
     #: Raw ``features`` file contents, or ``None`` when the layer has none.
     features: Optional[object] = None  # odbpp.features.FeatureFile
     #: Layer-level profile.  Per AGENTS constraint 3 this takes priority over
@@ -590,6 +595,8 @@ class Step:
     #: Layers in matrix row order (not directory order).
     layers: list[Layer] = field(default_factory=list)
     attributes: dict[str, str] = field(default_factory=dict)
+    #: Unit scope of the step's own ``attrlist``.
+    attribute_scope: Optional[UnitScope] = None
 
     def layer(self, name: str) -> Optional[Layer]:
         folded = name.casefold()

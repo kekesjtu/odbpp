@@ -14,6 +14,8 @@ are the ones that look right on screen:
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from odbpp.diagnostics import Diagnostics
@@ -236,6 +238,119 @@ class TestBaseGeometry:
 
 
 # ---------------------------------------------------------------------------
+# AGENTS constraint 3: drills projected through a dielectric
+# ---------------------------------------------------------------------------
+
+def _square_profile(x0: float, y0: float, x1: float, y1: float):
+    from odbpp.model import ContourPart, Polygon, SurfaceGeometry
+
+    corners = [(x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+    return SurfaceGeometry(polygons=[Polygon(
+        is_island=True, start=(x0, y0),
+        parts=[ContourPart(kind="segment", end=point) for point in corners],
+    )])
+
+
+def _drill_step(*, include: tuple[str, ...] = ("D_1_2",)):
+    """SIGNAL_1 / DIELECTRIC_A / SIGNAL_2 / INTERSTITIAL / SIGNAL_3.
+
+    ``D_1_2`` crosses DIELECTRIC_A (planes 0..1); ``D_2_3`` starts at that
+    dielectric's *bottom* plane and must not touch it; ``D_1_3`` crosses both.
+    """
+    from odbpp.features import PadFeature
+    from odbpp.model import Layer, LayerRef, LayerType, Step, StepHeader
+
+    units = UnitScope.metric()
+
+    def new_layer(name, layer_type, row, **kw) -> Layer:
+        return Layer(ref=LayerRef(name=name, row=row, type=layer_type, **kw),
+                     dir_name=name)
+
+    def sheet(name, row, profile) -> Layer:
+        layer = new_layer(name, LayerType.DIELECTRIC, row)
+        layer.profile = profile
+        layer.features = FeatureFile(path=name, units=units, records=[])
+        return layer
+
+    def drill(name, row, start, end) -> Layer:
+        record = PadFeature(line_no=1, x_mm=5.0, y_mm=5.0,
+                            symbol=SymbolRef(1, "r2000"))
+        layer = new_layer(name, LayerType.DRILL, row,
+                          start_name=start, end_name=end)
+        layer.features = FeatureFile(path=name, units=units, records=[record])
+        return layer
+
+    outline = _square_profile(0.0, 0.0, 10.0, 10.0)
+    layers = [
+        new_layer("SIGNAL_1", LayerType.SIGNAL, 1),
+        sheet("DIELECTRIC_A", 2, outline),
+        new_layer("SIGNAL_2", LayerType.SIGNAL, 3),
+        sheet("INTERSTITIAL", 4, outline),
+        new_layer("SIGNAL_3", LayerType.SIGNAL, 5),
+    ]
+    spans = {"D_1_2": ("SIGNAL_1", "SIGNAL_2"),
+             "D_2_3": ("SIGNAL_2", "SIGNAL_3"),
+             "D_1_3": ("SIGNAL_1", "SIGNAL_3")}
+    for row, name in enumerate(include, start=6):
+        layers.append(drill(name, row, *spans[name]))
+    return Step(name="S", header=StepHeader(units=units), layers=layers,
+                profile=outline)
+
+
+class TestDrillProjection:
+    def test_a_crossing_drill_is_removed_from_the_dielectric(self):
+        step = _drill_step()
+        expander = Expander(None)
+        result = expand_layer(step.layer("DIELECTRIC_A"), step, expander=expander)
+        assert result.used_base
+        # 10x10 outline minus the r2000 pad (2 mm diameter, r = 1 mm).  The pad
+        # is tessellated, so the hole is a hair under pi mm^2 -- hence rel=1e-2.
+        assert result.region.area == pytest.approx(100.0 - math.pi, rel=1e-2)
+        assert result.drills_subtracted == ["D_1_2"]
+        assert result.drill_cut_mm2 == pytest.approx(math.pi, rel=1e-2)
+        assert result.region.holes
+
+    def test_a_drill_starting_below_does_not_touch_it(self):
+        # D_2_3 spans planes (1, 2); the dielectric spans (0, 1).  Half-open
+        # intervals are what keep the blind drill out of it.
+        step = _drill_step(include=("D_2_3",))
+        result = expand_layer(step.layer("DIELECTRIC_A"), step,
+                              expander=Expander(None))
+        assert result.drills_subtracted == []
+        assert result.region.area == pytest.approx(100.0)
+
+    def test_a_through_drill_crosses_both_dielectrics(self):
+        step = _drill_step(include=("D_1_3",))
+        expander = Expander(None)
+        upper = expand_layer(step.layer("DIELECTRIC_A"), step, expander=expander)
+        lower = expand_layer(step.layer("INTERSTITIAL"), step, expander=expander)
+        assert upper.drills_subtracted == ["D_1_3"]
+        assert lower.drills_subtracted == ["D_1_3"]
+        assert upper.region.area == pytest.approx(100.0 - math.pi, rel=1e-2)
+
+    def test_an_empty_features_file_still_gets_its_holes(self):
+        # The regression: the early return for "no records" used to hand back the
+        # bare board outline, so a real dielectric (whose features file is often
+        # empty) filled every drill.
+        step = _drill_step()
+        dielectric = step.layer("DIELECTRIC_A")
+        assert dielectric.features.records == []
+        result = expand_layer(dielectric, step, expander=Expander(None))
+        assert result.drills_subtracted == ["D_1_2"]
+        assert result.region.area < 100.0
+
+    def test_an_unresolved_span_subtracts_nothing_and_warns(self):
+        diagnostics = Diagnostics()
+        step = _drill_step()
+        step.layer("D_1_2").ref.end_name = ""
+        expander = Expander(None, diagnostics=diagnostics)
+        result = expand_layer(step.layer("DIELECTRIC_A"), step, expander=expander)
+        assert result.region.area == pytest.approx(100.0)
+        assert result.drills_subtracted == []
+        assert "stackup.drill_span_unknown" in diagnostics.codes()
+
+
+# ---------------------------------------------------------------------------
 # symbol resolution
 # ---------------------------------------------------------------------------
 
@@ -327,6 +442,28 @@ class TestSweeps:
         assert arcs
         region = expander._path_points(arcs[0])
         assert len(region) > 2
+
+    def test_a_full_circle_arc_produces_a_closed_centreline(self):
+        # start == end is a 360 degree turn (spec p.40).  The old full-circle
+        # fast path returned the two coincident endpoints, which deduplicated to
+        # a one-point path and vanished without a diagnostic.
+        from odbpp.features import ArcFeature
+        from odbpp.units import UnitScope
+
+        expander = Expander(None)
+        arc = ArcFeature(line_no=1, start_mm=(5.0, 0.0), end_mm=(5.0, 0.0),
+                         center_mm=(0.0, 0.0), symbol=SymbolRef(0, "r1000"))
+        path = expander._path_points(arc)
+        assert len(path) > 8
+        assert path[0] == path[-1]
+
+        # The swept band is the annulus 4.5..5.5 mm: pi*(5.5^2 - 4.5^2) = 10*pi.
+        features = FeatureFile(path="review/full-circle", units=UnitScope.metric(),
+                               records=[arc])
+        region = expander.run_region(features.records, features, depth=0)
+        assert region.area == pytest.approx(10 * math.pi, rel=1e-3)
+        assert not [d for d in expander.diagnostics
+                    if d.code == "geometry.arc_degenerate"]
 
     def test_a_degenerate_arc_has_no_centreline(self):
         # start == end means a 360 degree turn (spec p.40), which is a zero-length

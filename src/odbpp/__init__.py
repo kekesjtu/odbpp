@@ -63,6 +63,7 @@ from .export import (
     step_to_json,
 )
 from .job import LoadOptions, load_job
+from .stackup import Stackup, ZSpan
 from .model import (
     Job,
     Layer,
@@ -115,6 +116,9 @@ __all__ = [
     "build_step_preview",
     "step_to_json",
     "layer_to_json",
+    # stackup (layer order, dielectric/drill Z spans, thicknesses)
+    "Stackup",
+    "ZSpan",
     # rendering (stage 3)
     "SvgOptions",
     "render_svg",

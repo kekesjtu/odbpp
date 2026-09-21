@@ -72,7 +72,8 @@ from .geometry import (
     standard_symbol_geometry,
     transform_points,
 )
-from .model import Orientation, Polarity, Point, SurfaceGeometry
+from .model import LayerType, Orientation, Polarity, Point, SurfaceGeometry
+from .stackup import Stackup
 from .symbols import (
     StandardSymbol,
     SymbolDefinition,
@@ -172,6 +173,13 @@ class LayerGeometry:
     polarity_runs: int = 0
     #: Whether the composition started from a filled base (profile) area.
     used_base: bool = False
+    #: Drill layers whose projection was subtracted from this layer's base, in
+    #: matrix order.  Empty for every layer that is not a dielectric sheet.
+    drills_subtracted: list[str] = field(default_factory=list)
+    #: Area the drill projection actually removed (mm^2).  Overlap measured
+    #: before the subtraction, so a hole that was already a feature-reported void
+    #: contributes less than its full area.
+    drill_cut_mm2: float = 0.0
 
     @property
     def area_mm2(self) -> float:
@@ -214,7 +222,41 @@ class Expander:
         self.diagnostics = diagnostics if diagnostics is not None else Diagnostics()
         self._geometry_cache: dict[tuple, Optional[SurfaceGeometry]] = {}
         self._definition_cache: dict[str, Optional[Region]] = {}
+        self._stackups: dict[str, Stackup] = {}
+        self._drill_regions: dict[tuple[str, str], Optional[Region]] = {}
         self._warned: set[str] = set()
+
+    # ------------------------------------------------------------- stackup
+
+    def stackup(self, step) -> Stackup:
+        """The step's layer stack, built once per step.
+
+        Building it is cheap but not free (it walks every board layer), and the
+        expander is reused across a whole job, so it is cached by step name.
+        """
+        cached = self._stackups.get(step.name)
+        if cached is None:
+            cached = Stackup(step, diagnostics=self.diagnostics)
+            self._stackups[step.name] = cached
+        return cached
+
+    def drill_region(self, step, layer) -> Optional[Region]:
+        """Composed projection of one drill layer, cached by step and layer.
+
+        A dielectric's base needs the union of every drill that crosses it, and
+        several dielectrics share the same drill layers -- expanding each drill
+        once turns an O(dielectrics x drills) composition into O(drills).
+        """
+        key = (step.name, layer.name.casefold())
+        if key in self._drill_regions:
+            return self._drill_regions[key]
+
+        region: Optional[Region] = None
+        if layer.features is not None and layer.features.records:
+            geometry = expand_layer(layer, step, expander=self, options=self.options)
+            region = geometry.region if geometry.region else None
+        self._drill_regions[key] = region
+        return region
 
     # ------------------------------------------------------------- warnings
 
@@ -409,18 +451,22 @@ class Expander:
             return [record.start_mm, record.end_mm]
 
         arc: ArcFeature = record
-        if arc.is_full_circle:
-            # A zero-length centreline would sweep nothing, but the spec calls
-            # start == end a full 360 degree turn (p.40).
-            radius = arc.radius_mm
-            if radius <= 0.0:
-                self._warn_once(
-                    "arc:degenerate",
-                    GEOMETRY_ARC_DEGENERATE,
-                    f"arc at {arc.start_mm} with a coincident centre has no radius",
-                )
-                return []
-            return [arc.start_mm, arc.end_mm]
+        # A centre that coincides with an endpoint leaves no radius, so there is
+        # no curve to sweep.
+        if arc.radius_mm <= 0.0:
+            self._warn_once(
+                "arc:degenerate",
+                GEOMETRY_ARC_DEGENERATE,
+                f"arc at {arc.start_mm} with a coincident centre has no radius",
+            )
+            return []
+
+        # ``arc_points`` already expands start == end into a full 360 degree
+        # turn (spec p.40), so the closed centreline falls out of the ordinary
+        # path.  Treating it as the degenerate two-point segment it literally is
+        # used to drop the whole record: the two coincident points survived
+        # deduplication as one, the path test below rejected it, and a legal
+        # full-circle ring vanished with no diagnostic.
         points = [arc.start_mm]
         points.extend(arc_points(arc.start_mm, arc.end_mm, arc.center_mm,
                                  arc.clockwise, self.options.tessellation))
@@ -722,32 +768,43 @@ def expand_layer(
 
     result = LayerGeometry(layer_name=layer.name, region=base, used_base=used_base)
 
-    if features is None or not features.records:
-        return result
+    records = features.records if features is not None else ()
+    if records:
+        result.records = len(records)
+        result.polarity_runs = _count_runs(records)
 
-    records = features.records
-    result.records = len(records)
-    result.polarity_runs = _count_runs(records)
+        # One running accumulator, seeded with the base area, then every run applied
+        # in file order.  Seeding the accumulator rather than subtracting a
+        # separately-accumulated region is not just tidier -- it is the difference
+        # between working and not on a negative layer.  A negative layer's
+        # *positive* records are voids, so subtracting them from an empty
+        # accumulator yields nothing, and a plane layer would come out blank.
+        region = base
+        for positive, run in _polarity_runs(records):
+            run_region = expander.run_region(run, features, depth=0)
+            if not run_region:
+                continue
+            # Layer polarity inverts the meaning of every record (spec p.39): on a
+            # negative layer the drawn shapes are the voids.
+            if positive != invert:
+                region = clipper.union(region, run_region)
+            else:
+                region = clipper.difference(region, run_region)
+        result.region = region
 
-    # One running accumulator, seeded with the base area, then every run applied
-    # in file order.  Seeding the accumulator rather than subtracting a
-    # separately-accumulated region is not just tidier -- it is the difference
-    # between working and not on a negative layer.  A negative layer's
-    # *positive* records are voids, so subtracting them from an empty
-    # accumulator yields nothing, and a plane layer would come out blank.
-    region = base
-    for positive, run in _polarity_runs(records):
-        run_region = expander.run_region(run, features, depth=0)
-        if not run_region:
-            continue
-        # Layer polarity inverts the meaning of every record (spec p.39): on a
-        # negative layer the drawn shapes are the voids.
-        if positive != invert:
-            region = clipper.union(region, run_region)
-        else:
-            region = clipper.difference(region, run_region)
-
-    result.region = region
+    # AGENTS constraint 3, Z half: a dielectric is the board outline *minus* the
+    # projection of every drill whose Z interval overlaps this dielectric's own.
+    # Applied last, so a hole wins over anything the layer's own artwork drew
+    # inside it, and applied even when the features file is empty -- which on a
+    # real board is the common case and was exactly when the holes used to be
+    # filled in.
+    if result.used_base and layer.type is LayerType.DIELECTRIC:
+        region, drilled, removed = _subtract_drills(
+            result.region, layer, step, expander
+        )
+        result.region = region
+        result.drills_subtracted = drilled
+        result.drill_cut_mm2 = removed
 
     if not result.region:
         expander.diagnostics.warn(
@@ -756,6 +813,43 @@ def expand_layer(
             layer.dir_name or None,
         )
     return result
+
+
+def _subtract_drills(
+    region: Region,
+    layer,
+    step,
+    expander: Expander,
+) -> tuple[Region, list[str], float]:
+    """Remove the projection of every drill crossing *layer* (AGENTS constraint 3).
+
+    Returns ``(region_without_holes, drill_names, removed_area_mm2)``.  Nothing
+    is guessed: a span that cannot be resolved yields no subtraction and a
+    diagnostic from :class:`~odbpp.stackup.Stackup`, because treating an unknown
+    span as a through-hole would silently perforate the whole board.
+    """
+    if not region:
+        return region, [], 0.0
+
+    stackup = expander.stackup(step)
+    crossing = stackup.drills_through(layer)
+    if not crossing:
+        return region, [], 0.0
+
+    projection = Region()
+    names: list[str] = []
+    for drill in crossing:
+        drill_region = expander.drill_region(step, drill)
+        if not drill_region:
+            continue
+        projection = clipper.union(projection, drill_region)
+        names.append(drill.name)
+
+    if not projection:
+        return region, [], 0.0
+
+    removed = clipper.intersection(region, projection).area
+    return clipper.difference(region, projection), names, removed
 
 
 def _starts_from_profile(layer) -> bool:

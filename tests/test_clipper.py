@@ -29,6 +29,7 @@ from odbpp.clipper import (
     region_from_geometry,
     region_from_rings,
     simplify,
+    snap_to_grid,
     stroke_paths,
     sweep,
     sweep_paths,
@@ -242,6 +243,23 @@ class TestIntersection:
 
     def test_a_single_operand_is_returned(self):
         assert intersection(square_region(0, 0, 2, 2)).area == pytest.approx(4.0)
+
+    def test_an_empty_operand_makes_the_whole_intersection_empty(self):
+        # Filtering the empties out first made ``A & 0`` return A: an empty
+        # region read as "no constraint" instead of "nothing survives".
+        assert not intersection(square_region(0, 0, 2, 2), Region())
+        assert not intersection(Region(), square_region(0, 0, 2, 2))
+        assert not intersection(square_region(0, 0, 2, 2),
+                                square_region(0, 0, 1, 1), Region())
+
+    def test_three_operands_intersect_pairwise(self):
+        # Feeding B and C together to the clip argument computes A & (B | C),
+        # which for two halves of A is all of A (4 mm^2) rather than nothing.
+        a = square_region(0, 0, 2, 2)
+        b = square_region(0, 0, 1, 2)
+        c = square_region(1, 0, 2, 2)
+        assert not intersection(a, b, c)
+        assert intersection(a, b, b).area == pytest.approx(2.0)
 
 
 class TestSimplify:
@@ -507,3 +525,61 @@ class TestQuantisation:
         ring = square_region(0, 0, 1, 1).rings[0]
         assert isinstance(ring, Ring)
         assert isinstance(ring.points, tuple)
+
+
+class TestSnapToGrid:
+    """Quantising to the output grid is geometry, not formatting."""
+
+    def test_it_keeps_a_square_that_is_already_on_the_grid(self):
+        region, collapsed = snap_to_grid(square_region(0, 0, 10, 10), 4)
+        assert collapsed == 0
+        assert region.area == pytest.approx(100.0)
+        for ring in region.rings:
+            for x, y in ring.points:
+                assert abs(x * 10_000 - round(x * 10_000)) < 1e-6
+                assert abs(y * 10_000 - round(y * 10_000)) < 1e-6
+
+    def test_a_ring_narrower_than_the_grid_collapses_and_is_counted(self):
+        # The isolated serialisation defect from the review: a 0.00002 mm wide
+        # rectangle became two coincident edges, i.e. an invalid polygon.
+        narrow = island((0.0, 0.0), (0.0, 1.0), (0.00002, 1.0), (0.00002, 0.0))
+        assert narrow.area == pytest.approx(0.00002)
+        region, collapsed = snap_to_grid(narrow, 4)
+        assert not region
+        assert collapsed == 1
+
+    def test_a_path_visiting_one_vertex_twice_does_not_raise(self):
+        # designodb-rigidflex's SPT ring 2183 collapsed two vertices onto one and
+        # Clipper rejected the path outright ("invalid for clipping").
+        path = [(461.266, -56.694), (461.268, -56.694),
+                (461.266, -56.694), (461.264, -56.694)]
+        region, collapsed = snap_to_grid(Region([Ring(tuple(path), True)]), 4)
+        assert not region
+        assert collapsed == 1
+
+    def test_a_self_intersecting_ring_is_repaired_not_shipped(self):
+        bowtie = island((0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0))
+        region, collapsed = snap_to_grid(bowtie, 4)
+        assert region.area == pytest.approx(50.0)
+        assert collapsed == 0
+
+    def test_nearby_vertices_are_merged_by_the_union_pass(self):
+        # Two overlapping islands a grid step apart must come back as one ring
+        # whose edges do not cross.
+        a = square_region(0, 0, 1.0, 1.0)
+        b = square_region(0.00004, 0.0, 1.00004, 1.0)
+        region, _collapsed = snap_to_grid(union(a, b), 4)
+        assert len(region.islands) == 1
+
+
+class TestGridSnapSerialisationRoundTrip:
+    """Whatever snap_to_grid returns must survive being written and read back."""
+
+    def test_snapped_rings_are_valid_and_non_degenerate(self):
+        from shapely.geometry import Polygon
+
+        region, _collapsed = snap_to_grid(square_region(0, 0, 10, 10), 4)
+        for ring in region.rings:
+            polygon = Polygon(ring.points)
+            assert polygon.is_valid
+            assert polygon.area > 0.0

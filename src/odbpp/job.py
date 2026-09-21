@@ -240,7 +240,7 @@ def _load_step(
 
     attr_rel = f"{step_rel}/attrlist"
     if archive.exists(attr_rel):
-        step.attributes, _ = parse_attrlist(
+        step.attributes, step.attribute_scope = parse_attrlist(
             archive, attr_rel, default_scope=job.info.units, diagnostics=diags
         )
 
@@ -315,9 +315,14 @@ def _load_layer(
 
     attr_rel = f"{layer_rel}/attrlist"
     if archive.exists(attr_rel):
-        layer.attributes, _ = parse_attrlist(
+        layer.attributes, layer.attribute_scope = parse_attrlist(
             archive, attr_rel, default_scope=job.info.units, diagnostics=diags
         )
+    else:
+        # No attrlist at all: the job default still applies to any attribute the
+        # layer carries from elsewhere, and ``None`` would have to be resolved
+        # by every consumer instead.
+        layer.attribute_scope = job.info.units
 
     if opts.load_features:
         features_rel = f"{layer_rel}/features"

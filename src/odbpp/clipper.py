@@ -46,6 +46,7 @@ __all__ = [
     "difference",
     "intersection",
     "simplify",
+    "snap_to_grid",
     "sweep",
     "sweep_polyline",
     "sweep_paths",
@@ -325,16 +326,143 @@ def difference(subject: Region, clip: Region) -> Region:
 
 
 def intersection(*regions: Region) -> Region:
-    """Intersection of all given regions."""
-    live = [r for r in regions if r]
-    if not live:
-        return Region()
-    if len(live) == 1:
-        return Region(list(live[0].rings))
+    """Intersection of *all* given regions.
 
-    engine = _clipper_for(live[0].rings, [r for region in live[1:] for r in region.rings])
-    tree = engine.Execute2(pyclipper.CT_INTERSECTION, _FILL, _FILL)
-    return _region_from_tree(tree)
+    Composed pairwise rather than by feeding every later region to the clip
+    argument: ``Execute2`` treats all clip paths as one polygon set, so a single
+    call would compute ``A & (B | C)`` instead of ``A & B & C``.  An empty
+    operand makes the whole intersection empty -- including an empty *first*
+    operand, which must not be mistaken for "no constraint".
+    """
+    if not regions:
+        return Region()
+
+    result = Region(list(regions[0].rings))
+    if not result:
+        return Region()
+
+    for other in regions[1:]:
+        if not other:
+            return Region()
+        engine = _clipper_for(result.rings, other.rings)
+        result = _region_from_tree(
+            engine.Execute2(pyclipper.CT_INTERSECTION, _FILL, _FILL)
+        )
+        if not result:
+            return Region()
+    return result
+
+
+def _to_grid(points: Sequence[Point], factor: float) -> list[tuple[int, int]]:
+    """Quantise to an integer grid of *factor* steps per millimetre.
+
+    Repeated vertices are removed, *including non-adjacent repetitions*: two
+    distinct source points can snap onto the same grid vertex, and Clipper
+    rejects a path that visits a vertex twice (the rigid-flex ``SPT`` layer has
+    6100 such rings, the first at index 2183).
+    """
+    out: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for x, y in points:
+        point = (int(round(x * factor)), int(round(y * factor)))
+        if point in seen:
+            continue
+        seen.add(point)
+        out.append(point)
+    while len(out) > 1 and out[0] == out[-1]:
+        out.pop()
+    return out
+
+
+def snap_to_grid(region: Region, digits: int) -> tuple[Region, int]:
+    """Regularise *region* onto the output coordinate grid.
+
+    Rounding each coordinate independently at serialisation time is not safe:
+    two nearby vertices can merge, a narrow ring can collapse onto a line, and an
+    edge can be pushed across a neighbour so the printed polygon is
+    self-intersecting -- while ``area_mm2`` still describes the *pre-rounding*
+    shape.  Consumers then receive polygons that are invalid or enclose nothing,
+    with no diagnostic.
+
+    This does the quantisation *as geometry*: every vertex is snapped to a
+    ``10**-digits`` mm grid, the whole region is re-unioned with the nonzero fill
+    rule (which resolves crossings, merges slivers and re-derives island/hole
+    nesting), and the result is wound to the spec convention.  Every output
+    vertex is an exact multiple of the grid step, so serialisation cannot change
+    the shape again.
+
+    Returns ``(region, collapsed)`` where *collapsed* is how many input rings had
+    no area left at the target resolution.  Dropping them is correct -- a ring
+    with zero area is not a polygon -- but the count is returned so callers can
+    report it rather than lose it silently.
+    """
+    if not region:
+        return Region(), 0
+
+    factor = float(10 ** max(0, int(digits)))
+    engine = pyclipper.Pyclipper()
+    collapsed = 0
+    added = 0
+    for ring in region.rings:
+        path = _to_grid(ring.points, factor)
+        if len(path) < 3:
+            collapsed += 1
+            continue
+        try:
+            engine.AddPath(path, pyclipper.PT_SUBJECT, True)
+            added += 1
+        except pyclipper.ClipperException:
+            # Clipper rejects a zero-area path outright.  SimplifyPolygon splits
+            # a self-touching ring into its simple parts and returns nothing for
+            # one that is genuinely flat; the latter is what a collapsed sliver
+            # looks like by the time it reaches here.
+            parts = [p for p in pyclipper.SimplifyPolygon(path, _FILL)
+                     if len(p) >= 3]
+            if not parts:
+                collapsed += 1
+                continue
+            for part in parts:
+                engine.AddPath(part, pyclipper.PT_SUBJECT, True)
+                added += 1
+
+    if not added:
+        return Region(), collapsed
+
+    tree = engine.Execute2(pyclipper.CT_UNION, _FILL, _FILL)
+    rings: list[Ring] = []
+
+    def emit(contour, is_hole: bool) -> None:
+        nonlocal collapsed
+        # Clipper's own union can return a *weakly* simple contour -- valid for
+        # its nonzero fill, but with a vertex visited twice when two features
+        # meet at a point.  A consumer validating rings rejects that, so each
+        # contour goes through SimplifyPolygon, which splits it into strictly
+        # simple loops.  It is cheap relative to the union that produced them
+        # (about a third of it on the worst layer of designodb-rigidflex).
+        try:
+            parts = pyclipper.SimplifyPolygon([tuple(p) for p in contour], _FILL)
+        except pyclipper.ClipperException:
+            parts = []
+        if not parts:
+            collapsed += 1
+            return
+        for part in parts:
+            if len(part) < 3:
+                continue
+            points = [(x / factor, y / factor) for x, y in part]
+            ring = _make_ring(points, is_hole=is_hole)
+            if ring is None:
+                collapsed += 1
+            else:
+                rings.append(ring)
+
+    def walk(parent) -> None:
+        for child in parent.Childs:
+            emit(child.Contour, bool(child.IsHole))
+            walk(child)
+
+    walk(tree)
+    return Region(rings), collapsed
 
 
 def simplify(region: Region) -> Region:
