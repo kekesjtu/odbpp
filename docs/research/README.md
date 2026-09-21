@@ -18,6 +18,8 @@ Release 8.1 Update 4, Siemens, 2024-07-16）为**唯一权威依据**。
 
 ## 复现调研结论的工具
 
+第三次审阅见 [10-third-review-2026-09-21.md](10-third-review-2026-09-21.md)：上次核心几何用例通过，仍有三个输出一致性/Z 标记问题。
+
 修复后的再次审阅见 [08-followup-review-2026-09-21.md](08-followup-review-2026-09-21.md)：保留三个可复现问题及全量测试结果。
 
 当前项目审阅见 [06-project-review-2026-09-21.md](06-project-review-2026-09-21.md)（七项已确认
