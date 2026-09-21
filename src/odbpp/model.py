@@ -589,6 +589,10 @@ class Job:
     steps: dict[str, Step] = field(default_factory=dict)
     #: Names of step directories present on disk but absent from the matrix.
     orphan_step_dirs: list[str] = field(default_factory=list)
+    #: User-defined symbol library, preloaded with the symbols the loaded layers
+    #: reference.  ``None`` when nothing referenced a user-defined symbol, or
+    #: when loading was told to skip ``features``.
+    symbols: Optional[object] = None  # odbpp.symbols.SymbolLibrary
     diagnostics: object = None  # odbpp.diagnostics.Diagnostics
 
     @property

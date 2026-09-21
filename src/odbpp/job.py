@@ -151,7 +151,28 @@ def _load(archive: OdbArchive, source: str, opts: LoadOptions, diags: Diagnostic
     if opts.check_symbols:
         _validate_symbols(symbols, job, diags)
 
+    if opts.load_features:
+        # Materialise the user-defined symbols the loaded layers reference, so
+        # the returned job can be rendered after this archive is closed.  The
+        # library is attached even when nothing needed preloading, because
+        # standard symbols are resolved through it too.
+        symbols.preload(_referenced_symbols(symbols, job))
+        job.symbols = symbols
+
     return job
+
+
+def _referenced_symbols(symbols: SymbolLibrary, job: Job) -> list[str]:
+    """Distinct user-defined symbol names referenced by any loaded layer."""
+    out: list[str] = []
+    for step in job.steps.values():
+        for layer in step.layers:
+            if layer.features is None:
+                continue
+            for name in symbols.custom_references(layer.features, job.units.system):
+                if name not in out:
+                    out.append(name)
+    return out
 
 
 # ---------------------------------------------------------------------------

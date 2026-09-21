@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Iterable, Optional, Union
 
 from .archive import OdbArchive
 from .diagnostics import (
@@ -505,6 +505,46 @@ class SymbolLibrary:
 
     def resolve_name(self, name: str, unit: UnitSystem) -> Optional[SymbolTarget]:
         return self.resolve(SymbolRef(index=0, name=name), unit)
+
+    # ------------------------------------------------------------- preloading
+
+    def preload(self, names: Iterable[str]) -> list[str]:
+        """Parse every definition reachable from *names*, recursively.
+
+        A :class:`SymbolLibrary` reads from an :class:`~odbpp.archive.OdbArchive`
+        lazily, and the archive is closed when loading finishes.  Detaching
+        therefore means materialising the definitions that will be needed, so a
+        :class:`~odbpp.model.Job` never holds a file handle and stays usable for
+        rendering long after the archive is gone.
+
+        Only reachable definitions are parsed.  ``cases/designodb-rigidflex``
+        ships 123 definitions but its layers reference 9, and eager loading
+        everything would be 13x wasted work for no benefit.
+
+        Returns the names that were actually loaded.
+        """
+        loaded: list[str] = []
+        seen: set[str] = set()
+
+        def visit(name: str) -> None:
+            key = name.casefold()
+            if key in seen:
+                return
+            seen.add(key)
+
+            definition = self.definition(name)
+            if definition is None:
+                return
+            loaded.append(definition.name)
+
+            # Children first, so a dependency chain is fully resident.
+            for child in self.custom_references(definition.features,
+                                                self.default_scope.system):
+                visit(child)
+
+        for name in names:
+            visit(name)
+        return loaded
 
     # ------------------------------------------------------------- recursion
 
