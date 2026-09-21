@@ -1,0 +1,146 @@
+UNITS=MM
+#
+# ODB++ Feature Symbol Reference (for UNITS=MM)
+# =============================================
+# Symbol dimensions are in MICRONS (1/1000 mm)
+#
+# Round:      r<diameter>         e.g., r1000 = 1mm diameter
+# Square:     s<size>             e.g., s1000 = 1mm square
+# Rectangle:  rect<w>x<h>         e.g., rect2000x1000 = 2mm x 1mm
+# Oval:       oval<w>x<h>         e.g., oval3000x1500 = 3mm x 1.5mm
+# Rounded rect: rect<w>x<h>xr<r>  e.g., rect2000x1000xr200 = 2x1mm with 0.2mm corners
+#
+# Coordinates below are in MM (millimeters)
+#
+
+#
+# Feature symbol names
+#
+$0 r500
+$1 r1000
+$2 r2000
+$3 s500
+$4 s1000
+$5 s2000
+$6 rect2000x1000
+$7 rect3000x1500
+$8 oval2000x1000
+$9 oval3000x2000
+$10 rect2000x1000xr200
+
+#
+# Feature attribute names
+#
+@0 .geometry
+
+#
+# ============================================
+# SECTION 1: ROUND PADS (r<diameter>)
+# ============================================
+# Testing different sizes at known positions
+#
+
+# Row 1: Round pads at y=10mm
+# r500 = 500um = 0.5mm diameter (0.25mm radius)
+P 10 10 0 P 0 8 0
+# r1000 = 1000um = 1mm diameter (0.5mm radius)
+P 20 10 1 P 0 8 0
+# r2000 = 2000um = 2mm diameter (1mm radius)
+P 35 10 2 P 0 8 0
+
+#
+# ============================================
+# SECTION 2: SQUARE PADS (s<size>)
+# ============================================
+#
+
+# Row 2: Square pads at y=25mm
+# s500 = 500um = 0.5mm square
+P 10 25 3 P 0 8 0
+# s1000 = 1000um = 1mm square
+P 20 25 4 P 0 8 0
+# s2000 = 2000um = 2mm square
+P 35 25 5 P 0 8 0
+
+#
+# ============================================
+# SECTION 3: RECTANGULAR PADS (rect<w>x<h>)
+# ============================================
+#
+
+# Row 3: Rectangular pads at y=40mm
+# rect2000x1000 = 2mm x 1mm
+P 12 40 6 P 0 8 0
+# rect3000x1500 = 3mm x 1.5mm
+P 30 40 7 P 0 8 0
+
+#
+# ============================================
+# SECTION 4: OVAL PADS (oval<w>x<h>)
+# ============================================
+#
+
+# Row 4: Oval pads at y=55mm
+# oval2000x1000 = 2mm x 1mm oval
+P 12 55 8 P 0 8 0
+# oval3000x2000 = 3mm x 2mm oval
+P 30 55 9 P 0 8 0
+
+#
+# ============================================
+# SECTION 5: ROUNDED RECTANGLE PADS
+# ============================================
+#
+
+# Row 5: Rounded rectangle at y=70mm
+# rect2000x1000xr200 = 2mm x 1mm with 0.2mm corner radius
+P 12 70 10 P 0 8 0
+
+#
+# ============================================
+# SECTION 6: LINES WITH DIFFERENT WIDTHS
+# ============================================
+# Lines use the symbol to define stroke width
+#
+
+# Horizontal lines at x=50-90mm
+# Line with r500 width (0.5mm trace)
+L 50 10 90 10 0 P 0
+# Line with r1000 width (1mm trace)
+L 50 20 90 20 1 P 0
+# Line with r2000 width (2mm trace)
+L 50 30 90 30 2 P 0
+
+# Diagonal line
+L 50 40 90 60 1 P 0
+
+# Vertical line
+L 95 10 95 70 0 P 0
+
+#
+# ============================================
+# SECTION 7: ARCS
+# ============================================
+# Arc: A xs ys xe ye xc yc sym P dcode ;attr
+# Direction: Y=clockwise, N=counter-clockwise
+#
+
+# Quarter circle arc at (70, 55), radius 10mm, CCW
+A 80 55 70 65 70 55 1 P 0 N
+
+# Half circle arc at (60, 70), radius 5mm, CW
+A 55 70 65 70 60 70 0 P 0 Y
+
+#
+# ============================================
+# SECTION 8: GRID OF ROUND PADS FOR VISUAL CHECK
+# ============================================
+# 5x3 grid of r1000 pads for easy visual verification
+#
+
+P 10 75 1 P 0 8 0
+P 15 75 1 P 0 8 0
+P 20 75 1 P 0 8 0
+P 25 75 1 P 0 8 0
+P 30 75 1 P 0 8 0
+

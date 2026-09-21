@@ -1,0 +1,28 @@
+STEP {
+   COL_NAME=pcb
+   NAME=pcb
+}
+
+LAYER {
+   ROW_NAME=top
+   CONTEXT=BOARD
+   TYPE=SIGNAL
+   NAME=top
+   POLARITY=POSITIVE
+   START_NAME=
+   END_NAME=
+   OLD_NAME=
+   ADD_TYPE=
+}
+
+LAYER {
+   ROW_NAME=bottom
+   CONTEXT=BOARD
+   TYPE=SIGNAL
+   NAME=bottom
+   POLARITY=POSITIVE
+   START_NAME=
+   END_NAME=
+   OLD_NAME=
+   ADD_TYPE=
+}

@@ -1,0 +1,12 @@
+UNITS=MM
+#
+# Board profile - 100mm x 80mm rectangle
+#
+S P 0
+OB 0 0 I
+OS 100 0
+OS 100 80
+OS 0 80
+OS 0 0
+OE
+SE
