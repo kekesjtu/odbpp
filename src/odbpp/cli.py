@@ -11,11 +11,13 @@ Commands
 ``symbols``    referenced symbols, split into standard and user-defined
 ``diagnostics`` every warning/error collected while loading
 ``summarize``  all of the above, as text or JSON
+``export``     compose the layers and write the mm JSON, SVG and HTML preview
 
-``summarize --format json`` is the machine-readable form; it is *not* the final
-intermediate format described in AGENTS (that one carries normalised positive
-polygons and comes later), it is a structural dump that makes the parse
-reviewable.
+``summarize --format json`` is a *structural* dump -- file-level facts that make
+the parse reviewable.  ``export --json`` is the intermediate format from the
+AGENTS data flow: normalised, fully positive polygons in millimetres.  The two
+are deliberately different documents, because one describes the input and the
+other describes the geometry.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from typing import Any, Optional, Sequence
 from . import __version__
 from .diagnostics import Diagnostics
 from .errors import OdbError
-from .geometry import SUPPORTED_SYMBOL_PREFIXES
+from .geometry import DEFAULT_SAGITTA_MM, SUPPORTED_SYMBOL_PREFIXES, TessellationOptions
 from .job import LoadOptions, load_job
 from .model import Job, Layer, Step
 from .symbols import parse_standard_symbol
@@ -71,6 +73,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_sum.add_argument("--max-records", type=int, default=5,
                        help="example feature records to show per layer (text only)")
 
+    p_exp = sub.add_parser("export", help="compose layers; write JSON/SVG/HTML preview",)
+    common(p_exp)
+    p_exp.add_argument("-o", "--out", default=None,
+                       help="output directory (default: out/<job name>)")
+    p_exp.add_argument("--layer", action="append", default=None, metavar="NAME",
+                       help="restrict to this layer; repeatable")
+    p_exp.add_argument("--exclude-type", action="append", default=None,
+                       metavar="TYPE",
+                       help="skip layers of this matrix TYPE (e.g. DOCUMENT); repeatable")
+    p_exp.add_argument("--sagitta", type=float, default=DEFAULT_SAGITTA_MM,
+                       help=f"curve flattening tolerance in mm (default {DEFAULT_SAGITTA_MM})")
+    p_exp.add_argument("--digits", type=int, default=4,
+                       help="decimal places for coordinates (default 4, i.e. 0.1 um)")
+    p_exp.add_argument("--minimum-stroke", type=float, default=0.0, metavar="MM",
+                       help="draw zero-width artwork (r0 lines) at this width "
+                            "(default 0, which keeps the geometry exact and "
+                            "therefore invisible)")
+    p_exp.add_argument("--only-json", action="store_true",
+                       help="write only the intermediate JSON")
+    p_exp.add_argument("--per-layer-svg", action="store_true",
+                       help="also write one SVG per layer under <out>/layers/")
+    p_exp.add_argument("--no-diagnostics", action="store_true",
+                       help="omit the diagnostics array from the JSON")
+    p_exp.set_defaults(json_out=None, format=None, max_records=5, no_features=False)
+
     return parser
 
 
@@ -85,6 +112,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except OdbError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+    if args.command == "export":
+        return _run_export(job, args, diagnostics)
 
     if args.command == "info":
         _print_info(job)
@@ -312,3 +342,92 @@ def _print_summary(job: Job, summary: dict[str, Any], *, max_records: int) -> No
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
+
+
+# ---------------------------------------------------------------------------
+# export
+# ---------------------------------------------------------------------------
+
+def _run_export(job: Job, args: argparse.Namespace,
+                diagnostics: Diagnostics) -> int:
+    """Compose the job's step and write the preview artefacts."""
+    import os
+
+    from .export import PreviewOptions, build_step_preview, layer_summary_lines
+    from .svg import SvgOptions, write_outputs
+
+    if args.step is None and len(job.steps) != 1:
+        print(f"error: job has {len(job.steps)} steps; choose one with --step",
+              file=sys.stderr)
+        for name in job.steps:
+            print(f"  {name}", file=sys.stderr)
+        return 2
+
+    try:
+        step = job.step(args.step) if args.step else job.single_step
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if step is None:
+        print(f"error: no such step: {args.step!r}", file=sys.stderr)
+        return 2
+
+    preview_options = PreviewOptions(
+        tessellation=TessellationOptions(sagitta_mm=args.sagitta),
+        layers=args.layer,
+        exclude_types=args.exclude_type or (),
+        minimum_stroke_mm=args.minimum_stroke,
+        round_digits=args.digits,
+    )
+    svg_options = SvgOptions(round_digits=args.digits)
+
+    try:
+        preview = build_step_preview(job, step, options=preview_options,
+                                     diagnostics=diagnostics)
+    except OdbError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    out_dir = args.out or os.path.join(
+        "out", os.path.basename(job.source_path.rstrip("/\\")) or "job")
+
+    # A preview with no geometry is almost always a wrong --layer or --step
+    # rather than a genuinely empty board, so say so instead of writing files
+    # that look broken.
+    if not preview.non_empty():
+        print("error: every selected layer composed to nothing; nothing written",
+              file=sys.stderr)
+        for layer in preview.layers:
+            print(f"  {layer.name}: {layer.geometry.records} records, "
+                  f"{len(layer.rings)} rings", file=sys.stderr)
+        return 2
+
+    outputs = write_outputs(
+        preview, job, out_dir,
+        svg_options=svg_options,
+        preview_options=preview_options,
+        want_json=True,
+        want_svg=not args.only_json,
+        want_html=not args.only_json,
+        per_layer_svg=args.per_layer_svg,
+        stem=step.name,
+    )
+
+    print(f"step {step.name!r}: {len(preview.non_empty())} of {len(preview.layers)} "
+          f"layers with geometry, {preview.total_polygons} rings, "
+          f"input units {preview.units_in}, output mm")
+    print(layer_summary_lines(preview))
+    print()
+    for path in outputs.all_paths():
+        print(f"wrote {path} ({os.path.getsize(path) / 1e6:.2f} MB)")
+
+    if args.no_diagnostics:
+        return 1 if diagnostics.errors else 0
+
+    errors = diagnostics.errors
+    if errors:
+        print(f"\n{len(errors)} error-level diagnostic(s):", file=sys.stderr)
+        for item in errors:
+            print(f"  {item}", file=sys.stderr)
+    return 1 if errors else 0
