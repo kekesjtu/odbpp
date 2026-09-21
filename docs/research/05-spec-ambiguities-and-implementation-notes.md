@@ -347,3 +347,76 @@ AGENTS 约束 3 的措辞是「**介质层**的基底多边形直接继承板框
 层极性与记录极性的组合按 **XOR** 处理：负性层上的负性记录意为"材料"。
 规范没有直接给出这个组合的语义，**且 `cases/` 中没有样本同时具备
 负性层与负性记录**，故仍属未证实，仅由 `TestPolarity` 固化当前读法。
+
+---
+
+## 13. `FORM` 与 `DIELECTRIC_TYPE` 的缺失：**已证实**（反例来自 `cases/`）
+
+### 13.1 现象
+
+`spec p.66` 定义 `FORM` 为基材形态（`RIGID` / `FLEX`）。按常规读法，
+省略该字段应等价于 `RIGID`——毕竟绝大多数板子是刚性的。
+
+对 `cases/` 全部 110 个 `LAYER` 块做字段普查（`docs/research/03` §2.4(g)）：
+
+| 字段 | 出现次数 / 110 |
+|---|---|
+| `FORM` | **0** |
+| `DIELECTRIC_TYPE` | 4 |
+| `ADD_TYPE` | 45 |
+
+也就是说，**四个用例里没有任何一个声明过 `FORM`**，其中包括
+`designodb-rigidflex` —— 一个 job 名里写着 "rigidflex"、step 名是
+`CELLULAR_FLIP-PHONE`、带有 `FLEX_5` / `FLEX_6` / `POLYIMIDE_BASE_11` /
+`COVERTOP` / `COVERBOTTOM` / `STIFFENER` 层、并配有 `RIGID_AREA` /
+`FLEX_AREA` / `BEND_AREA` 工艺注释层的柔性板。
+
+「省略即刚性」的读法在这个用例上会得出**全部 43 层都是刚性**的结论，
+即恰好在一张刚挠结合板上抹掉了它唯一的柔性属性。
+
+### 13.2 判定
+
+`LayerForm` 增加第三态 **`UNSPECIFIED = "UNSPECIFIED"`**，
+`DielectricType` 同理（未声明时不得默认成具体值）。
+
+```python
+class LayerRef:
+    form: LayerForm          # RIGID | FLEX | UNSPECIFIED
+
+    @property
+    def is_flex(self) -> Optional[bool]:
+        # True / False / None —— 三值，而不是带默认值的布尔
+        ...
+```
+
+理由：
+
+1. **「这层是刚性」与「这个文件没写」是两个不同的断言**，只有一个能被数据支持；
+   把后者报成前者是**编造**，而与 `AGENTS.md` 约束 2（输出必须是正向实体、
+   不得臆造）的取向一致。
+2. 一个带默认值的布尔会**静默传播**到下游（叠层、Z 区间、挠曲分析），
+   而三值在第一次比较时就会暴露出来。
+3. 缺失的成在**导出器**，不在某一层，所以 warning 按 **job 级聚合一条**
+   （`matrix.form_undeclared`），而不是刷 43 条同类告警。
+   只要**任意一层**声明了 `FORM`，就不再告警。
+4. 无法识别的 `FORM` 值（例如 `BENDABLE`）单独用 `matrix.unknown_form` 报告，
+   **不复用 `matrix.unknown_add_type`**：诊断码指错字段会把读者引向规范里错误的表。
+
+### 13.3 输出与夹具
+
+- JSON（步骤 2）同时输出 `form`（字符串）与 `is_flex`（`true` / `false` / `null`）。
+- 新增夹具 `tests/fixtures/fx_flex_form/`（见 `tests/fixtures/README.md`），
+  四层分别覆盖：已声明 `RIGID`、已声明 `FLEX`、完全不声明，
+  以及携带 `.layer_dielectric` / `.dielectric_constant` / `.layer_hdi_type`
+  的挠性介质层（`AGENTS.md` 注意事项 4）。因为其中至少一层声明了 `FORM`，
+  该夹具同时锁定了「有声明就不告警」这一条。
+- 真实样本侧另有一条测试固定 `designodb-rigidflex` 全部 43 层均为
+  `UNSPECIFIED`，且 `matrix.form_undeclared` 必定出现。
+
+### 13.4 若将来要判定挠性
+
+不能指望 `FORM`。可行的证据链（都在规范内，且在 `cases/` 中实测存在）：
+`ADD_TYPE=PG_FLEX`、层名、含 `FLEX_*` 的 `START_NAME`/`END_NAME` 钻孔跨度、
+层级 `profile` 与 step `profile` 轮廓不重合、`RIGID_AREA`/`FLEX_AREA`/`BEND_AREA`
+注释层、以及 `attrlist` 中的介电/损耗属性。
+**本阶段不做这样的推断**——它会产生无法在 JSON 中标注来源的结论。

@@ -138,7 +138,8 @@ steps/cellular_flip-phone/layers/d_1_10/tools
 | `D_8_9` / `D_9_10` | `SIGNAL_8` / `SIGNAL_9` | `SIGNAL_9` / `SIGNAL_10` | 盲孔（底层起） |
 | `D_5_6` | `FLEX_5` | `FLEX_6` | **挠性区埋孔** |
 
-其中 `FLEX_5` / `FLEX_6` 是 `FORM=FLEX` 的铜层。
+其中 `FLEX_5` / `FLEX_6` 是挠性区的铜层。注意：**它们并未声明 `FORM=FLEX`**（见 2.4(g)），
+该用例的 `matrix` 完全没有 `FORM` 字段。
 → 实现「钻孔 → 介质层投影」时必须先**按 matrix 行序把钻孔层展开成连续的铜层区间**，
 再与介质层的 Z 区间求交；不能只按名字数字排序。
 
@@ -216,6 +217,48 @@ USER = saram
 
 规范正文**未定义** `SUM` 的算法。→ 本阶段忽略，仅可选地做 `SIZE` 校验。
 
+**(g) `FORM` 在四个用例中 **一次都没有出现**（按 110 个 LAYER 块统计）**
+
+| 用例 | LAYER 块数 | 声明 `FORM` | 声明 `DIELECTRIC_TYPE` | 声明 `ADD_TYPE` |
+|---|---|---|---|---|
+| `minimal-test-odb` | 2（用旧式 `ROW_NAME`） | 0 | 0 | 2（值为空） |
+| `kicad-kitchen-sink` | 37 | 0 | 1 | 0 |
+| `kicad-video-odb` | 28 | 0 | 3 | 0 |
+| `designodb-rigidflex` | 43 | 0 | 0 | 43 |
+| **合计** | **110** | **0** | **4** | **45** |
+
+`designodb-rigidflex` 的 LAYER 块字段全集只有这 11 个：
+
+```
+ROW, CONTEXT, TYPE, NAME, POLARITY, START_NAME, END_NAME, OLD_NAME, ADD_TYPE, COLOR, ID
+```
+
+**结论：把 `FORM` 缺失当作 `RIGID` 是错的。** 规范（p.66）定义 `FORM` 正是用来区分
+剛性/挠性基材的字段，而唯一的挠性用例**恰好省略了它**——也就是说，「缺省即刚性」的实现在
+最需要它的地方给出了最错的答案。
+
+**挠性区的真实证据链**（全部在规范内，但都不是 `FORM`）：
+
+| 证据 | 位置 |
+|---|---|
+| 作业名 `designodb_rigidflex` / step 名 `CELLULAR_FLIP-PHONE` | `misc/info`、`matrix` |
+| `ADD_TYPE=PG_FLEX` | `matrix` 的 `FLEX_5` / `FLEX_6` 行 |
+| 层名 `FLEX_5` / `FLEX_6` / `POLYIMIDE_BASE_11` / `COVERTOP` / `COVERBOTTOM` / `STIFFENER` | `matrix` |
+| `START_NAME=FLEX_5` / `END_NAME=FLEX_6` 的钻孔层 `D_5_6` | `matrix` |
+| 层级 `profile` 使挠性层与剛性层轮廓不同（见 (d)） | `<layer>/profile` |
+| `flex_5/attrlist` 的 `.layer_hdi_type=Core`、`.dielectric_constant=4.299`、`.loss_tangent=0.02` | `attrlist` |
+| 工艺注释层 `RIGID_AREA` / `FLEX_AREA` / `BEND_AREA`（`ADD_TYPE=FLEX_AREA`） | `matrix` |
+
+→ **实现要求**：`LayerRef.form` 必须是**三值**（`RIGID` / `FLEX` / `UNSPECIFIED`），
+`LayerRef.is_flex` 在未声明时返回 `None` 而不是 `False`；同时按层聚合一条
+job 级 warning（`matrix.form_undeclared`），因为成因在导出器而不是某层。
+若要判定挠性，必须走上面的证据链（层名 + `ADD_TYPE` + `START/END_NAME` +
+`RIGID_AREA`/`FLEX_AREA`/`BEND_AREA`），**不能指望 `FORM`**。
+
+> 补充：`DIELECTRIC_TYPE`（4/110）和 `ADD_TYPE`（45/110）也大面积缺失，
+> 因此 `DielectricType` 同样按「未声明」处理，不得默认成某个具体值。
+
+
 ---
 
 ## 3. 从实测提炼的实现要求（Checklist）
@@ -239,6 +282,7 @@ USER = saram
 | R15 | `stephdr` 嵌套 step 阵列：按 AGENTS 约束 1 **不支持**，必须显式报 warning | `01` §6 | 必须 |
 | R16 | 标准/自定义符号按**严格文法**消歧，**禁止前缀匹配** | 4.2(a) | 必须 |
 | R17 | 符号**惰性加载 + 缓存**，未引用符号不影响解析 | 4.2(b) | 建议 |
+| R18 | `FORM` / `DIELECTRIC_TYPE` 缺失时**按三值/未声明处理**，禁止默认成 `RIGID`/`NONE` | 2.4(g) | 必须 |
 
 ---
 
@@ -325,7 +369,7 @@ special_spark_gap_0.457x0.229
 | # | 缺口 | 现状 | 影响 |
 |---|---|---|---|
 | 1 | 层级 `POLARITY=NEGATIVE`（负片电源/地层） | 4 例全为 `POSITIVE` | `02` §2.2 层间负片分支**零覆盖** |
-| 2 | `T`（Text）/ `B`（Barcode）图元 | **4 例中出现次数均为 0** | 字体矢量展开、条码生成**零覆盖** |
+| 2 | `T`（Text）/ `B`（Barcode）图元 | **4 例中出现次数均为 0** | 已按 AGENTS 约束 6 **明确不支持**（见 `05` §11）；仅保留识别 + warning |
 | 3 | 自定义符号**嵌套引用** | 现有 9 个被引用符号内部只用标准符号 | 递归 + 环检测**零覆盖** |
 | 4 | 符号 **resize factor**（`apt_def = -1 <sym> <resize>`） | 未出现 | 缩放路径**零覆盖** |
 | 5 | `CONDUCTIVE_PASTE` 层、`CARBON_MASK`/`SILVER_MASK` 子类型 | 未出现 | 低优先 |
@@ -333,8 +377,9 @@ special_spark_gap_0.457x0.229
 | 7 | 多 step / 嵌套 step 阵列（`stephdr` 的 `DX/DY/NX/NY`） | 4 例均为单 step | AGENTS 约束 1 明确排除，但**warning 触发路径零覆盖** |
 | 8 | 大符号族：`hex_*`/`tri`/`thr`/`ths`/`s_ths`/`rc_ths`/`hplate`/`cross`/`dogbone`/`dpack`/`moire` | 4 例只用到 `r`/`s`/`rect`/`oval`/`donut_r`/`donut_rc` | Appendix A 大部分符号无回归 |
 | 9 | `wheels/`（Gerber 轮）、`stackup.xml`、`impedance.xml` | 本阶段不实现 | 明确排除 |
+| 10 | **声明了 `FORM=RIGID` / `FORM=FLEX` 的 matrix** | 110 个 LAYER 块中 **0 个**声明了 `FORM` | 「已声明」分支零覆盖（已用 `tests/fixtures/fx_flex_form` 补上） |
 
-> **缺口 2、3、4、6、7、8 需自造夹具**：用最小手写 ODB++ 目录（可直接复用
+> **缺口 2、3、4、6、7、8、10 需自造夹具**：用最小手写 ODB++ 目录（可直接复用
 > `cases/minimal-test-odb` 的骨架）逐特性构造，作为单元测试输入，而非依赖外部样本。
 > 建议目录：`tests/fixtures/`，与本清单分离，避免污染 `cases/`（真实样本目录）。
 
