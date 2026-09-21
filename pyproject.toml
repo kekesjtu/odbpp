@@ -10,12 +10,18 @@ readme = "docs/README.md"
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
 authors = [{ name = "kekesjtu", email = "mydearlong@sjtu.edu.cn" }]
-dependencies = []
+dependencies = [
+    # Core, not optional: ``odbpp/__init__.py`` imports the geometry layer
+    # unconditionally, so every command -- including the pure-inventory ones --
+    # needs pyclipper importable.  Leaving it in an extra made a plain
+    # ``pip install -e .`` produce a package that cannot even be imported.
+    "pyclipper>=1.3.0.post6",
+]
 
 [project.optional-dependencies]
-# Boolean geometry and validation. Kept optional so that the parser, the CLI and
-# the test suite run in a bare interpreter; the annotation pipeline needs them.
-geometry = ["pyclipper>=1.3.0.post6", "shapely>=2.0", "numpy>=1.26"]
+# Validation/topology helpers used by the tests and tools, not by the pipeline
+# itself; the parser and the exporter no longer depend on them at runtime.
+geometry = ["shapely>=2.0", "numpy>=1.26"]
 parse = ["lxml>=5.0"]
 tools = ["pypdf>=4.0"]
 test = ["pytest>=8.0"]

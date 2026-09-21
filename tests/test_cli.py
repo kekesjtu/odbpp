@@ -238,6 +238,20 @@ class TestExport:
         document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
         assert document["coordinate_system"]["resolution_mm"] == 0.1
 
+    def test_no_diagnostics_omits_the_array_from_the_file(self, capsys, tmp_path):
+        # The flag only changed the terminal report; the file still carried the
+        # array the option promises to omit.
+        run(capsys, "export", str(sample_path("minimal-test-odb")),
+            "-o", str(tmp_path), "--only-json", "--no-diagnostics")
+        document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
+        assert "diagnostics" not in document
+
+    def test_diagnostics_are_present_by_default(self, capsys, tmp_path):
+        run(capsys, "export", str(sample_path("minimal-test-odb")),
+            "-o", str(tmp_path), "--only-json")
+        document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
+        assert "diagnostics" in document
+
     def test_excluding_a_type_removes_those_layers(self, capsys, tmp_path):
         run(capsys, "export", str(fixture_path("fx_negative_layer")),
             "-o", str(tmp_path), "--only-json", "--exclude-type", "POWER_GROUND")

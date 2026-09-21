@@ -609,6 +609,7 @@ def write_outputs(
     want_html: bool = True,
     per_layer_svg: bool = False,
     stem: Optional[str] = None,
+    include_diagnostics: bool = True,
 ) -> Outputs:
     """Write the preview, returning the paths produced."""
     import json as _json
@@ -627,7 +628,8 @@ def write_outputs(
         path = os.path.join(out_dir, f"{stem}.json")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
             _json.dump(step_to_json(job, preview,
-                                    round_digits=popts.round_digits),
+                                    round_digits=popts.round_digits,
+                                    include_diagnostics=include_diagnostics),
                        handle, ensure_ascii=False, indent=1)
             handle.write("\n")
         outputs.json = path

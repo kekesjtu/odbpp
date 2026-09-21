@@ -417,6 +417,9 @@ def _run_export(job: Job, args: argparse.Namespace,
         want_html=not args.only_json,
         per_layer_svg=args.per_layer_svg,
         stem=step.name,
+        # The flag has to reach the serialiser, not just the terminal report:
+        # omitting the array from the file is what the option promises.
+        include_diagnostics=not args.no_diagnostics,
     )
 
     print(f"step {step.name!r}: {len(preview.non_empty())} of {len(preview.layers)} "
