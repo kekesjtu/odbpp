@@ -392,9 +392,14 @@ def _run_export(job: Job, args: argparse.Namespace,
     out_dir = args.out or os.path.join(
         "out", os.path.basename(job.source_path.rstrip("/\\")) or "job")
 
-    # A preview with no geometry is almost always a wrong --layer or --step
-    # rather than a genuinely empty board, so say so instead of writing files
-    # that look broken.
+    if preview.failed_layers:
+        print(f"warning: {len(preview.failed_layers)} layer(s) could not be "
+              f"composed and are absent from the preview: "
+              f"{', '.join(preview.failed_layers)}", file=sys.stderr)
+
+    # A preview with no geometry at all is almost always a wrong --layer or
+    # --step rather than a genuinely empty board, so say so instead of writing
+    # files that look broken.
     if not preview.non_empty():
         print("error: every selected layer composed to nothing; nothing written",
               file=sys.stderr)

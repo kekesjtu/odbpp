@@ -228,6 +228,22 @@ def _make_ring(points: Sequence[Point], is_hole: bool) -> Optional[Ring]:
     quantised = _to_clipper(points)
     if len(quantised) < 3:
         return None
+
+    # A collinear ring is not a polygon.  Clipper would accept it and later
+    # produce a zero-area sliver no consumer can interpret, so it is rejected
+    # here where the reason is still known.
+    #
+    # The test sums the *absolute* cross products rather than the signed shoelace
+    # area, because a self-intersecting bowtie has a signed area of exactly zero
+    # while enclosing plenty of area -- and repairing bowties is precisely what
+    # simplify() is for.
+    cross_sum = 0
+    for index, (x, y) in enumerate(quantised):
+        nx, ny = quantised[(index + 1) % len(quantised)]
+        cross_sum += abs(x * ny - nx * y)
+    if cross_sum == 0:
+        return None
+
     deduped = _from_clipper(quantised)
     # Spec p.39: islands clockwise, holes counter-clockwise.
     want_clockwise = not is_hole
@@ -253,7 +269,6 @@ def _region_from_tree(node) -> Region:
                 if ring is not None:
                     rings.append(ring)
             walk(child, depth + 1)
-
     walk(node, 0)
     return Region(rings)
 

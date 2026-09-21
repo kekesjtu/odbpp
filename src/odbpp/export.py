@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Iterator, Optional, Sequence
-
 from .clipper import Ring
 from .diagnostics import (
     EXPORT_LAYER_FAILED,
@@ -163,8 +162,16 @@ class StepPreview:
     layers: list[LayerPreview]
     units_in: str
     diagnostics: Diagnostics
-    #: Layers asked for but not found, and layers that composed to nothing.
+    #: Layers that composed successfully to zero area -- usually intentional, and
+    #: most often zero-width (``r0``) artwork.  Kept distinct from
+    #: ``failed_layers`` because "this layer is empty" and "this layer could not
+    #: be read" call for opposite responses from whoever is looking at the
+    #: preview.
     empty_layers: list[str] = field(default_factory=list)
+    #: Layers that could not be composed at all, e.g. an unusable layer profile
+    #: (AGENTS constraint 3).  Their absence from the drawing is a bug or a data
+    #: problem, not a property of the board.
+    failed_layers: list[str] = field(default_factory=list)
 
     @property
     def bounds(self) -> Optional[tuple[float, float, float, float]]:
@@ -298,11 +305,11 @@ def build_step_preview(
                                      diagnostics=diags, expander=expander))
 
     selected = _selected_layers(step, opts, diags)
-    requested = {l.name.casefold() for l in selected}
     produced = {l.name.casefold() for l in layers}
-    missing = sorted(requested - produced)
+    # Original spellings, not case-folded keys: these names are shown to a user.
+    unavailable = [l.name for l in selected if l.name.casefold() not in produced]
 
-    empty = [l.name for l in layers if l.is_empty] + missing
+    empty = [l.name for l in layers if l.is_empty]
     if not any(not l.is_empty for l in layers):
         diags.error(
             EXPORT_NO_GEOMETRY,
@@ -316,6 +323,10 @@ def build_step_preview(
         units_in=job.units.system.value,
         diagnostics=diags,
         empty_layers=empty,
+        # A layer that composed to nothing still produced a LayerPreview; one
+        # that raised did not.  That difference is what separates "empty" from
+        # "missing".
+        failed_layers=[name for name in unavailable if name not in empty],
     )
 
 
@@ -407,6 +418,7 @@ def step_to_json(job: Job, preview: StepPreview, *,
             "layer_count": len(preview.layers),
             "polygon_count": preview.total_polygons,
             "empty_layers": preview.empty_layers,
+            "failed_layers": preview.failed_layers,
         },
     }
 

@@ -505,6 +505,7 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
     bounds = preview.bounds or (0, 0, 0, 0)
     size = f"{bounds[2] - bounds[0]:.2f} x {bounds[3] - bounds[1]:.2f} mm"
     empty = [l.name for l in ordered if l.is_empty]
+    failed = list(preview.failed_layers)
 
     head_meta = " &middot; ".join(filter(None, [
         _html.escape(source or ""),
@@ -515,14 +516,24 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
         size,
     ]))
 
+    # Empty and failed layers are called out separately and never merged: an
+    # empty layer is usually intentional (zero-width artwork) while a failed one
+    # means the drawing is incomplete, and a reader needs to know which.
     warning = ""
     if empty:
-        warning = (
+        warning += (
             '<div class="meta" style="color:#d29922;margin-top:4px">'
             f'{len(empty)} layer(s) composed to nothing: '
             f'{_html.escape(", ".join(empty[:6]))}'
             f'{"..." if len(empty) > 6 else ""}'
             " &mdash; often zero-width (<code>r0</code>) artwork</div>"
+        )
+    if failed:
+        warning += (
+            '<div class="meta" style="color:#f85149;margin-top:4px">'
+            f'{len(failed)} layer(s) could not be composed and are absent: '
+            f'{_html.escape(", ".join(failed[:6]))}'
+            f'{"..." if len(failed) > 6 else ""}</div>'
         )
 
     return f"""<!DOCTYPE html>

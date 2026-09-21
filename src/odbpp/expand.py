@@ -73,7 +73,12 @@ from .geometry import (
     transform_points,
 )
 from .model import Orientation, Polarity, Point, SurfaceGeometry
-from .symbols import StandardSymbol, SymbolDefinition, SymbolLibrary
+from .symbols import (
+    StandardSymbol,
+    SymbolDefinition,
+    SymbolLibrary,
+    parse_standard_symbol,
+)
 
 __all__ = [
     "Stroke",
@@ -320,7 +325,7 @@ class Expander:
     # --------------------------------------------------------------- pads
 
     def _pad_region(self, record: PadFeature, unit, *, depth: int) -> Optional[Region]:
-        target = self._resolve(record.symbol, unit, features=None)
+        target = self._resolve(record.symbol, unit)
         geometry = self.symbol_geometry(target, depth=depth)
         if geometry is None:
             self._missing_symbol_warning(record.symbol)
@@ -349,7 +354,7 @@ class Expander:
     # ------------------------------------------------------------ sweeps
 
     def _stroke_region(self, record, unit, *, depth: int) -> Optional[Region]:
-        target = self._resolve(record.symbol, unit, features=None)
+        target = self._resolve(record.symbol, unit)
         stroke = stroke_of(target)
         if stroke is None:
             return self._custom_sweep(record, target, unit, depth=depth)
@@ -592,9 +597,23 @@ class Expander:
             translated.rings.append(clipper.Ring(tuple(points), ring.is_hole))
         return translated
 
-    def _resolve(self, ref, unit, features=None):
-        if self.library is None or ref is None:
+    def _resolve(self, ref, unit):
+        """Resolve a symbol reference, or ``None`` if it cannot be.
+
+        Without a library, standard names still resolve: they are pure arithmetic
+        on the name (Appendix A) and need neither the archive nor the attribute
+        definitions.  Only a ``symbols/`` lookup requires the library, so a job
+        loaded with ``load_features=False`` -- or built by hand -- can still
+        render everything drawn with standard symbols, which on real boards is
+        nearly all of it.
+        """
+        if ref is None:
             return None
+
+        effective = ref.effective_unit(unit)
+        if self.library is None:
+            return parse_standard_symbol(ref.name, effective)
+
         try:
             return self.library.resolve(ref, unit)
         except SymbolCycleError:
