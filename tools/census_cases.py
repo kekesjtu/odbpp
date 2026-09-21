@@ -10,7 +10,6 @@ Reads *.tgz transparently. Ignores '.sum' sidecars. Prints a per-case summary of
 """
 from __future__ import annotations
 
-import io
 import os
 import re
 import sys
@@ -152,9 +151,9 @@ def census(path: str) -> None:
     print(f"### {path}")
     print(f"    feature-like files : {files}  (inside symbols/: {in_symbols})")
     print(f"    layers seen        : {len(layers)}")
-    print(f"    records            : " + ", ".join(f"{k}={v}" for k, v in sorted(recs.items())))
-    print(f"    polarity           : " + ", ".join(f"{k}={v}" for k, v in sorted(polarity.items())))
-    print(f"    OB polygons        : " + ", ".join(f"{k}={v}" for k, v in sorted(poly.items())))
+    print("    records            : " + ", ".join(f"{k}={v}" for k, v in sorted(recs.items())))
+    print("    polarity           : " + ", ".join(f"{k}={v}" for k, v in sorted(polarity.items())))
+    print("    OB polygons        : " + ", ".join(f"{k}={v}" for k, v in sorted(poly.items())))
     top = ", ".join(f"{k}={v}" for k, v in prefixes.most_common(14))
     print(f"    symbol prefixes    : {top}")
     print()

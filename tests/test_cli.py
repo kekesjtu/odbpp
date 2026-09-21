@@ -12,7 +12,7 @@ import json
 
 from odbpp.cli import main, summarize
 
-from conftest import fixture_path
+from conftest import fixture_path, sample_path
 
 
 def run(capsys, *argv):
@@ -158,3 +158,105 @@ class TestBadInput:
         code, _, err = run(capsys, "info", str(tmp_path / "nope"))
         assert code == 2
         assert "error:" in err
+
+
+class TestExport:
+    """The export command turns a job into the mm JSON, SVG and HTML preview."""
+
+    def test_it_writes_the_three_artefacts(self, capsys, tmp_path):
+        code, out, _err = run(capsys, "export", str(sample_path("minimal-test-odb")),
+                              "-o", str(tmp_path))
+        assert code == 0
+        assert (tmp_path / "pcb.json").exists()
+        assert (tmp_path / "pcb.svg").exists()
+        assert (tmp_path / "pcb.html").exists()
+        assert "wrote" in out
+
+    def test_the_summary_names_every_layer(self, capsys, tmp_path):
+        _code, out, _err = run(capsys, "export",
+                               str(sample_path("minimal-test-odb")),
+                               "-o", str(tmp_path))
+        assert "top" in out and "bottom" in out
+        assert "output mm" in out
+
+    def test_the_json_is_metric_and_positive(self, capsys, tmp_path):
+        run(capsys, "export", str(sample_path("minimal-test-odb")),
+            "-o", str(tmp_path))
+        document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
+        assert document["units"] == "mm"
+        assert document["schema"].startswith("odbpp/")
+        for layer in document["steps"][0]["layers"]:
+            for polygon in layer["polygons"]:
+                assert isinstance(polygon["island"], bool)
+
+    def test_only_json_skips_the_drawings(self, capsys, tmp_path):
+        run(capsys, "export", str(sample_path("minimal-test-odb")),
+            "-o", str(tmp_path), "--only-json")
+        assert (tmp_path / "pcb.json").exists()
+        assert not (tmp_path / "pcb.svg").exists()
+
+    def test_per_layer_svg_writes_a_directory(self, capsys, tmp_path):
+        run(capsys, "export", str(sample_path("minimal-test-odb")),
+            "-o", str(tmp_path), "--per-layer-svg")
+        assert (tmp_path / "layers").is_dir()
+        assert len(list((tmp_path / "layers").iterdir())) == 2
+
+    def test_a_layer_filter_restricts_the_export(self, capsys, tmp_path):
+        _code, out, _err = run(capsys, "export",
+                               str(sample_path("minimal-test-odb")),
+                               "-o", str(tmp_path), "--layer", "top", "--only-json")
+        document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
+        assert [l["name"] for l in document["steps"][0]["layers"]] == ["top"]
+        assert "1 of 1 layers" in out
+
+    def test_a_misspelled_layer_exits_nonzero_without_writing(self, capsys, tmp_path):
+        code, _out, err = run(capsys, "export", str(sample_path("minimal-test-odb")),
+                              "-o", str(tmp_path), "--layer", "nope")
+        assert code == 2
+        assert "nothing written" in err
+        assert not (tmp_path / "pcb.json").exists()
+
+    def test_a_broken_layer_profile_still_exports_the_rest(self, capsys, tmp_path):
+        # AGENTS constraint 3 makes the bad layer a hard error for that layer, and
+        # the other layers must still render: a preview missing one layer is far
+        # more useful than no preview.
+        code, _out, err = run(capsys, "export",
+                              str(fixture_path("fx_bad_layer_profile")),
+                              "-o", str(tmp_path))
+        assert code == 1
+        assert "DIELECTRIC_1" in err
+        # The step is named BOARD, so the stem is BOARD -- not the fixture name.
+        document = json.loads((tmp_path / "BOARD.json").read_text(encoding="utf-8"))
+        names = [l["name"] for l in document["steps"][0]["layers"]]
+        assert "F.CU" in names
+        assert "DIELECTRIC_1" not in names
+        assert document["summary"]["failed_layers"] == ["DIELECTRIC_1"]
+
+    def test_digits_changes_the_coordinate_precision(self, capsys, tmp_path):
+        run(capsys, "export", str(sample_path("minimal-test-odb")),
+            "-o", str(tmp_path), "--only-json", "--digits", "1")
+        document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
+        assert document["coordinate_system"]["resolution_mm"] == 0.1
+
+    def test_excluding_a_type_removes_those_layers(self, capsys, tmp_path):
+        run(capsys, "export", str(fixture_path("fx_negative_layer")),
+            "-o", str(tmp_path), "--only-json", "--exclude-type", "POWER_GROUND")
+        document = json.loads((tmp_path / "BOARD.json").read_text(encoding="utf-8"))
+        assert all(l["type"] != "POWER_GROUND"
+                   for l in document["steps"][0]["layers"])
+
+    def test_the_default_output_directory_is_under_out(self, capsys):
+        # Uses the fixture path's own name so the test does not depend on cwd.
+        import os
+        import shutil
+
+        target = os.path.join("out", "minimal-test-odb")
+        shutil.rmtree(target, ignore_errors=True)
+        try:
+            code, out, _err = run(capsys, "export",
+                                  str(sample_path("minimal-test-odb")))
+            assert code == 0
+            assert os.path.exists(os.path.join(target, "pcb.json"))
+            assert "out" in out
+        finally:
+            shutil.rmtree(target, ignore_errors=True)

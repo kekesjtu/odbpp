@@ -33,6 +33,21 @@ def case_path(name: str) -> Path:
     return path
 
 
+def sample_path(name: str) -> Path:
+    """A hand-authored fixture or a real case, whichever exists.
+
+    Some tests are about *behaviour* rather than about a particular file, and
+    read better against a real board than against a fixture built to exercise
+    one code path.  Preferring the fixture keeps them running in a trimmed
+    checkout; falling back to the case keeps them honest when the samples are
+    present.
+    """
+    path = FIXTURES / name
+    if path.exists():
+        return path
+    return case_path(name)
+
+
 def write_tree(root: Path, files: dict[str, str]) -> Path:
     """Materialise ``{relative path: text}`` under *root*."""
     for relpath, text in files.items():
