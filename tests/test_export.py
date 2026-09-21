@@ -71,6 +71,55 @@ class TestDocument:
         assert "diagnostics" not in step_to_json(job, preview,
                                                  include_diagnostics=False)
 
+    def test_the_z_axis_is_stated(self):
+        # Z is a board axis, not a drawing direction: the Y-up model plane says
+        # nothing about which way the stack runs.
+        job, preview, _diag = preview_of("minimal-test-odb")
+        system = step_to_json(job, preview)["coordinate_system"]
+        assert "downward" in system["z_axis"]
+
+
+class TestSerialisationResolution:
+    """The written polygons and the reported numbers must be one geometry."""
+
+    def _six_digit_preview(self, name="minimal-test-odb"):
+        from odbpp.clipper import Region, Ring, to_surface_geometry
+        from odbpp.features import SurfaceFeature
+
+        job = load_job(str(sample_path(name)))
+        layer = job.single_step.layers[0]
+        # A legitimate 0.00002 x 1 mm surface: real geometry at 1e-6 mm, but flat
+        # at the default 1e-4 mm grid.
+        narrow = Ring(((0, 0), (0, 1), (0.00002, 1), (0.00002, 0)), False)
+        layer.features.records = [SurfaceFeature(
+            line_no=1, geometry=to_surface_geometry(Region([narrow])))]
+        preview = build_step_preview(job, options=PreviewOptions(
+            layers=[layer.name], round_digits=6))
+        return job, preview
+
+    def test_serialisation_defaults_to_the_model_resolution(self):
+        from shapely.geometry import Polygon
+
+        job, preview = self._six_digit_preview()
+        document = step_to_json(job, preview)
+        written = document["steps"][0]["layers"][0]
+        polygon = Polygon(written["polygons"][0]["points"])
+        assert polygon.is_valid
+        assert polygon.area == pytest.approx(0.00002, abs=1e-9)
+        assert written["area_mm2"] == pytest.approx(polygon.area, abs=1e-9)
+        assert document["coordinate_system"]["resolution_mm"] == pytest.approx(1e-6)
+
+    def test_a_coarser_request_is_re_regularised_and_recomputed(self):
+        # Asking for 4 digits used to round the points of a 6-digit preview
+        # without re-checking topology, so the file held zero-area rings while
+        # area_mm2 still described the un-rounded shape.
+        job, preview = self._six_digit_preview()
+        written = step_to_json(job, preview,
+                               round_digits=4)["steps"][0]["layers"][0]
+        assert written["polygons"] == []
+        assert written["area_mm2"] == 0.0
+        assert written["bounds_mm"] is None
+
 
 # ---------------------------------------------------------------------------
 # layer content
@@ -407,6 +456,39 @@ class TestStackupJson:
 
         assert clipper.intersection(region(dielectric), region(drill)).area \
             == pytest.approx(0.0, abs=1e-9)
+
+    def test_a_board_layer_states_its_absolute_z_in_millimetres(self):
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(_job, preview)
+        layers = {l["name"]: l for l in document["steps"][0]["layers"]}
+        copper = layers["F.CU"]["z_mm"]
+        # F.MASK declares 0.01 mm and F.CU 1 um of copper, so the copper slab
+        # sits at 0.010..0.011 mm below the top of the stack.
+        assert copper["start_mm"] == pytest.approx(0.01)
+        assert copper["end_mm"] == pytest.approx(0.011)
+        assert copper["thickness_known"] is True
+        assert copper["source"] == ".copper_weight"
+        dielectric = layers["DIELECTRIC_1"]["z_mm"]
+        assert dielectric["end_mm"] > dielectric["start_mm"]
+        # The step-level stack carries the same Z, so a consumer can rebuild the
+        # board without walking the per-layer array.
+        stack = document["steps"][0]["stackup"]
+        assert any(s["name"] == "F.CU" and s["z_mm"] for s in stack)
+
+    def test_an_imperial_weight_gets_a_thickness_and_a_z(self):
+        # designodb-rigidflex is INCH: .copper_weight is an areal density, and
+        # the default copper density turns it into the thickness the Z walk needs.
+        diagnostics = Diagnostics()
+        job = load_job(str(sample_path("designodb-rigidflex.tgz")),
+                       diagnostics=diagnostics)
+        preview = build_step_preview(
+            job, options=PreviewOptions(layers=["SIGNAL_1"]),
+            diagnostics=diagnostics)
+        layer = step_to_json(job, preview)["steps"][0]["layers"][0]
+        weight = layer["copper_weight"]
+        assert weight["unit"] == "oz/ft2"
+        assert weight["thickness_source"] == "assumed_density"
+        assert layer["z_mm"]["end_mm"] == pytest.approx(0.0398192, abs=1e-5)
 
 
 class TestSerialisedTopology:

@@ -114,6 +114,11 @@ class LayerPreview:
     #: The step's stack model, when the preview came from the export pipeline.
     #: ``None`` for hand-built previews; every accessor below tolerates that.
     stackup: Optional[Stackup] = None
+    #: Decimal places of the coordinate grid *geometry* was regularised onto.
+    #: ``None`` for hand-built previews.  Serialisation defaults to this, so the
+    #: polygons written are the ones that were validated; asking for a different
+    #: precision re-regularises instead of silently rounding points.
+    round_digits: Optional[int] = None
 
     @property
     def name(self) -> str:
@@ -201,6 +206,17 @@ class LayerPreview:
             return None
         return describe_span(self.stackup, self.stackup.span_of(self.layer))
 
+    def z_extent(self):
+        """Absolute millimetre Z extent (:class:`~odbpp.stackup.ZExtent`).
+
+        ``None`` when the preview has no stack model, or when the layer is not
+        part of the board (documentation, component outlines).  See
+        :meth:`StepPreview.z_axis` for the axis convention.
+        """
+        if self.stackup is None:
+            return None
+        return self.stackup.z_extent(self.layer)
+
 
 @dataclass
 class StepPreview:
@@ -223,6 +239,17 @@ class StepPreview:
     #: The step's resolved layer stack (copper order, dielectric/drill Z spans,
     #: thicknesses).  ``None`` only for hand-built previews.
     stackup: Optional[Stackup] = None
+    #: Coordinate-grid resolution the layers were regularised onto; see
+    #: :attr:`LayerPreview.round_digits`.
+    round_digits: Optional[int] = None
+
+    #: Convention of the ``z_mm`` extents in this step's JSON.  Z is a board
+    #: axis, not a model coordinate: it runs downward from the top surface and
+    #: is independent of the Y-up model plane.
+    Z_AXIS = "increases downward from the top of the stack (matrix row 1), mm"
+
+    def z_axis(self) -> str:
+        return self.Z_AXIS
 
     @property
     def bounds(self) -> Optional[tuple[float, float, float, float]]:
@@ -336,7 +363,8 @@ def iter_step_previews(
                 f"the remaining geometry was re-regularised at that resolution",
                 layer.dir_name or None,
             )
-        yield LayerPreview(layer=layer, geometry=geometry, stackup=stackup)
+        yield LayerPreview(layer=layer, geometry=geometry, stackup=stackup,
+                           round_digits=opts.round_digits)
 
 
 def _make_expander(job: Job, options: PreviewOptions,
@@ -396,6 +424,7 @@ def build_step_preview(
         # "missing".
         failed_layers=[name for name in unavailable if name not in empty],
         stackup=stackup,
+        round_digits=opts.round_digits,
     )
 
 
@@ -412,7 +441,40 @@ def _points_json(ring: Ring, digits: int) -> list[list[float]]:
     return [[_round(x, digits), _round(y, digits)] for x, y in ring.points]
 
 
-def layer_to_json(preview: LayerPreview, *, round_digits: int = 4) -> dict:
+def _preview_digits(preview, round_digits: Optional[int]) -> int:
+    """Decimal places to serialise *preview* at.
+
+    An explicit request wins; otherwise the preview's own model resolution is
+    used, so the polygons written are the ones that were validated.  A
+    hand-built preview without a recorded resolution falls back to 4, which is
+    the historical default.
+    """
+    if round_digits is not None:
+        return max(0, int(round_digits))
+    own = getattr(preview, "round_digits", None)
+    if own is not None:
+        return max(0, int(own))
+    return 4
+
+
+def _serialised_rings(preview, digits: int) -> tuple[list[Ring], float, Optional[tuple]]:
+    """Rings, area and bounds as they will be written at *digits*.
+
+    When the request disagrees with the resolution the preview was built at, the
+    region is re-regularised onto the requested grid rather than rounded point
+    by point.  Rounding alone can flatten a ring to zero area or cross two edges
+    while ``area_mm2`` still describes the pre-rounding shape; re-quantising and
+    recomputing keeps the reported numbers and the written polygons the same
+    geometry.
+    """
+    own = getattr(preview, "round_digits", None)
+    if own is None or int(own) == digits:
+        return preview.rings, preview.area_mm2, preview.bounds
+    region, _collapsed = snap_to_grid(preview.geometry.region, digits)
+    return region.rings, region.area, region.bounds
+
+
+def layer_to_json(preview: LayerPreview, *, round_digits: Optional[int] = None) -> dict:
     """One layer as JSON-ready data.
 
     Rings are emitted as flat point lists with an explicit ``island`` flag rather
@@ -428,9 +490,15 @@ def layer_to_json(preview: LayerPreview, *, round_digits: int = 4) -> dict:
     ``z_span``, ``start_layer``/``end_layer``).  A consumer must be able to
     rebuild the stackup from this document alone -- it must not have to know
     that an imperial file's dielectric value is inches.
+
+    ``z_mm`` is the layer's absolute extent on the board Z axis, in millimetres
+    from the top of the stack (see :meth:`StepPreview.z_axis`).  It is ``null``
+    for layers that are not part of the board.
     """
+    digits = _preview_digits(preview, round_digits)
     geometry = preview.geometry
-    bounds = preview.bounds
+    rings, area, bounds = _serialised_rings(preview, digits)
+    extent = preview.z_extent()
     thickness = preview.thickness()
     weight = preview.copper_weight()
     stackup = preview.stackup
@@ -452,7 +520,7 @@ def layer_to_json(preview: LayerPreview, *, round_digits: int = 4) -> dict:
         "attributes": preview.layer_attributes(),
         "attribute_units": preview.attribute_units(),
         "thickness_mm": None if thickness is None
-        else _round(thickness.thickness_mm, round_digits + 3),
+        else _round(thickness.thickness_mm, digits + 3),
         "thickness": None if thickness is None else thickness.as_dict(),
         "copper_weight": None if weight is None else weight.as_dict(),
         # Drill/stiffener span endpoints as authored, then resolved.
@@ -461,32 +529,46 @@ def layer_to_json(preview: LayerPreview, *, round_digits: int = 4) -> dict:
         "copper_index": None if stackup is None
         else stackup.copper_index(preview.name),
         "z_span": preview.z_span(),
+        "z_mm": None if extent is None else {
+            "start_mm": _round(extent.start_mm, digits + 3),
+            "end_mm": _round(extent.end_mm, digits + 3),
+            "thickness_mm": _round(extent.thickness_mm, digits + 3),
+            "thickness_known": extent.thickness_known,
+            "source": extent.source,
+        },
         "base_from_profile": geometry.used_base,
         "feature_records": geometry.records,
         "polarity_runs": geometry.polarity_runs,
         # AGENTS constraint 3: the dielectric's own Z interval decided which
         # drills were projected out of it, and how much area that removed.
         "drills_subtracted": list(geometry.drills_subtracted),
-        "drill_cut_mm2": _round(geometry.drill_cut_mm2, round_digits + 2),
-        "area_mm2": _round(preview.area_mm2, round_digits + 2),
+        "drill_cut_mm2": _round(geometry.drill_cut_mm2, digits + 2),
+        "area_mm2": _round(area, digits + 2),
         "bounds_mm": None if bounds is None
-        else [_round(b, round_digits) for b in bounds],
+        else [_round(b, digits) for b in bounds],
         "polygons": [
             {
                 "island": not ring.is_hole,
-                "points": _points_json(ring, round_digits),
+                "points": _points_json(ring, digits),
             }
-            for ring in preview.rings
+            for ring in rings
         ],
     }
 
 
 def step_to_json(job: Job, preview: StepPreview, *,
-                 round_digits: int = 4,
+                 round_digits: Optional[int] = None,
                  include_diagnostics: bool = True) -> dict:
-    """The whole intermediate document (data-flow step 2)."""
+    """The whole intermediate document (data-flow step 2).
+
+    ``round_digits`` defaults to the resolution the preview was composed at, so
+    the document describes the geometry that was validated.  Passing a different
+    value re-regularises every layer at that resolution and recomputes areas and
+    bounds accordingly (see :func:`layer_to_json`).
+    """
     from . import __version__
 
+    digits = _preview_digits(preview, round_digits)
     bounds = preview.bounds
     document = {
         "schema": SCHEMA,
@@ -506,15 +588,18 @@ def step_to_json(job: Job, preview: StepPreview, *,
             "origin": "as authored in the ODB++ step (no recentring)",
             "y_axis": "up",
             "winding": "islands clockwise, holes counter-clockwise (spec p.39)",
-            "resolution_mm": 10 ** -round_digits,
+            "resolution_mm": 10 ** -digits,
+            # Z is an axis of its own: a board stack measured downward from the
+            # top surface, not a direction in the X/Y drawing.
+            "z_axis": preview.z_axis(),
         },
         "steps": [{
             "name": preview.step.name,
             "bounds_mm": None if bounds is None
-            else [_round(b, round_digits) for b in bounds],
-            "profile": _profile_json(preview.step, round_digits),
-            "stackup": _stackup_json(preview, round_digits),
-            "layers": [layer_to_json(l, round_digits=round_digits)
+            else [_round(b, digits) for b in bounds],
+            "profile": _profile_json(preview.step, digits),
+            "stackup": _stackup_json(preview, digits),
+            "layers": [layer_to_json(l, round_digits=digits)
                        for l in preview.layers],
         }],
         "summary": {
@@ -537,7 +622,8 @@ def _stackup_json(preview: StepPreview, round_digits: int) -> Optional[list[dict
     This is what makes the document rebuildable without re-deriving the matrix:
     copper planes are indexed top-down, a dielectric or drill states the two
     planes it spans, and every thickness is already in millimetres with the unit
-    scope it was converted from.  ``None`` when the preview has no stack model.
+    scope it was converted from.  ``z_mm`` gives the same stack absolute
+    millimetres.  ``None`` when the preview has no stack model.
     """
     stackup = preview.stackup
     if stackup is None:
@@ -546,6 +632,7 @@ def _stackup_json(preview: StepPreview, round_digits: int) -> Optional[list[dict
     out: list[dict] = []
     for layer in stackup.board_layers:
         thickness = stackup.thickness(layer)
+        extent = stackup.z_extent(layer)
         out.append({
             "row": layer.ref.row,
             "name": layer.name,
@@ -554,6 +641,13 @@ def _stackup_json(preview: StepPreview, round_digits: int) -> Optional[list[dict
             "thickness_mm": None if thickness is None
             else _round(thickness.thickness_mm, round_digits + 3),
             "z_span": describe_span(stackup, stackup.span_of(layer)),
+            "z_mm": None if extent is None else {
+                "start_mm": _round(extent.start_mm, round_digits + 3),
+                "end_mm": _round(extent.end_mm, round_digits + 3),
+                "thickness_mm": _round(extent.thickness_mm, round_digits + 3),
+                "thickness_known": extent.thickness_known,
+                "source": extent.source,
+            },
             "start_layer": layer.ref.start_name or None,
             "end_layer": layer.ref.end_name or None,
         })

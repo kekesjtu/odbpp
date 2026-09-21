@@ -244,6 +244,15 @@ def render_svg(preview: StepPreview, *, options: Optional[SvgOptions] = None,
         colour = layer_colour(layer, index)
         data = path_data(layer.rings, digits)
         opacity = layer_opacity(layer)
+        extent = layer.z_extent()
+        # Z travels with the drawing, not only with the JSON: a layer whose
+        # extent is unknown says so, so a reader never mistakes an assumed-zero
+        # gap for a measured one.
+        z_attributes = "" if extent is None else (
+            f'data-z-start="{_fmt(extent.start_mm, digits)}" '
+            f'data-z-end="{_fmt(extent.end_mm, digits)}" '
+            f'data-z-known="{str(extent.thickness_known).lower()}" '
+        )
         attributes = (
             f'id="L{index}" class="odb-layer" '
             f'data-name="{_escape(layer.name)}" '
@@ -251,6 +260,7 @@ def render_svg(preview: StepPreview, *, options: Optional[SvgOptions] = None,
             f'data-rings="{len(layer.rings)}" '
             f'data-area="{layer.area_mm2:.3f}" '
             f'data-colour="{colour}" '
+            f'{z_attributes}'
             f'fill="{colour}" fill-opacity="{opacity:g}" style="color:{colour}"'
         )
         if not data:
@@ -413,6 +423,11 @@ _JS = r"""
       '<tr><td>type</td><td>' + row.dataset.type + '</td></tr>' +
       '<tr><td>rings</td><td>' + row.dataset.rings + '</td></tr>' +
       '<tr><td>area</td><td>' + row.dataset.area + ' mm&sup2;</td></tr>' +
+      '<tr><td>z</td><td>' + (row.dataset.zStart === undefined
+          ? 'not on the board'
+          : row.dataset.zStart + ' .. ' + row.dataset.zEnd + ' mm' +
+            (row.dataset.zKnown === 'false' ? ' (partly assumed)' : '')) +
+      '</td></tr>' +
       '<tr><td>colour</td><td>' + row.dataset.colour + '</td></tr>' +
       '</table>';
     el.style.display = 'block';
@@ -477,10 +492,17 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
     for index, layer in enumerate(ordered):
         colour = layer_colour(layer, index)
         checked = "" if layer.is_empty else " checked"
+        extent = layer.z_extent()
+        z_attributes = "" if extent is None else (
+            f'data-z-start="{extent.start_mm:.3f}" '
+            f'data-z-end="{extent.end_mm:.3f}" '
+            f'data-z-known="{str(extent.thickness_known).lower()}" '
+        )
         rows.append(
             f'<div class="row" data-name="{_escape(layer.name)}" '
             f'data-type="{layer.type_name}" data-rings="{len(layer.rings)}" '
-            f'data-area="{layer.area_mm2:.3f}" data-colour="{colour}">'
+            f'data-area="{layer.area_mm2:.3f}" data-colour="{colour}" '
+            f'{z_attributes}'
             f'<input type="checkbox"{checked}>'
             f'<span class="chip" style="background:{colour}"></span>'
             f'<span class="nm">{_escape(layer.name)}</span>'
@@ -489,6 +511,24 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
             f'</div>'
         )
     return "".join(rows)
+
+
+def _thickness_note(preview: StepPreview) -> str:
+    """Board thickness from the Z table, or ``""`` when nothing is known.
+
+    Only shown when at least one layer has a known extent: a value assembled
+    entirely from assumed zeros would be a fabrication, and the header is
+exactly where a fabricated number would be believed.
+    """
+    stackup = preview.stackup
+    if stackup is None:
+        return ""
+    extents = [stackup.z_extent(layer) for layer in stackup.board_layers]
+    known = [e for e in extents if e is not None and e.thickness_known]
+    if not known:
+        return ""
+    total = max(e.end_mm for e in known)
+    return f"~{total:.3f} mm thick (top..{total:.2f} mm)"
 
 
 def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
@@ -514,6 +554,7 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
         f"{len(preview.layers)} layers",
         f"{preview.total_polygons} rings",
         size,
+        _thickness_note(preview),
     ]))
 
     # Empty and failed layers are called out separately and never merged: an
@@ -618,7 +659,10 @@ def write_outputs(
     from .export import step_to_json
 
     opts = svg_options or SvgOptions()
-    popts = preview_options or PreviewOptions()
+    # Keep the JSON at the preview's own resolution unless the caller explicitly
+    # asks for another one; a mismatched request is re-regularised, never
+    # produced by rounding the already-snapped points.
+    json_digits = preview_options.round_digits if preview_options is not None else None
     stem = stem or preview.step.name or "preview"
     os.makedirs(out_dir, exist_ok=True)
 
@@ -628,7 +672,7 @@ def write_outputs(
         path = os.path.join(out_dir, f"{stem}.json")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
             _json.dump(step_to_json(job, preview,
-                                    round_digits=popts.round_digits,
+                                    round_digits=json_digits,
                                     include_diagnostics=include_diagnostics),
                        handle, ensure_ascii=False, indent=1)
             handle.write("\n")

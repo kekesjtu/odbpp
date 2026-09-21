@@ -89,6 +89,20 @@ class TestSvgStructure:
             assert group.get("data-area") is not None
             assert group.get("data-colour", "").startswith("#")
 
+    def test_layer_groups_carry_absolute_z(self):
+        # The drawing has to say where a layer sits in the stack, not only what
+        # it looks like from above.
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        groups = {g.get("data-name"): g for g in
+                  layer_groups(parse(render_svg(preview)))}
+        copper = groups["F.CU"]
+        assert float(copper.get("data-z-start")) == pytest.approx(0.01)
+        assert float(copper.get("data-z-end")) == pytest.approx(0.011)
+        assert copper.get("data-z-known") == "true"
+        dielectric = groups["DIELECTRIC_1"]
+        assert float(dielectric.get("data-z-end")) > \
+            float(dielectric.get("data-z-start"))
+
     def test_a_layer_with_no_geometry_still_gets_a_group(self):
         # Keeping the element means the layer list matches the drawing, and the
         # emptiness is visible instead of looking like an omission.
@@ -343,6 +357,18 @@ class TestHtml:
         text = render_html(preview)
         assert preview.step.name in text
         assert preview.units_in in text
+
+    def test_the_layer_rows_carry_z_for_the_info_panel(self):
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        text = render_html(preview)
+        assert 'data-z-start="0.010"' in text
+        assert 'data-z-end="0.011"' in text
+        # The viewer reads the dashes as camelCase; keep them wired up.
+        assert "dataset.zStart" in text
+
+    def test_the_header_states_the_board_thickness(self):
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        assert "mm thick" in render_html(preview)
 
     def test_a_failed_layer_is_called_out(self):
         diagnostics = Diagnostics()
