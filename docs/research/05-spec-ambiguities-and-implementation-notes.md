@@ -456,3 +456,40 @@ class FormSource(str, Enum):
 以及挠曲分析。这些都不需要在解析阶段补任何猜测，因为 13.3 的规则已经
 把规范能给的都给了。
 
+
+## 14. 绝对 Z 坐标与英制铜厚换算（**部分为工程假定**）
+
+审阅二号修订（`09-review2-fixes-2026-09-21.md`）按用户要求为「有实体的层」输出绝对 Z 起止，
+但规范只定义层序与部分厚度字段，未定义板厚的完整算法，也未给出铜密度。以下把**规范有明文**
+与**本仓库的假定**分开登记。
+
+### 14.1 Z 轴与原点（**约定，非规范**）
+
+- Z 自叠层顶面（matrix 第一行板层）向下为正，单位 mm，与 Y-up 的模型平面相互独立；
+  JSON 在 `coordinate_system.z_axis` 中明写该约定。
+- 「顶面」取 matrix 行序最靠上的板图层（`LayerContext.BOARD`），不区分刚性区/挠性区。
+- 文档类图层（无物理厚度、`LayerContext.MISC`）不给 Z（`z_mm: null`）。
+
+### 14.2 厚度来源与「已知」标记（**规范字段 + 工程判定**）
+
+- 铜层厚度优先 `.copper_weight`，回退 `.layer_dielectric`（后者在铜层上属规范偏差，见注 5）；
+- DIELECTRIC 用 `.layer_dielectric`；SOLDER_MASK 用 `.layer_dielectric`；
+- 钻孔不占厚度，Z 区间由 `START_NAME`/`END_NAME` 指向的铜面位置决定；
+- **工程判定**：只有铜 / DIELECTRIC / SOLDER_MASK 视为「结构性层」。结构性层厚度缺失时，
+  其下方所有 Z 标记 `thickness_known=false`；丝印、锡膏、补强（`MASK`）、元件、文档
+  视作板面附着物，厚度缺失不影响铜面位置。规范没有「板厚由哪些层构成」的定义，此集合是假定。
+
+### 14.3 英制铜密度（**公开假定**）
+
+- 规范 p.24 只说 `UNITS=INCH` 时 copper weight 是面密度 oz/ft²，不给密度。
+  故本仓库内置 `DEFAULT_COPPER_DENSITY_G_CM3 = 8.96`，1 oz/ft² → 0.034058 mm；
+  真实电镀/压延铜密度与表面处理会带来偏差。
+- 输出保留 `kind`/`unit` 两种物理量，并对派生厚度标注 `thickness_source="assumed_density"`
+  与 `assumed_density_g_cm3`，使该假设可审计、可覆盖。
+
+### 14.4 自接触轮廓与闭合中心线（**规范可判定，非假定**）
+
+- 规范 p.39/p.40 允许轮廓在一点自接触、且整圆弧首尾点重合。
+  修正后不再删除非相邻重复顶点，改由 NONZERO 布尔规整拆分；闭合中心线按闭环描边
+  （`ET_CLOSEDLINE`）而非开路径加帽，使环带保留末段与孔洞。
+- 序列化精度不再逐点舍入：预览携带构建分辨率，要求不同精度时重新规整并重算面积/边界。

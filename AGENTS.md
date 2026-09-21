@@ -38,7 +38,7 @@
    - 层级 profile 缺失时，回退到 `steps/<step>/profile`；
    - 层级 profile 存在但无法解析时，报告错误，不得静默回退。
    - 穿透孔则由与该介质层 $Z$ 轴区间有重叠的钻孔图元（Drill）投影生成。
-4. 1. ODB++ 存在两套单位语义：
+4. ODB++ 存在两套单位语义：
    - 坐标、一般尺寸按当前文件作用域中的 `MM` 或 `INCH` 解释；
    - 标准符号参数、resize 和钻孔尺寸等字段按规范指定的 `µm` 或 `mil` 解释。
    - parser 输出的 JSON 文件一律统一换算并输出为公制单位 mm。
@@ -56,3 +56,7 @@
 5. 由 docs/ 中的官方 ODB++ 格式说明文件可知，字段 .layer_dielectric 在规范设计中仅用于非铜层。  DIELECTRIC（介质层）、SOLDERMASK（阻焊层）、SOLDER PASTE（钢网/锡膏层）。
 6. 对于优质 cases/ 的说明：符合官方文件的规范。
 7. 使用中文回复用户。
+8. JSON 与 SVG/HTML 预览中，板内且有实体的层必须给出绝对 Z 起止（mm，自叠层顶面向下）；
+   厚度数据缺失时给出 best-effort 位置并显式标记 `thickness_known=false`，不得静默当作实测值。
+9. 英制 `.copper_weight`（面密度 oz/ft²）按内置默认铜密度 8.96 g/cm³ 换算厚度，用于绝对 Z；
+   输出需记录 `thickness_source` 与 `assumed_density_g_cm3`，且保留 `kind`/`unit` 以区分物理量。
