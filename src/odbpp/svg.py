@@ -31,11 +31,17 @@ whoever needs to check the board.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional, Sequence
 
 from .clipper import Ring
-from .export import LayerPreview, PreviewOptions, StepPreview
+from .export import (
+    LayerPreview,
+    PreviewOptions,
+    StepPreview,
+    _preview_digits,
+    regularise_preview,
+)
 
 __all__ = [
     "SvgOptions",
@@ -50,9 +56,20 @@ __all__ = [
 
 @dataclass(frozen=True)
 class SvgOptions:
-    """Presentation knobs.  Nothing here changes geometry."""
+    """Presentation knobs.
 
-    round_digits: int = 4
+    Colour, background and empty-layer handling change only the picture.
+    ``round_digits`` is the exception: it is the resolution the geometry is
+    re-regularised onto before drawing, so a coarser request yields fewer, simpler
+    polygons rather than the same polygons printed with fewer digits.
+    """
+
+    #: Decimal places for drawn coordinates, or ``None`` to inherit the
+    #: preview's own model resolution.  Inheriting is the default because the
+    #: drawing has to show the polygons the JSON reports; asking for a different
+    #: precision here re-regularises the geometry at that precision rather than
+    #: rounding live coordinates (see :func:`odbpp.export.regularise_preview`).
+    round_digits: Optional[int] = None
     #: Dark background: copper reads better on it, and it is what EDA tools use.
     background: str = "#101418"
     #: Include layers that composed to nothing, so the layer list is complete and
@@ -184,6 +201,19 @@ def path_data(rings: Sequence[Ring], digits: int) -> str:
     return "".join(parts)
 
 
+def _render_digits(preview: StepPreview, options: SvgOptions) -> int:
+    """Coordinate resolution to draw *preview* at.
+
+    An explicit ``SvgOptions.round_digits`` wins; otherwise the preview's model
+    resolution is used, so the drawing shows the same polygons the JSON will.
+    A hand-built preview with no recorded resolution falls back to the preview
+    default.
+    """
+    if options.round_digits is not None:
+        return max(0, int(options.round_digits))
+    return _preview_digits(preview, None)
+
+
 def _ordered(layers: Sequence[LayerPreview], options: SvgOptions) -> list[LayerPreview]:
     visible = [l for l in layers if options.include_empty or not l.is_empty]
     return sorted(visible, key=lambda l: (_Z_RANK.get(l.type_name, 5),
@@ -212,10 +242,19 @@ def render_svg(preview: StepPreview, *, options: Optional[SvgOptions] = None,
     HTML viewer.
     """
     opts = options or SvgOptions()
-    digits = opts.round_digits
-    chosen = _ordered(list(layers if layers is not None else preview.layers), opts)
+    digits = _render_digits(preview, opts)
+    # Draw the geometry at the resolution it is reported at: printing live
+    # coordinates at a coarser precision is what turned a 0.00002 mm-wide pad
+    # into a zero-width path whose JSON still claimed area.
+    view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
+    if layers is not None:
+        by_name = {l.name: l for l in view.layers}
+        source = [by_name[l.name] for l in layers if l.name in by_name]
+    else:
+        source = view.layers
+    chosen = _ordered(source, opts)
 
-    x0, y0, width, height = _viewbox(preview, digits)
+    x0, y0, width, height = _viewbox(view, digits)
     out: list[str] = []
     out.append(
         f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -538,23 +577,28 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
     import html as _html
 
     opts = options or SvgOptions()
-    ordered = _ordered(list(preview.layers), opts)
-    body = render_svg(preview, options=opts, layers=ordered)
+    # Regularise once and use the same view for the page's metadata and for the
+    # inlined SVG, so the header cannot describe rings or bounds the drawing no
+    # longer shows.
+    view = regularise_preview(preview, _render_digits(preview, opts),
+                              diagnostics=preview.diagnostics)
+    ordered = _ordered(list(view.layers), opts)
+    body = render_svg(view, options=opts, layers=ordered)
 
-    name = title or preview.step.name
-    bounds = preview.bounds or (0, 0, 0, 0)
+    name = title or view.step.name
+    bounds = view.bounds or (0, 0, 0, 0)
     size = f"{bounds[2] - bounds[0]:.2f} x {bounds[3] - bounds[1]:.2f} mm"
     empty = [l.name for l in ordered if l.is_empty]
-    failed = list(preview.failed_layers)
+    failed = list(view.failed_layers)
 
     head_meta = " &middot; ".join(filter(None, [
         _html.escape(source or ""),
-        f"step {_html.escape(preview.step.name)}",
-        f"input units {preview.units_in}",
-        f"{len(preview.layers)} layers",
-        f"{preview.total_polygons} rings",
+        f"step {_html.escape(view.step.name)}",
+        f"input units {view.units_in}",
+        f"{len(view.layers)} layers",
+        f"{view.total_polygons} rings",
         size,
-        _thickness_note(preview),
+        _thickness_note(view),
     ]))
 
     # Empty and failed layers are called out separately and never merged: an
@@ -604,7 +648,7 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
       <button id="zout" title="zoom out">&minus;</button>
       <button id="fit" title="fit to window (f)">fit</button>
     </div>
-    <div id="layers">{_layer_rows(preview, opts, ordered)}</div>
+    <div id="layers">{_layer_rows(view, opts, ordered)}</div>
   </div>
   <div id="stage">
     {body}
@@ -652,17 +696,36 @@ def write_outputs(
     stem: Optional[str] = None,
     include_diagnostics: bool = True,
 ) -> Outputs:
-    """Write the preview, returning the paths produced."""
+    """Write the preview, returning the paths produced.
+
+    One resolution is chosen per artefact family and the geometry is
+    re-regularised onto it before writing, so what the JSON reports, what the
+    SVG draws and what the HTML lists are the same polygons.  By default both
+    families follow the preview's own model resolution; an explicit
+    ``preview_options``/``svg_options`` precision overrides it, and a mismatch
+    between the two is honoured rather than hidden.
+    """
     import json as _json
     import os
 
     from .export import step_to_json
 
-    opts = svg_options or SvgOptions()
-    # Keep the JSON at the preview's own resolution unless the caller explicitly
-    # asks for another one; a mismatched request is re-regularised, never
-    # produced by rounding the already-snapped points.
-    json_digits = preview_options.round_digits if preview_options is not None else None
+    # JSON follows the preview's resolution unless the caller asks otherwise; the
+    # drawing follows the JSON unless the caller asks otherwise.
+    json_digits = _preview_digits(
+        preview, preview_options.round_digits if preview_options is not None else None)
+    if svg_options is not None and svg_options.round_digits is not None:
+        draw_digits = max(0, int(svg_options.round_digits))
+    else:
+        draw_digits = json_digits
+    opts = (replace(svg_options, round_digits=draw_digits)
+            if svg_options is not None else SvgOptions(round_digits=draw_digits))
+
+    json_view = regularise_preview(preview, json_digits,
+                                   diagnostics=preview.diagnostics)
+    draw_view = (json_view if draw_digits == json_digits else
+                 regularise_preview(preview, draw_digits,
+                                    diagnostics=preview.diagnostics))
     stem = stem or preview.step.name or "preview"
     os.makedirs(out_dir, exist_ok=True)
 
@@ -671,7 +734,7 @@ def write_outputs(
     if want_json:
         path = os.path.join(out_dir, f"{stem}.json")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            _json.dump(step_to_json(job, preview,
+            _json.dump(step_to_json(job, json_view,
                                     round_digits=json_digits,
                                     include_diagnostics=include_diagnostics),
                        handle, ensure_ascii=False, indent=1)
@@ -681,24 +744,24 @@ def write_outputs(
     if want_svg:
         path = os.path.join(out_dir, f"{stem}.svg")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(render_svg(preview, options=opts))
+            handle.write(render_svg(draw_view, options=opts))
         outputs.svg = path
 
     if want_html:
         path = os.path.join(out_dir, f"{stem}.html")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(render_html(preview, options=opts,
+            handle.write(render_html(draw_view, options=opts,
                                      source=getattr(job, "source_path", "")))
         outputs.html = path
 
     if per_layer_svg:
         layer_dir = os.path.join(out_dir, "layers")
         os.makedirs(layer_dir, exist_ok=True)
-        for index, layer in enumerate(_ordered(preview.layers, opts)):
+        for index, layer in enumerate(_ordered(draw_view.layers, opts)):
             safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in layer.name)
             path = os.path.join(layer_dir, f"{safe}.svg")
             with open(path, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(render_svg(preview, options=opts, layers=[layer]))
+                handle.write(render_svg(draw_view, options=opts, layers=[layer]))
             outputs.layer_svgs.append(path)
 
     return outputs

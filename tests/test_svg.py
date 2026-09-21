@@ -442,3 +442,86 @@ class TestWriteOutputs:
         with open(outputs.json, encoding="utf-8") as handle:
             document = json.load(handle)
         assert document["schema"]
+
+
+# ---------------------------------------------------------------------------
+# one geometry per run
+# ---------------------------------------------------------------------------
+
+class TestOutputPrecisionConsistency:
+    """The JSON, the SVG and the HTML must describe the same polygons.
+
+    The regression these cover printed live coordinates at a coarser precision
+    than the model: a 0.00002 mm-wide pad became ``M0 0L0 0L0 1L0 1Z`` in the
+    drawing while the JSON beside it still reported its area.
+    """
+
+    @staticmethod
+    def _six_digit_preview():
+        from odbpp.clipper import Region, Ring, to_surface_geometry
+        from odbpp.export import PreviewOptions
+        from odbpp.features import SurfaceFeature
+
+        job = load_job(str(sample_path("minimal-test-odb")))
+        layer = job.single_step.layers[0]
+        narrow = Ring(((0, 0), (0, 1), (0.00002, 1), (0.00002, 0)), False)
+        layer.features.records = [SurfaceFeature(
+            line_no=1, geometry=to_surface_geometry(Region([narrow])))]
+        preview = build_step_preview(job, options=PreviewOptions(
+            layers=[layer.name], round_digits=6))
+        return job, layer.name, preview
+
+    def test_the_finer_preview_precision_reaches_the_drawing_and_the_html(self, tmp_path):
+        import json
+        from pathlib import Path
+
+        job, name, preview = self._six_digit_preview()
+        outputs = write_outputs(preview, job, str(tmp_path))
+        document = json.loads(Path(outputs.json).read_text(encoding="utf-8"))
+        points = document["steps"][0]["layers"][0]["polygons"][0]["points"]
+        assert any(abs(x - 0.00002) < 1e-9 for x, _y in points)
+
+        root = parse(Path(outputs.svg).read_text(encoding="utf-8"))
+        group = next(g for g in layer_groups(root) if g.get("data-name") == name)
+        path = path_of(group)
+        assert "0.00002" in path, path
+        assert path in Path(outputs.html).read_text(encoding="utf-8")
+
+    def test_an_explicit_coarser_drawing_precision_re_regularises(self, tmp_path):
+        # Only changing the default would not be enough: an explicit request
+        # still has to re-quantise the region rather than round its points.
+        import json
+        from pathlib import Path
+
+        job, name, preview = self._six_digit_preview()
+        outputs = write_outputs(preview, job, str(tmp_path),
+                                svg_options=SvgOptions(round_digits=2))
+        document = json.loads(Path(outputs.json).read_text(encoding="utf-8"))
+        assert document["steps"][0]["layers"][0]["polygons"], \
+            "the JSON still follows the preview's 6-digit resolution"
+
+        root = parse(Path(outputs.svg).read_text(encoding="utf-8"))
+        group = next(g for g in layer_groups(root) if g.get("data-name") == name)
+        assert group.get("data-rings") == "0"
+        assert path_of(group) == ""
+        assert float(group.get("data-area")) == 0.0
+
+    def test_an_explicit_coarser_json_precision_agrees_with_the_drawing(self, tmp_path):
+        # A caller that coarsens both must get one collapsed geometry in both
+        # artefacts, not a collapsed drawing next to uncollapsed polygons.
+        import json
+        from pathlib import Path
+
+        from odbpp.export import PreviewOptions
+
+        job, name, preview = self._six_digit_preview()
+        outputs = write_outputs(preview, job, str(tmp_path),
+                                preview_options=PreviewOptions(round_digits=4))
+        document = json.loads(Path(outputs.json).read_text(encoding="utf-8"))
+        layer = document["steps"][0]["layers"][0]
+        assert layer["polygons"] == []
+        assert document["summary"]["empty_layers"] == [name]
+        root = parse(Path(outputs.svg).read_text(encoding="utf-8"))
+        group = next(g for g in layer_groups(root) if g.get("data-name") == name)
+        assert path_of(group) == ""
+        assert group.get("data-rings") == "0"
