@@ -1,5 +1,0 @@
-#
-# Synthetic placeholder for the standard font.  The glyph records defined in
-# Appendix C are intentionally omitted: this fixture exists to exercise T/B
-# record parsing, not text rendering.
-#

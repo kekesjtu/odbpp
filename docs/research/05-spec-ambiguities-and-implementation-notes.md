@@ -177,7 +177,6 @@ materialize `@`/`&` 表，则每条记录解析时看到的表都是空的，会
 
 | 分支 | 合成覆盖 |
 |---|---|
-| `T` 文本记录、`B` 条码记录 | `fx_text_barcode` |
 | 记录级负极性 | `fx_negative_layer` |
 | 层级 `POLARITY=NEGATIVE` | `fx_negative_layer` |
 | 自定义符号三层嵌套 | `fx_nested_symbol` |
@@ -187,6 +186,30 @@ materialize `@`/`&` 表，则每条记录解析时看到的表都是空的，会
 | step repeat（拼板）→ 告警并忽略 | `tests/test_job.py::TestNestedStepArrays` |
 | 倒角掩码只命中单角 | `tests/test_geometry.py`（正文读法） |
 
-真实样本从未出现的图元/参数：`T`、`B`、`moire`、`ext`、`el`、`bfr`/`bfs`、
-`*plate`、`dshape`、`cross`、`dogbone`、`dpack`、热焊盘（`thr`/`ths`/`*_ths`/
-`*_tho`）、`width_factor` 非 1 的文本、`;ID=` 之外的自定义属性形态。
+真实样本从未出现的图元/参数：`moire`、`ext`、`el`、`bfr`/`bfs`、`*plate`、
+`dshape`、`cross`、`dogbone`、`dpack`、热焊盘（`thr`/`ths`/`*_ths`/`*_tho`）。
+
+---
+
+## 11. `T` / `B` 图元：**明确不支持**（AGENTS 约束 6）
+
+用户在 `AGENTS.md` 中新增约束 6：「不需要支持 T/B 图元。」
+
+理由与后果：
+
+- `T`（文本）需要实现矢量字体文件格式（`fonts/standard`，p.48）与字形展开；
+  `B`（条码）需要 UPC39 编码器与条码渲染。二者都**不是几何展开**问题，
+  与本项目「几何解析 → 多边形 → 预览」的主线无关。
+- 已删除：`features.TextFeature` / `features.BarcodeFeature` 两个数据类、
+  `_parse_text` / `_parse_barcode` 两个解析器、`tests/fixtures/fx_text_barcode/`
+  以及相关测试。
+- **保留**：`features._UNSUPPORTED_RECORDS` 中登记 `T`/`B`，遇到时报
+  `features.unsupported_record` 诊断而非 `features.unknown_record`。
+  这两个 code 的区别是必要的：「unknown」意味着解析器有 bug，「unsupported」
+  意味着这是一个已决策的范围边界。同时该告警让「某层少了丝印文字」**可见**，
+  而不是无声丢数据。
+- 副作用：含 `T`/`B` 的 `features` 文件会出现 `features.count_mismatch`
+  （文件里的 `F <n>` 计数包含未建模的记录）。这是预期行为，测试已固化。
+- `units.UnitScope.width_factor_to_mm()` 暂时无生产调用方（`width_factor` 只
+  出现在 `T` 记录上），保留并注明原因：它是**单位规则**，未来若恢复文本支持
+  应从这里查 12-mil 陷阱，而不是重新踩一遍。

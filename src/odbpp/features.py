@@ -40,6 +40,7 @@ from .diagnostics import (
     FEATURES_NO_UNITS,
     FEATURES_UNDECLARED_ATTRIBUTE,
     FEATURES_UNKNOWN_RECORD,
+    FEATURES_UNSUPPORTED_RECORD,
     Diagnostics,
 )
 from .errors import ParseError
@@ -60,8 +61,6 @@ __all__ = [
     "PadFeature",
     "LineFeature",
     "ArcFeature",
-    "TextFeature",
-    "BarcodeFeature",
     "SurfaceFeature",
     "FeatureFile",
     "parse_feature_file",
@@ -201,63 +200,6 @@ class ArcFeature(Feature):
     def radius_mm(self) -> float:
         (x0, y0), (cx, cy) = self.start_mm, self.center_mm
         return ((x0 - cx) ** 2 + (y0 - cy) ** 2) ** 0.5
-
-
-@dataclass
-class TextFeature(Feature):
-    """``T`` -- text drawn from a vector font (spec p.173).
-
-    ``xsize_mm``/``ysize_mm`` are in **layer units** (mm or inch), unlike symbol
-    parameters.  ``width_factor`` is always in 12-mil units regardless of the
-    ``UNITS`` directive (spec p.174).
-    """
-
-    x_mm: float = 0.0
-    y_mm: float = 0.0
-    font: str = "standard"
-    orientation: Orientation = field(default_factory=Orientation)
-    xsize_mm: float = 0.0
-    ysize_mm: float = 0.0
-    width_factor: float = 1.0
-    text: str = ""
-    version: int = 0
-
-    @property
-    def kind(self) -> str:
-        return "text"
-
-    @property
-    def stroke_width_mm(self) -> float:
-        """Character stroke width derived from ``width_factor`` (always 12-mil units)."""
-        return UnitScope.width_factor_to_mm(self.width_factor)
-
-    @property
-    def dynamic_variables(self) -> list[str]:
-        """``$$NAME`` placeholders in the string, without the prefix."""
-        return re.findall(r"\$\$([A-Za-z_-]+)", self.text)
-
-
-@dataclass
-class BarcodeFeature(Feature):
-    """``B`` -- a UPC39 barcode (spec p.176)."""
-
-    x_mm: float = 0.0
-    y_mm: float = 0.0
-    barcode: str = "UPC39"
-    font: str = "standard"
-    orientation: Orientation = field(default_factory=Orientation)
-    element_width_mm: float = 0.0
-    height_mm: float = 0.0
-    full_ascii: bool = True
-    checksum: bool = False
-    inverted_background: bool = False
-    add_text_string: bool = False
-    text_position: str = "T"
-    text: str = ""
-
-    @property
-    def kind(self) -> str:
-        return "barcode"
 
 
 @dataclass
@@ -728,128 +670,6 @@ def _parse_arc(
     )
 
 
-def _parse_text(
-    tokens: list[Token], line: str, line_no: int, path: Optional[str],
-    scope: UnitScope, uid: Optional[int],
-    definitions, assignments: "dict[int, Optional[str]]", attr_names: list[str],
-    attr_strings: list[str], diagnostics: Diagnostics,
-) -> TextFeature:
-    if len(tokens) < 10:
-        raise ParseError(
-            "text record needs x y font polarity orient_def xsize ysize width_factor "
-            "text version",
-            path=path, line_no=line_no, line=line,
-        )
-
-    x = scope.coord_mm(_num(tokens[0], path=path, line_no=line_no, line=line, what="x"))
-    y = scope.coord_mm(_num(tokens[1], path=path, line_no=line_no, line=line, what="y"))
-    font = tokens[2].text
-    polarity = _polarity(tokens[3], path=path, line_no=line_no, line=line)
-    orientation, consumed = _parse_orientation(tokens, 4, path=path, line_no=line_no, line=line)
-    pos = 4 + consumed
-
-    if len(tokens) < pos + 5:
-        raise ParseError("truncated text record", path=path, line_no=line_no, line=line)
-
-    xsize = _num(tokens[pos], path=path, line_no=line_no, line=line, what="xsize")
-    ysize = _num(tokens[pos + 1], path=path, line_no=line_no, line=line, what="ysize")
-    width_factor = _num(tokens[pos + 2], path=path, line_no=line_no, line=line,
-                        what="width_factor")
-    text_token = tokens[pos + 3]
-    version = _int(tokens[pos + 4], path=path, line_no=line_no, line=line, what="version")
-
-    attrs, undeclared = resolve_attributes(assignments, attr_names, attr_strings,
-                                          definitions, path=path, diagnostics=diagnostics)
-    _report_undeclared(undeclared, path, diagnostics)
-
-    return TextFeature(
-        line_no=line_no,
-        polarity=polarity,
-        dcode=0,
-        attributes=attrs,
-        uid=uid,
-        raw=line,
-        x_mm=x,
-        y_mm=y,
-        font=font,
-        orientation=orientation,
-        # Text size is in LAYER units, not symbol-size units (spec p.174).
-        xsize_mm=scope.coord_mm(xsize),
-        ysize_mm=scope.coord_mm(ysize),
-        width_factor=width_factor,
-        text=text_token.text,
-        version=version,
-    )
-
-
-def _parse_barcode(
-    tokens: list[Token], line: str, line_no: int, path: Optional[str],
-    scope: UnitScope, uid: Optional[int],
-    definitions, assignments: "dict[int, Optional[str]]", attr_names: list[str],
-    attr_strings: list[str], diagnostics: Diagnostics,
-) -> BarcodeFeature:
-    if len(tokens) < 15:
-        raise ParseError(
-            "barcode record needs x y barcode font polarity orient_def E w h fasc cs bg "
-            "astr astr_pos text",
-            path=path, line_no=line_no, line=line,
-        )
-
-    x = scope.coord_mm(_num(tokens[0], path=path, line_no=line_no, line=line, what="x"))
-    y = scope.coord_mm(_num(tokens[1], path=path, line_no=line_no, line=line, what="y"))
-    barcode = tokens[2].text
-    font = tokens[3].text
-    polarity = _polarity(tokens[4], path=path, line_no=line_no, line=line)
-    orientation, consumed = _parse_orientation(tokens, 5, path=path, line_no=line_no, line=line)
-    pos = 5 + consumed
-
-    if tokens[pos].text.upper() != "E":
-        raise ParseError(
-            f"expected the reserved barcode marker 'E', got {tokens[pos].text!r}",
-            path=path, line_no=line_no, line=line,
-        )
-    pos += 1
-
-    if len(tokens) < pos + 8:
-        raise ParseError("truncated barcode record", path=path, line_no=line_no, line=line)
-
-    element_width = _num(tokens[pos], path=path, line_no=line_no, line=line,
-                         what="barcode element width")
-    height = _num(tokens[pos + 1], path=path, line_no=line_no, line=line, what="barcode height")
-    full_ascii = _yn(tokens[pos + 2])
-    checksum = _yn(tokens[pos + 3])
-    inverted = _yn(tokens[pos + 4])
-    add_text = _yn(tokens[pos + 5])
-    text_position = tokens[pos + 6].text.upper()
-    text = tokens[pos + 7].text
-
-    attrs, undeclared = resolve_attributes(assignments, attr_names, attr_strings,
-                                          definitions, path=path, diagnostics=diagnostics)
-    _report_undeclared(undeclared, path, diagnostics)
-
-    return BarcodeFeature(
-        line_no=line_no,
-        polarity=polarity,
-        dcode=0,
-        attributes=attrs,
-        uid=uid,
-        raw=line,
-        x_mm=x,
-        y_mm=y,
-        barcode=barcode,
-        font=font,
-        orientation=orientation,
-        element_width_mm=scope.coord_mm(element_width),
-        height_mm=scope.coord_mm(height),
-        full_ascii=full_ascii,
-        checksum=checksum,
-        inverted_background=inverted,
-        add_text_string=add_text,
-        text_position=text_position,
-        text=text,
-    )
-
-
 def _report_undeclared(names: list[str], path: Optional[str],
                        diagnostics: Diagnostics) -> None:
     """Report undeclared attributes once per file rather than once per record."""
@@ -879,6 +699,16 @@ _RECORD_PARSERS = {
     "P": _parse_pad,
     "L": _parse_line,
     "A": _parse_arc,
+}
+
+#: Record types this parser recognises but deliberately does not implement.
+#: They are named explicitly rather than falling through to
+#: ``FEATURES_UNKNOWN_RECORD``, because "unknown" would suggest a parser bug
+#: while this is a scope decision -- and because a silent skip would drop real
+#: geometry from the layer without a trace.
+_UNSUPPORTED_RECORDS = {
+    "T": "text",
+    "B": "barcode",
 }
 
 
@@ -1077,19 +907,27 @@ def parse_feature_file(
                 current_surface = surface
                 continue
 
+            # T (text) and B (barcode) are out of scope: they need a vector font
+            # or a symbology renderer, not geometry expansion.  They are reported
+            # by name so a layer silently missing its silkscreen text is visible.
+            if kind in _UNSUPPORTED_RECORDS:
+                diagnostics.warn(
+                    FEATURES_UNSUPPORTED_RECORD,
+                    f"{kind} ({_UNSUPPORTED_RECORDS[kind]}) records are outside this "
+                    f"parser's scope; the record is ignored",
+                    relpath,
+                )
+                continue
+
             common = dict(
                 line=line, line_no=line_no, path=relpath, scope=result.units,
                 uid=uid, definitions=definitions,
                 assignments=assignments, attr_names=result.attr_names,
                 attr_strings=result.attr_strings, diagnostics=diagnostics,
             )
-            record: Feature
-            if kind == "T":
-                record = _parse_text(tokens, **common)
-            elif kind == "B":
-                record = _parse_barcode(tokens, **common)
-            else:
-                record = _RECORD_PARSERS[kind](tokens, symbols=result.symbols, **common)
+            record: Feature = _RECORD_PARSERS[kind](
+                tokens, symbols=result.symbols, **common
+            )
 
             result.records.append(record)
             continue

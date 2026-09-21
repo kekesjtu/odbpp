@@ -130,18 +130,6 @@ class TestSymbolFixtures:
         assert not any(d.code == "symbol.cycle" for d in job.diagnostics.items)
 
 
-class TestTextBarcodeFixture:
-    def test_all_six_records_parse(self):
-        job = load_job(str(fixture_path("fx_text_barcode")))
-        layer = job.step("BOARD").layer("F.SILKSCREEN")
-        assert layer.features.counts_by_kind() == {"text": 4, "barcode": 2}
-
-    def test_inch_coordinates_arrive_as_millimetres(self):
-        job = load_job(str(fixture_path("fx_text_barcode")))
-        record = job.step("BOARD").layer("F.SILKSCREEN").features.records[0]
-        assert record.x_mm == pytest.approx(0.1 * 25.4)
-
-
 class TestMatrixAuthority:
     def test_a_matrix_layer_without_a_directory_is_warned_about(self, tmp_path):
         from conftest import write_tree

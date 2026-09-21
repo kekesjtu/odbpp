@@ -2,8 +2,8 @@
 
 Hand-authored ODB++ v8.1 jobs. They exist because `cases/` is real-world data
 that happens to miss the corners this parser must get right: there is no sample
-in `cases/` with a negative-polarity layer, a `T`/`B` record, a nested
-user-defined symbol, a resize factor, or a broken layer profile.
+in `cases/` with a negative-polarity layer, a nested user-defined symbol, a
+resize factor, or a broken layer profile.
 
 Everything here is written by us, is tiny, and is deliberately *legal* ODB++
 except where a fixture is documenting a failure mode.
@@ -62,24 +62,6 @@ MM, one step. `symbols/` holds a three-deep chain
 forbids this; a parser must detect it instead of recursing until the stack
 overflows. Expected result: a `symbol.cycle` **error** diagnostic (so the CLI
 exits non-zero), and `SymbolCycleError` from an explicit `expand_order`.
-
-### `fx_text_barcode/` — `T` and `B` records
-
-INCH, one step. Six records on `F.SILKSCREEN`.
-
-| Teaches | Where |
-|---|---|
-| Legacy orientation codes | `orient_def` `0` and `1` |
-| Arbitrary-angle orientation | `8 30.0` and `9 45.0` (the `9` also mirrors) |
-| Text payload is not a comment | `'ROT#30;SEMI'` contains `#` and `;` |
-| Text sizes are in layer units | `xsize`/`ysize` convert via `coord_mm` |
-| `width_factor` is always 12-mil units | `1.00000` -> 0.3048 mm |
-| Both polarities | the `NEG90` record |
-| Barcode flags, including the second-string variant | the two `B` records, `astr_pos` `T` and `B` |
-| `;ID=` on a record with no attributes | `B ... 'BC67890';ID=77` |
-
-`fonts/standard` is a minimal stub: the parser records the font name and does not
-expand glyphs, so the stub only has to be present.
 
 ## Adding a fixture
 

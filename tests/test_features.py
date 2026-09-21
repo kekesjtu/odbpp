@@ -12,18 +12,16 @@ import pytest
 from odbpp.archive import OdbArchive
 from odbpp.features import (
     ArcFeature,
-    BarcodeFeature,
     LineFeature,
     PadFeature,
     SurfaceFeature,
-    TextFeature,
     parse_feature_file,
 )
 from odbpp.model import Polarity
 from odbpp.units import UnitSystem, UnitScope
 from odbpp.diagnostics import Diagnostics
 
-from conftest import fixture_path, write_tree
+from conftest import write_tree
 
 MM = UnitScope(UnitSystem.MM)
 INCH = UnitScope(UnitSystem.INCH)
@@ -272,78 +270,51 @@ class TestFileLevelMetadata:
         assert any(d.code == "features.unknown_record" for d in diagnostics.items)
 
 
-class TestTextRecords:
-    def test_text_is_kept_verbatim_including_hashes_and_semicolons(self):
-        # Spec p.174: '#' and ';' are ordinary data inside the quoted string.
-        job = _load("fx_text_barcode")
-        records = _silkscreen(job).records
-        texts = [r for r in records if isinstance(r, TextFeature)]
-        assert texts[1].text == "ROT#30;SEMI"
+class TestOutOfScopeRecords:
+    """T (text) and B (barcode) are deliberately not implemented.
 
-    def test_text_sizes_use_the_coordinate_semantic(self):
-        # 'T ... xsize ysize' is in layer units (spec p.174), unlike symbol sizes.
-        job = _load("fx_text_barcode")
-        record = [r for r in _silkscreen(job).records if isinstance(r, TextFeature)][0]
-        assert record.xsize_mm == pytest.approx(0.05 * 25.4)
-        assert record.ysize_mm == pytest.approx(0.05 * 25.4)
+    They need a vector font and a symbology renderer rather than geometry
+    expansion.  The requirement is only that a layer containing them stays
+    readable and that the omission is *visible*: silently skipping them would
+    drop real silkscreen geometry without a trace.
+    """
 
-    def test_width_factor_is_always_twelve_mil_units(self):
-        # Spec p.174: width_factor 1.0 == 12 mil, in both unit systems.
-        job = _load("fx_text_barcode")
-        record = [r for r in _silkscreen(job).records if isinstance(r, TextFeature)][0]
-        assert record.width_factor == pytest.approx(1.0)
-        assert record.stroke_width_mm == pytest.approx(12 * 0.0254)
+    @pytest.mark.parametrize(
+        "record,label",
+        [
+            ("T 1 1 standard P 0 0.5 0.5 1.0 'REF1' 0", "text"),
+            ("B 1 1 UPC39 standard P 0 E 0.008 0.2 Y N Y Y T 'BC1'", "barcode"),
+        ],
+    )
+    def test_the_record_is_reported_by_name_not_as_unknown(self, record, label):
+        diagnostics = Diagnostics()
+        parse(f"UNITS=MM\nF 2\n$0 r1000\nP 1 1 0 P 0 0\n{record}\n",
+              diagnostics=diagnostics)
+        codes = {d.code for d in diagnostics.items}
+        assert "features.unsupported_record" in codes
+        assert "features.unknown_record" not in codes
+        assert label in str(diagnostics)
 
-    def test_a_negative_text_record_is_recorded(self):
-        job = _load("fx_text_barcode")
-        negative = [r for r in _silkscreen(job).records
-                    if isinstance(r, TextFeature) and r.polarity is Polarity.NEGATIVE]
-        assert len(negative) == 1
-        assert negative[0].text == "NEG90"
+    def test_the_rest_of_the_layer_still_parses(self):
+        diagnostics = Diagnostics()
+        parsed = parse(
+            "UNITS=MM\nF 3\n$0 r1000\n"
+            "P 1 1 0 P 0 0\n"
+            "T 2 2 standard P 0 0.5 0.5 1.0 'REF1' 0\n"
+            "P 3 3 0 P 0 0\n",
+            diagnostics=diagnostics,
+        )
+        assert [r.kind for r in parsed.records] == ["pad", "pad"]
 
-    def test_dynamic_variables_are_exposed(self):
-        parsed = parse("UNITS=MM\nF 1\nT 1 1 standard P 0 1 1 1.0 '$$COMPONENT' 0\n")
-        assert parsed.records[0].dynamic_variables == ["COMPONENT"]
-
-
-class TestBarcodeRecords:
-    def test_the_parameters_are_decoded(self):
-        job = _load("fx_text_barcode")
-        barcode = [r for r in _silkscreen(job).records if isinstance(r, BarcodeFeature)][0]
-        assert barcode.barcode == "UPC39"
-        assert barcode.full_ascii is True
-        assert barcode.checksum is False
-        assert barcode.inverted_background is True
-        assert barcode.add_text_string is True
-        assert barcode.text_position == "T"
-        assert barcode.text == "BC12345"
-
-    def test_the_second_barcode_can_differ_in_every_flag(self):
-        job = _load("fx_text_barcode")
-        barcode = [r for r in _silkscreen(job).records if isinstance(r, BarcodeFeature)][1]
-        assert barcode.checksum is True
-        assert barcode.inverted_background is False
-        assert barcode.text_position == "B"
-        assert barcode.uid == 77
-
-    def test_the_element_width_is_in_layer_units(self):
-        job = _load("fx_text_barcode")
-        barcode = [r for r in _silkscreen(job).records if isinstance(r, BarcodeFeature)][0]
-        # 0.008 inch element width.
-        assert barcode.element_width_mm == pytest.approx(0.008 * 25.4)
-        assert barcode.height_mm == pytest.approx(0.2 * 25.4)
+    def test_the_declared_count_is_reported_as_a_mismatch(self):
+        # The count in the file includes the records we do not model, so the
+        # mismatch warning is expected and is itself the signal.
+        diagnostics = Diagnostics()
+        parse("UNITS=MM\nF 2\n$0 r1000\nP 1 1 0 P 0 0\n"
+              "T 2 2 standard P 0 0.5 0.5 1.0 'X' 0\n", diagnostics=diagnostics)
+        assert any(d.code == "features.count_mismatch" for d in diagnostics.items)
 
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-
-def _load(name: str):
-    from odbpp import load_job
-
-    return load_job(str(fixture_path(name)))
-
-
-def _silkscreen(job):
-    step = next(iter(job.steps.values()))
-    return step.layer("F.SILKSCREEN").features
