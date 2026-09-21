@@ -6,6 +6,10 @@
 # whole directory is marked binary: git must never touch its bytes.
 cases/** -text -diff
 
+# ...but our own documentation inside cases/ is prose and must stay diffable.
+# Later rules win, so this overrides the blanket rule above.
+cases/*.md text eol=lf diff
+cases/**/*.md text eol=lf diff
 # Vendor reference PDF: never diff, never text-convert.
 *.pdf -text -diff
 # Source, docs and configs: normalise to LF so Linux CI and Windows agree.
