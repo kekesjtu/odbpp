@@ -115,19 +115,48 @@ class LayerContext(str, Enum):
 class LayerForm(str, Enum):
     """``FORM`` field: rigid or flexible laminate (spec p.66).
 
-    ``UNSPECIFIED`` is not a spec value: it means the matrix did not declare
-    ``FORM`` at all, which is what real exporters sometimes do.
-    ``cases/designodb-rigidflex`` (Xpedition / Valor NPI) omits the field from
-    every one of its 43 ``LAYER`` blocks, including the six layers that make up
-    the flex tail.  Defaulting those to ``RIGID`` would assert something the file
-    never said -- and assert it about the one property that makes a rigid-flex
-    board a rigid-flex board.  Consumers that need a boolean should use
-    :attr:`LayerRef.is_flex`, which is honest about the unknown case.
+    Not a layer *type*: ``TYPE`` is the base type (``SIGNAL``, ``DIELECTRIC``,
+    ...) and ``ADD_TYPE`` the subtype.  ``FORM`` is a separate optional field,
+    and spec p.66 gives it a default, so there are only two values:
+
+        RIGID -- Layer is defined as rigid.
+        FLEX  -- Layer is defined as flexible.
+
+    Resolution is in :data:`FLEX_SUBTYPES` / :class:`FormSource`, not here.
     """
 
     RIGID = "RIGID"
     FLEX = "FLEX"
-    UNSPECIFIED = "UNSPECIFIED"
+
+
+#: Subtypes whose default ``FORM`` is ``FLEX`` rather than ``RIGID``.
+#:
+#: Spec p.66: "Layers of the subtype SIGNAL_FLEX, PG_FLEX and MIXED_FLEX have a
+#: default FORM = FLEX."  That sentence is what makes a rigid-flex board
+#: readable at all: ``cases/designodb-rigidflex`` never writes ``FORM``, and
+#: these three subtypes are the only reason its flex region can be identified
+#: from fields instead of from layer names.
+FLEX_SUBTYPES = frozenset({"SIGNAL_FLEX", "PG_FLEX", "MIXED_FLEX"})
+
+
+class FormSource(str, Enum):
+    """Where the resolved :attr:`LayerRef.form` came from (spec p.66).
+
+    Kept separate from the value so a consumer can tell "the exporter told us"
+    from "we applied a default", without either of them having to be thrown
+    away.  ``DEFAULT`` on a ``DIELECTRIC`` layer is also a spec deviation worth
+    reporting, because that is precisely the layer where a wrong answer moves
+    the flex boundary.
+    """
+
+    #: The ``LAYER`` block states ``FORM``.
+    DECLARED = "DECLARED"
+    #: Absent ``FORM``, ``ADD_TYPE`` is one of :data:`FLEX_SUBTYPES`.
+    FLEX_SUBTYPE = "FLEX_SUBTYPE"
+    #: Absent ``FORM`` and not a flex subtype; spec default ``RIGID`` applies,
+    #: but note spec p.66: "Layers of type DIELECTRIC are to be defined as
+    #: RIGID or FLEX" -- for those, silence is a deviation, not a default.
+    DEFAULT = "DEFAULT"
 
 
 class DielectricType(str, Enum):
@@ -245,6 +274,8 @@ class LayerRef:
     polarity: Polarity = Polarity.POSITIVE
     uid: Optional[int] = None
     form: LayerForm = LayerForm.RIGID
+    #: Whether ``form`` was declared, implied by the subtype, or defaulted.
+    form_source: FormSource = FormSource.DEFAULT
     dielectric_type: DielectricType = DielectricType.NONE
     dielectric_name: str = ""
     #: UIDs of the copper layers the dielectric is laminated to.
@@ -267,18 +298,18 @@ class LayerRef:
         return self.type is not None and self.type.is_copper
 
     @property
-    def is_flex(self) -> Optional[bool]:
-        """``True``/``False`` when the matrix declared ``FORM``, else ``None``.
+    def is_flex(self) -> bool:
+        """Resolved rigid/flex, per spec p.66's default rule.
 
-        A three-valued answer rather than a boolean with a made-up default,
-        because "this layer is rigid" and "this file does not say" are different
-        claims and only one of them is supported by the data.
+        Always a definite answer, because the spec supplies one; use
+        :attr:`form_source` when you need to know how firm it is.
         """
-        if self.form is LayerForm.FLEX:
-            return True
-        if self.form is LayerForm.RIGID:
-            return False
-        return None
+        return self.form is LayerForm.FLEX
+
+    @property
+    def form_is_declared(self) -> bool:
+        """``True`` unless ``form`` came from the ``RIGID`` default."""
+        return self.form_source is not FormSource.DEFAULT
 
 
 @dataclass

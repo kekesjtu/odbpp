@@ -53,5 +53,6 @@
 4. 由 docs/ 中的官方 ODB++ 格式说明文件可知，在 ODB++ 中，copper weight 字段的数值和物理含义并不是固定不变的，而是跟随当前环境定义的单位制（Metric or Imperial）发生变化：  
     - 英制模式（UNITS=INCH）：单位：ounce per square foot（即行业常说的 $\text{oz/ft}^2$，盎司/oz）。物理属性：属于面密度/重量概念。
     - 公制模式（UNITS=MM）：单位：µm（微米）。物理属性：属于 copper thickness 概念。
-4.由 docs/ 中的官方 ODB++ 格式说明文件可知，字段 .layer_dielectric 在规范设计中仅用于非铜层。  DIELECTRIC（介质层）、SOLDERMASK（阻焊层）、SOLDER PASTE（钢网/锡膏层）。
-5.对于优质 cases/ 的说明：符合官方文件的规范。
+5. 由 docs/ 中的官方 ODB++ 格式说明文件可知，字段 .layer_dielectric 在规范设计中仅用于非铜层。  DIELECTRIC（介质层）、SOLDERMASK（阻焊层）、SOLDER PASTE（钢网/锡膏层）。
+6. 对于优质 cases/ 的说明：符合官方文件的规范。
+7. 使用中文回复用户。

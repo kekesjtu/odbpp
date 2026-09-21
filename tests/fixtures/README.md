@@ -63,23 +63,30 @@ forbids this; a parser must detect it instead of recursing until the stack
 overflows. Expected result: a `symbol.cycle` **error** diagnostic (so the CLI
 exits non-zero), and `SymbolCycleError` from an explicit `expand_order`.
 
-### `fx_flex_form/` — declared vs undeclared `FORM`
+### `fx_flex_form/` — the three ways `FORM` gets its value
 
-MM, one step, four matrix layers differing only in what they say about `FORM`.
+MM, one step, six matrix layers covering every branch of the spec p.66 rule:
 
-| Layer | `FORM` | `LayerRef.form` | `LayerRef.is_flex` |
-|---|---|---|---|
-| `SILK_1` | absent | `UNSPECIFIED` | `None` |
-| `RIGID_1` | `RIGID` | `RIGID` | `False` |
-| `POLYIMIDE_1` | absent | `UNSPECIFIED` | `None` |
-| `FLEX_1` | `FLEX` | `FLEX` | `True` |
+```
+FORM  ... (optional) (default = RIGID)
+Layers of the subtype SIGNAL_FLEX, PG_FLEX and MIXED_FLEX have a
+default FORM = FLEX.
+Layers of type DIELECTRIC are to be defined as RIGID or FLEX.
+```
 
-This exists because **all four real jobs in `cases/` omit `FORM`** — including
-`designodb-rigidflex`, a flip-phone board whose flex tail is the entire point. So
-the interesting contrast is declared-vs-undeclared, and the trap is answering
-`RIGID` when the file said nothing. Because at least one layer here does declare
-`FORM`, this fixture also pins that the job-level `matrix.form_undeclared`
-warning stays quiet when the field is present anywhere.
+| Layer | `TYPE` | `ADD_TYPE` | `FORM` | resolved `form` | `form_source` |
+|---|---|---|---|---|---|
+| `SILK_1` | `SILK_SCREEN` | — | absent | `RIGID` | `DEFAULT` |
+| `RIGID_1` | `SIGNAL` | — | `RIGID` | `RIGID` | `DECLARED` |
+| `POLYIMIDE_1` | `DIELECTRIC` | — | absent | `RIGID` | `DEFAULT` |
+| `FLEX_1` | `SIGNAL` | — | `FLEX` | `FLEX` | `DECLARED` |
+| `GND_FLEX` | `POWER_GROUND` | `PG_FLEX` | absent | `FLEX` | `FLEX_SUBTYPE` |
+| `SIG_CONFLICT` | `SIGNAL` | `SIGNAL_FLEX` | `RIGID` | `RIGID` | `DECLARED` |
+
+Expected diagnostics: `matrix.form_missing_dielectric` for `POLYIMIDE_1` (spec
+p.66 makes the field expected on dielectric layers) and `matrix.form_conflict`
+for `SIG_CONFLICT` (a declared `RIGID` against a subtype whose default is
+`FLEX`).
 
 `POLYIMIDE_1` additionally carries `.layer_dielectric`, `.dielectric_constant`
 and `.layer_hdi_type`, since a flex core is where those attributes actually

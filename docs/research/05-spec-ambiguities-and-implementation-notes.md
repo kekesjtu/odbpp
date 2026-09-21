@@ -350,14 +350,11 @@ AGENTS 约束 3 的措辞是「**介质层**的基底多边形直接继承板框
 
 ---
 
-## 13. `FORM` 与 `DIELECTRIC_TYPE` 的缺失：**已证实**（反例来自 `cases/`）
+## 13. `FORM` 的解析规则：**初稿判定被推翻**（规范 p.66 有明文默认值）
 
 ### 13.1 现象
 
-`spec p.66` 定义 `FORM` 为基材形态（`RIGID` / `FLEX`）。按常规读法，
-省略该字段应等价于 `RIGID`——毕竟绝大多数板子是刚性的。
-
-对 `cases/` 全部 110 个 `LAYER` 块做字段普查（`docs/research/03` §2.4(g)）：
+`cases/` 全部 110 个 `LAYER` 块的字段普查（详见 `03` §2.4(g)）：
 
 | 字段 | 出现次数 / 110 |
 |---|---|
@@ -365,58 +362,97 @@ AGENTS 约束 3 的措辞是「**介质层**的基底多边形直接继承板框
 | `DIELECTRIC_TYPE` | 4 |
 | `ADD_TYPE` | 45 |
 
-也就是说，**四个用例里没有任何一个声明过 `FORM`**，其中包括
-`designodb-rigidflex` —— 一个 job 名里写着 "rigidflex"、step 名是
-`CELLULAR_FLIP-PHONE`、带有 `FLEX_5` / `FLEX_6` / `POLYIMIDE_BASE_11` /
-`COVERTOP` / `COVERBOTTOM` / `STIFFENER` 层、并配有 `RIGID_AREA` /
-`FLEX_AREA` / `BEND_AREA` 工艺注释层的柔性板。
+`FORM` 一次都没出现——包括 `designodb-rigidflex`，一个 job 名里写着
+"rigidflex"、带 `FLEX_5` / `FLEX_6` / `POLYIMIDE_BASE_11` / `COVERTOP` /
+`COVERBOTTOM` / `STIFFENER` 层、并配有 `RIGID_AREA` / `FLEX_AREA` /
+`BEND_AREA` 注释层的刚挠板。
 
-「省略即刚性」的读法在这个用例上会得出**全部 43 层都是刚性**的结论，
-即恰好在一张刚挠结合板上抹掉了它唯一的柔性属性。
+### 13.2 初稿的判定（**错误**）
 
-### 13.2 判定
+初稿读到这里就下了结论：`FORM` 缺失 = 未知，于是给 `LayerForm` 加了第三态
+`UNSPECIFIED`，让 `is_flex` 返回 `None`，并发出 job 级 `matrix.form_undeclared`。
+理由是「『这层是刚性』与『这个文件没写』是两个不同的断言」。
 
-`LayerForm` 增加第三态 **`UNSPECIFIED = "UNSPECIFIED"`**，
-`DielectricType` 同理（未声明时不得默认成具体值）。
+**理由本身没错，但前提错了**：它默认规范对该字段没有规定默认值。
+p.66 的原文（补全上下文后）：
 
-```python
-class LayerRef:
-    form: LayerForm          # RIGID | FLEX | UNSPECIFIED
-
-    @property
-    def is_flex(self) -> Optional[bool]:
-        # True / False / None —— 三值，而不是带默认值的布尔
-        ...
+```
+FORM  Defines the layer as ridge or flexible. (optional) (default = RIGID)
+      • RIGID  — Layer is defined as rigid.
+      • FLEX   — Layer is defined as flexible.
+Layers of the subtype SIGNAL_FLEX, PG_FLEX and MIXED_FLEX have a
+default FORM = FLEX.
+Layers of type DIELECTRIC are to be defined as RIGID or FLEX.
 ```
 
-理由：
+第二句是关键：**挠性子类型的默认值是 `FLEX`**。所以
+`designodb-rigidflex` 的挠性区**本来就能从文件里读出来**——
+`FLEX_5` / `FLEX_6` 的 `ADD_TYPE=PG_FLEX` 就是答案。
+初稿的 `UNSPECIFIED` 把一个**规范明文给出的事实**降级成了未知，
+比「默默当成刚性」更糟：它把可用的信息丢掉了。
 
-1. **「这层是刚性」与「这个文件没写」是两个不同的断言**，只有一个能被数据支持；
-   把后者报成前者是**编造**，而与 `AGENTS.md` 约束 2（输出必须是正向实体、
-   不得臆造）的取向一致。
-2. 一个带默认值的布尔会**静默传播**到下游（叠层、Z 区间、挠曲分析），
-   而三值在第一次比较时就会暴露出来。
-3. 缺失的成在**导出器**，不在某一层，所以 warning 按 **job 级聚合一条**
-   （`matrix.form_undeclared`），而不是刷 43 条同类告警。
-   只要**任意一层**声明了 `FORM`，就不再告警。
-4. 无法识别的 `FORM` 值（例如 `BENDABLE`）单独用 `matrix.unknown_form` 报告，
-   **不复用 `matrix.unknown_add_type`**：诊断码指错字段会把读者引向规范里错误的表。
+教训：`03` §2.4(g) 的字段普查只能说明**某个字段没出现**，不能说明
+**该字段所描述的性质无从获得**。下结论前必须读完该字段在规范里的完整条目，
+包括紧随其后的默认值说明。
 
-### 13.3 输出与夹具
+### 13.3 修正后的判定
 
-- JSON（步骤 2）同时输出 `form`（字符串）与 `is_flex`（`true` / `false` / `null`）。
-- 新增夹具 `tests/fixtures/fx_flex_form/`（见 `tests/fixtures/README.md`），
-  四层分别覆盖：已声明 `RIGID`、已声明 `FLEX`、完全不声明，
-  以及携带 `.layer_dielectric` / `.dielectric_constant` / `.layer_hdi_type`
-  的挠性介质层（`AGENTS.md` 注意事项 4）。因为其中至少一层声明了 `FORM`，
-  该夹具同时锁定了「有声明就不告警」这一条。
-- 真实样本侧另有一条测试固定 `designodb-rigidflex` 全部 43 层均为
-  `UNSPECIFIED`，且 `matrix.form_undeclared` 必定出现。
+`LayerForm` 回到两个取值，另加一个**来源**枚举：
 
-### 13.4 若将来要判定挠性
+```python
+class LayerForm(str, Enum):        # spec p.66
+    RIGID = "RIGID"
+    FLEX  = "FLEX"
 
-不能指望 `FORM`。可行的证据链（都在规范内，且在 `cases/` 中实测存在）：
-`ADD_TYPE=PG_FLEX`、层名、含 `FLEX_*` 的 `START_NAME`/`END_NAME` 钻孔跨度、
-层级 `profile` 与 step `profile` 轮廓不重合、`RIGID_AREA`/`FLEX_AREA`/`BEND_AREA`
-注释层、以及 `attrlist` 中的介电/损耗属性。
-**本阶段不做这样的推断**——它会产生无法在 JSON 中标注来源的结论。
+FLEX_SUBTYPES = frozenset({"SIGNAL_FLEX", "PG_FLEX", "MIXED_FLEX"})
+
+class FormSource(str, Enum):
+    DECLARED     = "DECLARED"      # LAYER 块写了 FORM
+    FLEX_SUBTYPE = "FLEX_SUBTYPE"  # FORM 缺失，但 ADD_TYPE 是挠性子类型
+    DEFAULT      = "DEFAULT"       # FORM 缺失，套用规范的 RIGID 默认值
+```
+
+| 情形 | `form` | `form_source` |
+|---|---|---|
+| `FORM=RIGID` / `FORM=FLEX` | 照写 | `DECLARED` |
+| `FORM` 缺失，`ADD_TYPE` ∈ `FLEX_SUBTYPES` | `FLEX` | `FLEX_SUBTYPE` |
+| `FORM` 缺失，其他 | `RIGID`（规范默认） | `DEFAULT` |
+
+`is_flex` 回到普通 `bool`（规范给了值，就不该由我们来含糊）；
+想区分强弱断言请用 `form_source` / `form_is_declared`。
+**保留来源信息**这一点是从初稿继承下来的、且经得起检验的部分：
+「导出器写了 `FLEX`」与「我们套了 `RIGID` 默认值」确实不是同等强的断言。
+
+### 13.4 新增的两条诊断
+
+- **`matrix.form_missing_dielectric`** —— `DIELECTRIC` 层未声明 `FORM`。
+  规范对介质层用的是另一个措辞：「Layers of type DIELECTRIC are to be defined as
+  RIGID or FLEX.」`optional` 只对一般情形成立，对介质层是「应当定义」。
+  实测：`designodb-rigidflex` 9 个、`kicad-video-odb` 3 个、
+  `kicad-kitchen-sink` 1 个介质层省略了 `FORM`。
+  之所以值得单独报，是因为介质层正是搞错会**移动挠性边界**的那类层
+  （`03` §2.4(d)：刚挠板的层级 `profile` 与 step `profile` 轮廓不同）。
+- **`matrix.form_conflict`** —— 声明值与子类型默认值冲突，
+  例如 `FORM=RIGID` + `ADD_TYPE=PG_FLEX`。按声明值取（规范说的是 `default`，
+  不是约束），但冲突本身要报：否则一个在 `PG_FLEX` 层上写 `FORM=RIGID`
+  的导出器是**完全不可见**的。
+- `matrix.unknown_form` 保留，但语义变了：取值无法识别（如 `BENDABLE`）时
+  **回退到子类型/默认规则**，而不是像初稿那样放弃取值。
+
+### 13.5 输出与夹具
+
+- JSON（步骤 2）输出 `form`（`RIGID` / `FLEX`）、`form_source`、`is_flex`（bool）。
+- 夹具 `tests/fixtures/fx_flex_form/`（见 `tests/fixtures/README.md`）覆盖三条规则
+  的全部六个分支，含 `PG_FLEX` 隐含 `FLEX`、`SIGNAL_FLEX`+`FORM=RIGID` 冲突、
+  以及不带 `FORM` 的介质层。
+- 真实样本侧固定 `designodb-rigidflex`：`is_flex` 为真的**恰好**是
+  `FLEX_5` / `FLEX_6`，二者 `form_source` 均为 `FLEX_SUBTYPE`，
+  其余 41 层为 `RIGID`/`DEFAULT`，且恰好 9 条 `form_missing_dielectric`。
+
+### 13.6 仍未做：用挠性信息做什么
+
+本阶段**只解析、不推断**：`form` / `form_source` 进入 JSON，供下游使用。
+尚未实现的是利用它——介质层的 Z 区间投影（研究项 R6）、叠层剖分、
+以及挠曲分析。这些都不需要在解析阶段补任何猜测，因为 13.3 的规则已经
+把规范能给的都给了。
+

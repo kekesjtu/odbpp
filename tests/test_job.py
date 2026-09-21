@@ -19,7 +19,7 @@ from odbpp import LoadOptions, load_job
 from odbpp.errors import LayerProfileError, ParseError
 from odbpp.geometry import bounding_box, polygon_points
 from odbpp.diagnostics import Diagnostics
-from odbpp.model import LayerForm, LayerType, Polarity
+from odbpp.model import FormSource, LayerForm, LayerType, Polarity
 from odbpp.units import UnitSystem
 
 from conftest import case_path, fixture_path, sample_path
@@ -371,71 +371,129 @@ def _minimal_job(matrix: str) -> dict:
 
 
 class TestLayerForm:
-    """``FORM`` is rigid-vs-flex laminate (spec p.66), and exporters omit it.
+    """``FORM`` is resolved by a rule in spec p.66, not by a guess.
 
-    All four real jobs in ``cases/`` leave it out -- including
-    ``designodb-rigidflex``, whose whole point is that part of it bends.  So the
-    interesting cases are "declared" and "not declared", and the failure to avoid
-    is answering RIGID when the file said nothing at all.
+        FORM  Defines the layer as ridge or flexible. (optional) (default = RIGID)
+            RIGID / FLEX
+        Layers of the subtype SIGNAL_FLEX, PG_FLEX and MIXED_FLEX have a
+        default FORM = FLEX.
+        Layers of type DIELECTRIC are to be defined as RIGID or FLEX.
+
+    So a missing field is not "unknown": the spec supplies the value, and the
+    subtype overrides it.  What is worth keeping is *how* the value was reached,
+    because "RIGID because the spec says so" and "RIGID because the exporter was
+    silent" are not equally strong -- especially on a dielectric layer, which is
+    where a wrong answer moves the flex boundary.
     """
 
-    def test_a_declared_form_is_reported(self):
-        job = load_job(str(fixture_path("fx_flex_form")))
-        step = job.single_step
+    def test_a_declared_form_wins(self):
+        step = load_job(str(fixture_path("fx_flex_form"))).single_step
         assert step.layer("RIGID_1").ref.form is LayerForm.RIGID
+        assert step.layer("RIGID_1").ref.form_source is FormSource.DECLARED
         assert step.layer("FLEX_1").ref.form is LayerForm.FLEX
+        assert step.layer("FLEX_1").ref.form_source is FormSource.DECLARED
 
-    def test_an_absent_form_is_not_rigid(self):
-        step = load_job(str(fixture_path("fx_flex_form"))).single_step
-        for name in ("SILK_1", "POLYIMIDE_1"):
-            assert step.layer(name).ref.form is LayerForm.UNSPECIFIED
+    def test_a_flex_subtype_implies_flex_without_a_declared_form(self):
+        # The rule that makes cases/designodb-rigidflex readable: FLEX_5 and
+        # FLEX_6 never write FORM, but ADD_TYPE=PG_FLEX means FLEX.
+        ref = load_job(str(fixture_path("fx_flex_form"))).single_step.layer("GND_FLEX").ref
+        assert ref.add_type == "PG_FLEX"
+        assert ref.form is LayerForm.FLEX
+        assert ref.form_source is FormSource.FLEX_SUBTYPE
+        assert ref.is_flex is True
 
-    def test_is_flex_is_three_valued(self):
-        step = load_job(str(fixture_path("fx_flex_form"))).single_step
-        assert step.layer("FLEX_1").ref.is_flex is True
-        assert step.layer("RIGID_1").ref.is_flex is False
-        assert step.layer("SILK_1").ref.is_flex is None
+    def test_the_rigid_default_applies_to_an_ordinary_layer(self):
+        ref = load_job(str(fixture_path("fx_flex_form"))).single_step.layer("SILK_1").ref
+        assert ref.form is LayerForm.RIGID
+        assert ref.form_source is FormSource.DEFAULT
+        assert ref.is_flex is False
+        assert ref.form_is_declared is False
 
-    def test_no_warning_when_at_least_one_layer_declares_form(self):
+    def test_a_declared_form_beats_the_subtype_default_and_says_so(self):
+        # FORM is documented as a *default* per subtype, so the declared value
+        # wins -- but the contradiction is reported, because otherwise an
+        # exporter emitting FORM=RIGID on a PG_FLEX layer is invisible.
+        diagnostics = Diagnostics()
+        step = load_job(str(fixture_path("fx_flex_form")),
+                        diagnostics=diagnostics).single_step
+        ref = step.layer("SIG_CONFLICT").ref
+        assert ref.form is LayerForm.RIGID
+        conflict = [d for d in diagnostics if d.code == "matrix.form_conflict"]
+        assert len(conflict) == 1
+        assert "SIG_CONFLICT" in conflict[0].message
+
+    def test_a_dielectric_that_omits_form_is_reported(self):
+        # Spec p.66 says dielectric layers are *to be defined* RIGID or FLEX --
+        # the field is optional only in general, not for this class.
         diagnostics = Diagnostics()
         load_job(str(fixture_path("fx_flex_form")), diagnostics=diagnostics)
-        assert "matrix.form_undeclared" not in diagnostics.codes()
+        missing = [d for d in diagnostics
+                   if d.code == "matrix.form_missing_dielectric"]
+        assert [d.message.split("'")[1] for d in missing] == ["POLYIMIDE_1"]
 
-    def test_a_matrix_that_declares_nothing_warns_once(self, tmp_path):
+    def test_a_real_dielectric_that_declares_form_is_silent(self):
+        # fx_negative_layer's DIELECTRIC_1 writes FORM=RIGID, DIELECTRIC_TYPE=CORE
+        # and CU_TOP/CU_BOTTOM -- the fully specified shape of the field.
+        diagnostics = Diagnostics()
+        step = load_job(str(fixture_path("fx_negative_layer")),
+                        diagnostics=diagnostics).single_step
+        ref = step.layer("DIELECTRIC_1").ref
+        assert ref.form is LayerForm.RIGID
+        assert ref.form_source is FormSource.DECLARED
+        assert "matrix.form_missing_dielectric" not in diagnostics.codes()
+
+    def test_a_job_without_dielectrics_does_not_warn(self):
+        diagnostics = Diagnostics()
+        load_job(str(sample_path("minimal-test-odb")), diagnostics=diagnostics)
+        assert "matrix.form_missing_dielectric" not in diagnostics.codes()
+
+    def test_a_dielectric_that_declares_form_is_silent(self, tmp_path):
         from conftest import write_tree
-        from odbpp.diagnostics import MATRIX_FORM_UNDECLARED
 
         write_tree(tmp_path / "job", _minimal_job(_lf(
-            "LAYER {", "    ROW=1", "    NAME=A", "    TYPE=SIGNAL", "}",
-            "LAYER {", "    ROW=2", "    NAME=B", "    TYPE=SIGNAL", "}",
+            "LAYER {", "    ROW=1", "    NAME=DIEL", "    TYPE=DIELECTRIC",
+            "    FORM=FLEX", "}",
+        )))
+        diagnostics = Diagnostics()
+        load_job(str(tmp_path / "job"), diagnostics=diagnostics)
+        assert "matrix.form_missing_dielectric" not in diagnostics.codes()
+        assert "matrix.form_conflict" not in diagnostics.codes()
+
+    def test_an_unrecognised_form_falls_back_instead_of_giving_up(self, tmp_path):
+        from conftest import write_tree
+
+        write_tree(tmp_path / "job", _minimal_job(_lf(
+            "LAYER {", "    ROW=1", "    NAME=A", "    TYPE=POWER_GROUND",
+            "    ADD_TYPE=PG_FLEX", "    FORM=BENDABLE", "}",
         )))
         diagnostics = Diagnostics()
         job = load_job(str(tmp_path / "job"), diagnostics=diagnostics)
-        assert all(l.ref.form is LayerForm.UNSPECIFIED
-                   for l in job.single_step.layers)
-        # One warning for the matrix, not one per layer: the cause is the exporter.
-        assert [d.code for d in diagnostics].count(MATRIX_FORM_UNDECLARED) == 1
-
-    def test_an_unrecognised_form_is_reported_and_left_unspecified(self, tmp_path):
-        from conftest import write_tree
-
-        write_tree(tmp_path / "job", _minimal_job(_lf(
-            "LAYER {", "    ROW=1", "    NAME=A", "    TYPE=SIGNAL",
-            "    FORM=BENDABLE", "}",
-        )))
-        diagnostics = Diagnostics()
-        job = load_job(str(tmp_path / "job"), diagnostics=diagnostics)
-        assert job.single_step.layers[0].ref.form is LayerForm.UNSPECIFIED
-        assert job.single_step.layers[0].ref.is_flex is None
+        ref = job.single_step.layers[0].ref
+        # Unreadable, so the subtype rule takes over -- and it says FLEX.
+        assert ref.form is LayerForm.FLEX
+        assert ref.form_source is FormSource.FLEX_SUBTYPE
         unknown = [d for d in diagnostics if d.code == "matrix.unknown_form"]
-        assert len(unknown) == 1
-        assert "BENDABLE" in unknown[0].message
-        # A FORM we cannot read must not be reported as an ADD_TYPE problem.
+        assert len(unknown) == 1 and "BENDABLE" in unknown[0].message
+        # A FORM we cannot read is not an ADD_TYPE problem.
         assert "matrix.unknown_add_type" not in diagnostics.codes()
 
-    def test_real_jobs_leave_the_form_undeclared(self):
+    def test_the_rigid_flex_sample_resolves_its_flex_region(self):
+        """The point of the whole rule.
+
+        designodb-rigidflex writes no FORM anywhere, yet two of its 43 layers are
+        flex -- because spec p.66 gives ADD_TYPE=PG_FLEX a default of FLEX.
+        Reading that sentence is the difference between a rigid-flex board whose
+        flex region is identifiable and one where every layer looks rigid.
+        """
         diagnostics = Diagnostics()
         job = load_job(str(sample_path("designodb-rigidflex.tgz")),
                        diagnostics=diagnostics)
-        assert {l.ref.form for l in job.single_step.layers} == {LayerForm.UNSPECIFIED}
-        assert "matrix.form_undeclared" in diagnostics.codes()
+        flex = [l.name for l in job.single_step.layers if l.ref.is_flex]
+        assert flex == ["FLEX_5", "FLEX_6"]
+        assert all(job.single_step.layer(n).ref.form_source is FormSource.FLEX_SUBTYPE
+                   for n in flex)
+        assert all(l.ref.form is LayerForm.RIGID for l in job.single_step.layers
+                   if l.name not in flex)
+        # ...and its nine dielectric layers are reported for not declaring FORM.
+        assert len([d for d in diagnostics
+                    if d.code == "matrix.form_missing_dielectric"]) == 9

@@ -360,10 +360,10 @@ def layer_to_json(preview: LayerPreview, *, round_digits: int = 4) -> dict:
         "context": preview.layer.ref.context.value,
         "polarity": preview.layer.ref.polarity.value,
         "form": preview.layer.ref.form.value,
-        # Three-valued on purpose: null means the matrix never declared FORM.
-        # cases/designodb-rigidflex -- a rigid-flex board -- omits it on all 43
-        # layers, so a boolean here would be an invented answer to "is the flex
-        # tail flexible?".
+        # How firm that answer is. Spec p.66 defaults FORM to RIGID, so is_flex is
+        # always a real boolean; form_source says whether the exporter declared
+        # it, a FLEX subtype implied it, or the RIGID default supplied it.
+        "form_source": preview.layer.ref.form_source.value,
         "is_flex": preview.layer.ref.is_flex,
         "is_copper": preview.is_copper,
         "row": preview.layer.ref.row,

@@ -22,7 +22,8 @@ from .diagnostics import (
     INFO_MISSING_UNITS,
     MATRIX_DANGLING_CU_REF,
     MATRIX_DUPLICATE_LAYER,
-    MATRIX_FORM_UNDECLARED,
+    MATRIX_FORM_CONFLICT,
+    MATRIX_FORM_MISSING_DIELECTRIC,
     MATRIX_UNKNOWN_ADD_TYPE,
     MATRIX_UNKNOWN_FORM,
     MATRIX_UNKNOWN_LAYER_TYPE,
@@ -33,12 +34,14 @@ from .diagnostics import (
 )
 from .errors import ParseError
 from .model import (
+    FLEX_SUBTYPES,
     AttributeDef,
     AttributeDefinitions,
     DielectricType,
     DrillTool,
     DrillTools,
     DrillToolType,
+    FormSource,
     LayerContext,
     LayerForm,
     LayerRef,
@@ -176,31 +179,8 @@ def parse_matrix(
     matrix.steps.sort(key=lambda s: s.col)
 
     _check_cu_references(matrix, rel, diagnostics)
-    _check_form_declared(matrix, rel, diagnostics)
 
     return matrix
-
-
-def _check_form_declared(matrix: Matrix, path: str, diagnostics: Diagnostics) -> None:
-    """Warn once when the matrix never states ``FORM``.
-
-    Reported at the matrix level rather than per layer, because the cause is the
-    exporter and 43 identical warnings would bury everything else.  This is worth
-    a warning at all because ``FORM`` is what distinguishes rigid from flexible
-    laminate (spec p.66): a rigid-flex board with an undeclared form is exactly
-    the case where a reader would otherwise take our default for a fact.
-    """
-    if not matrix.layers:
-        return
-    if any(layer.form is not LayerForm.UNSPECIFIED for layer in matrix.layers):
-        return
-    diagnostics.warn(
-        MATRIX_FORM_UNDECLARED,
-        f"no LAYER block declares FORM; rigid/flex laminate is unknown for all "
-        f"{len(matrix.layers)} layers, and LayerRef.is_flex is None for each of "
-        f"them",
-        path,
-    )
 
 
 def _parse_layer_block(
@@ -238,26 +218,56 @@ def _parse_layer_block(
             line_no=block.line_no,
         )
 
-    # An absent FORM is *not* the same as FORM=RIGID, and the difference matters:
-    # every layer of cases/designodb-rigidflex -- including the six that form the
-    # flex tail -- would otherwise be reported as rigid laminate.
+    # Spec p.66 gives FORM a default, so a missing field is *not* unknown:
+    #   FORM ... (optional) (default = RIGID)
+    #   Layers of the subtype SIGNAL_FLEX, PG_FLEX and MIXED_FLEX have a
+    #   default FORM = FLEX.
+    # There are exactly three ways to reach a value, and which one applied is
+    # worth keeping: on a DIELECTRIC layer, "RIGID because the spec says so" and
+    # "RIGID because the exporter was silent" are not equally strong claims.
     form_raw = block.str_field("FORM", "").strip().upper()
-    if not form_raw:
-        form = LayerForm.UNSPECIFIED
-    elif form_raw == "FLEX":
-        form = LayerForm.FLEX
-    elif form_raw == "RIGID":
-        form = LayerForm.RIGID
+    if form_raw in ("RIGID", "FLEX"):
+        form = LayerForm(form_raw)
+        form_source = FormSource.DECLARED
     else:
-        # Not MATRIX_UNKNOWN_ADD_TYPE: FORM and ADD_TYPE are separate fields, and a
-        # code naming the wrong one sends the reader to the wrong spec table.
+        if form_raw:
+            diagnostics.warn(
+                MATRIX_UNKNOWN_FORM,
+                f"layer {block.str_field('NAME')!r} has unrecognised "
+                f"FORM={form_raw!r}; falling back to the subtype/default rule",
+                path,
+            )
+        flex_subtype = add_type in FLEX_SUBTYPES
+        form = LayerForm.FLEX if flex_subtype else LayerForm.RIGID
+        form_source = (FormSource.FLEX_SUBTYPE if flex_subtype
+                       else FormSource.DEFAULT)
+
+    # A declared FORM wins over the subtype default (it *is* a default, not a
+    # constraint), but the pair disagreeing means one of the two is wrong -- and
+    # an exporter emitting FORM=RIGID on a PG_FLEX layer would otherwise be
+    # invisible.
+    if (form_source is FormSource.DECLARED and add_type in FLEX_SUBTYPES
+            and form is not LayerForm.FLEX):
         diagnostics.warn(
-            MATRIX_UNKNOWN_FORM,
-            f"layer {block.str_field('NAME')!r} has unrecognised FORM={form_raw!r}; "
-            f"leaving the form unspecified",
+            MATRIX_FORM_CONFLICT,
+            f"layer {block.str_field('NAME')!r} declares FORM={form_raw} but has "
+            f"ADD_TYPE={add_type}, whose default FORM is FLEX; taking the "
+            f"declared value",
             path,
         )
-        form = LayerForm.UNSPECIFIED
+
+    # Spec p.66: "Layers of type DIELECTRIC are to be defined as RIGID or FLEX."
+    # That is the one layer class where the spec makes the field expected rather
+    # than optional, and the one where a wrong answer moves the flex boundary --
+    # so silence is reported rather than quietly defaulted.
+    if layer_type is LayerType.DIELECTRIC and form_source is FormSource.DEFAULT:
+        diagnostics.warn(
+            MATRIX_FORM_MISSING_DIELECTRIC,
+            f"DIELECTRIC layer {block.str_field('NAME')!r} does not declare FORM, "
+            f"which spec p.66 says dielectric layers are to define; assuming the "
+            f"RIGID default",
+            path,
+        )
 
     diel_raw = block.str_field("DIELECTRIC_TYPE", "NONE").strip().upper() or "NONE"
     try:
@@ -276,6 +286,7 @@ def _parse_layer_block(
         polarity=(Polarity.NEGATIVE if polarity_raw == "NEGATIVE" else Polarity.POSITIVE),
         uid=block.int_field("ID"),
         form=form,
+        form_source=form_source,
         dielectric_type=diel_type,
         dielectric_name=block.str_field("DIELECTRIC_NAME"),
         cu_top=block.int_field("CU_TOP"),

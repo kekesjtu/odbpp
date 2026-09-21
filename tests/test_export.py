@@ -142,18 +142,18 @@ class TestLayerJson:
         assert gnd["type"] == "POWER_GROUND"
         assert gnd["base_from_profile"] is True
 
-    def test_an_undeclared_form_reaches_json_as_null(self):
-        # The whole point of the three-valued field: a rigid-flex job that never
-        # states FORM must not come out of the exporter claiming "is_flex": false.
+    def test_form_travels_with_its_provenance(self):
+        # is_flex is always a real boolean because spec p.66 supplies a default;
+        # form_source is what tells a consumer how firm that boolean is.
         _job, preview, _diag = preview_of("fx_flex_form")
         data = {layer["name"]: layer for layer in
                 step_to_json(_job, preview)["steps"][0]["layers"]}
-        assert data["FLEX_1"]["form"] == "FLEX"
+        assert (data["FLEX_1"]["form"], data["FLEX_1"]["form_source"]) ==             ("FLEX", "DECLARED")
         assert data["FLEX_1"]["is_flex"] is True
-        assert data["RIGID_1"]["form"] == "RIGID"
-        assert data["RIGID_1"]["is_flex"] is False
-        assert data["SILK_1"]["form"] == "UNSPECIFIED"
-        assert data["SILK_1"]["is_flex"] is None
+        assert (data["GND_FLEX"]["form"], data["GND_FLEX"]["form_source"]) ==             ("FLEX", "FLEX_SUBTYPE")
+        assert data["GND_FLEX"]["is_flex"] is True
+        assert (data["SILK_1"]["form"], data["SILK_1"]["form_source"]) ==             ("RIGID", "DEFAULT")
+        assert data["SILK_1"]["is_flex"] is False
 
     def test_layer_attributes_are_filtered_to_the_meaningful_ones(self):
         # AGENTS note 4: .layer_dielectric is meaningful only for non-copper

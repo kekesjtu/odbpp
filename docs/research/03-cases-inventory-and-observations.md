@@ -217,7 +217,7 @@ USER = saram
 
 规范正文**未定义** `SUM` 的算法。→ 本阶段忽略，仅可选地做 `SIZE` 校验。
 
-**(g) `FORM` 在四个用例中 **一次都没有出现**（按 110 个 LAYER 块统计）**
+**(g) `FORM` 在四个用例中一次都没有出现（按 110 个 LAYER 块统计）**
 
 | 用例 | LAYER 块数 | 声明 `FORM` | 声明 `DIELECTRIC_TYPE` | 声明 `ADD_TYPE` |
 |---|---|---|---|---|
@@ -233,30 +233,79 @@ USER = saram
 ROW, CONTEXT, TYPE, NAME, POLARITY, START_NAME, END_NAME, OLD_NAME, ADD_TYPE, COLOR, ID
 ```
 
-**结论：把 `FORM` 缺失当作 `RIGID` 是错的。** 规范（p.66）定义 `FORM` 正是用来区分
-剛性/挠性基材的字段，而唯一的挠性用例**恰好省略了它**——也就是说，「缺省即刚性」的实现在
-最需要它的地方给出了最错的答案。
+**先记一次更正。** 本节初稿的结论是「缺省即刚性是错的，`FORM` 缺失应视为未知」。
+这个结论**只读了一半规范**。p.66 的原文是：
 
-**挠性区的真实证据链**（全部在规范内，但都不是 `FORM`）：
+```
+FORM  Defines the layer as ridge or flexible. (optional) (default = RIGID)
+      • RIGID  — Layer is defined as rigid.
+      • FLEX   — Layer is defined as flexible.
+Layers of the subtype SIGNAL_FLEX, PG_FLEX and MIXED_FLEX have a
+default FORM = FLEX.
+Layers of type DIELECTRIC are to be defined as RIGID or FLEX.
+```
+
+也就是说 `FORM` 有**规范明文给出的默认值**，缺失并不等于未知；而且第二条给了
+一条会**覆盖**该默认值的规则。两句话合起来，`designodb-rigidflex` 的挠性区
+**完全可以从字段推出来**——我此前说的「不能指望 `FORM`」是错的。
+
+**`FORM` 不是层的 type。** 层的 type 是 `TYPE`（`SIGNAL` / `POWER_GROUND` /
+`DIELECTRIC` / `MIXED` / `MASK` / …），子类型是 `ADD_TYPE`；`FORM` 是同一
+`LAYER` 块里的第三个独立字段。规范把三者连起来的唯一地方就是上面那句
+「`SIGNAL_FLEX` / `PG_FLEX` / `MIXED_FLEX` 子类型的默认 `FORM = FLEX`」。
+
+**由此得到三条解析规则**（实现见 `model.FLEX_SUBTYPES` / `model.FormSource`）：
+
+| 情形 | `form` | `form_source` |
+|---|---|---|
+| `FORM=RIGID` 或 `FORM=FLEX` | 照写 | `DECLARED` |
+| `FORM` 缺失，`ADD_TYPE` ∈ {`SIGNAL_FLEX`,`PG_FLEX`,`MIXED_FLEX`} | `FLEX` | `FLEX_SUBTYPE` |
+| `FORM` 缺失，其他 | `RIGID`（规范默认） | `DEFAULT` |
+
+对 `designodb-rigidflex` 实际跑的结果：
+
+```
+FLEX_5   TYPE=POWER_GROUND  ADD_TYPE=PG_FLEX  FORM=(缺失) → FLEX / FLEX_SUBTYPE
+FLEX_6   TYPE=POWER_GROUND  ADD_TYPE=PG_FLEX  FORM=(缺失) → FLEX / FLEX_SUBTYPE
+其余 41 层                                              → RIGID / DEFAULT
+```
+
+**挠性区确实可以从文件读出来**，而且不需要看层名：靠的是 `ADD_TYPE`。
+
+**(h) 但 9 个介质层都没写 `FORM`，那是真的缺失**
+
+规范对介质层用的是**另一个措辞**：「Layers of type DIELECTRIC are to be defined as
+RIGID or FLEX.」——`optional` 只对一般情形成立，对介质层是「应当定义」。
+`designodb-rigidflex` 的 9 个介质层（`DIELECTRIC_3/5/7/9`、`POLYIMIDE_BASE_11`、
+`DIELECTRIC_13/15/17/19`）全部省略了 `FORM`；`kicad-video-odb` 3 个、
+`kicad-kitchen-sink` 1 个同样省略。→ 报 `matrix.form_missing_dielectric`。
+介质层恰恰是搞错会**移动挠性边界**的那类层（见 (d)），所以沉默要报出来。
+
+**其余挠性证据（规范内，且实测存在）**，作为 `ADD_TYPE` 之外的旁证与交叉校验：
 
 | 证据 | 位置 |
 |---|---|
 | 作业名 `designodb_rigidflex` / step 名 `CELLULAR_FLIP-PHONE` | `misc/info`、`matrix` |
-| `ADD_TYPE=PG_FLEX` | `matrix` 的 `FLEX_5` / `FLEX_6` 行 |
 | 层名 `FLEX_5` / `FLEX_6` / `POLYIMIDE_BASE_11` / `COVERTOP` / `COVERBOTTOM` / `STIFFENER` | `matrix` |
 | `START_NAME=FLEX_5` / `END_NAME=FLEX_6` 的钻孔层 `D_5_6` | `matrix` |
-| 层级 `profile` 使挠性层与剛性层轮廓不同（见 (d)） | `<layer>/profile` |
+| 层级 `profile` 使挠性层与刚性层轮廓不同（见 (d)） | `<layer>/profile` |
 | `flex_5/attrlist` 的 `.layer_hdi_type=Core`、`.dielectric_constant=4.299`、`.loss_tangent=0.02` | `attrlist` |
-| 工艺注释层 `RIGID_AREA` / `FLEX_AREA` / `BEND_AREA`（`ADD_TYPE=FLEX_AREA`） | `matrix` |
+| 工艺注释层 `RIGID_AREA` / `FLEX_AREA` / `BEND_AREA`（`ADD_TYPE=FLEX_AREA` 等） | `matrix` |
 
-→ **实现要求**：`LayerRef.form` 必须是**三值**（`RIGID` / `FLEX` / `UNSPECIFIED`），
-`LayerRef.is_flex` 在未声明时返回 `None` 而不是 `False`；同时按层聚合一条
-job 级 warning（`matrix.form_undeclared`），因为成因在导出器而不是某层。
-若要判定挠性，必须走上面的证据链（层名 + `ADD_TYPE` + `START/END_NAME` +
-`RIGID_AREA`/`FLEX_AREA`/`BEND_AREA`），**不能指望 `FORM`**。
+→ **实现要求（修订版）**：
+`LayerRef.form` 只需两个取值（`RIGID` / `FLEX`），因为规范把第三种情形也定了值；
+但必须同时暴露 **`form_source`**，因为「导出器写了 `FLEX`」和「我们套了 `RIGID` 默认值」
+是强弱不同的两个断言，而这正是 (h) 要报的东西。此外：
+- `FORM` 声明值与其子类型默认值冲突（如 `FORM=RIGID` + `ADD_TYPE=PG_FLEX`）→
+  按声明值取，但报 `matrix.form_conflict`；
+  否则一个在 `PG_FLEX` 层上写 `FORM=RIGID` 的导出器是**不可见**的。
+- `FORM` 取值无法识别（如 `BENDABLE`）→ 报 `matrix.unknown_form`，
+  **并回退到子类型/默认规则**（而不是像初稿那样放弃取值）。
 
-> 补充：`DIELECTRIC_TYPE`（4/110）和 `ADD_TYPE`（45/110）也大面积缺失，
-> 因此 `DielectricType` 同样按「未声明」处理，不得默认成某个具体值。
+> 补充：`DIELECTRIC_TYPE`（4/110）和 `ADD_TYPE`（45/110）也大面积缺失。
+> `DIELECTRIC_TYPE` 的规范默认值是 **`NONE`**（p.66：`(optional) (default = NONE)`），
+> 所以「缺失 = `NONE`」是照规范实现，不是臆造——这一点和 `FORM` 同理，
+> 与本节初稿的说法相反。真正需要报出来的是 `DIELECTRIC` 层缺 `FORM`（(h)）。
 
 
 ---
@@ -282,7 +331,9 @@ job 级 warning（`matrix.form_undeclared`），因为成因在导出器而不�
 | R15 | `stephdr` 嵌套 step 阵列：按 AGENTS 约束 1 **不支持**，必须显式报 warning | `01` §6 | 必须 |
 | R16 | 标准/自定义符号按**严格文法**消歧，**禁止前缀匹配** | 4.2(a) | 必须 |
 | R17 | 符号**惰性加载 + 缓存**，未引用符号不影响解析 | 4.2(b) | 建议 |
-| R18 | `FORM` / `DIELECTRIC_TYPE` 缺失时**按三值/未声明处理**，禁止默认成 `RIGID`/`NONE` | 2.4(g) | 必须 |
+| R18 | `FORM` 按规范 p.66 **三段规则**解析（声明 > 挠性子类型默认 >`RIGID` 默认），并保留 `form_source` 来源 | 2.4(g) | 必须 |
+| R19 | `DIELECTRIC` 层未声明 `FORM` 要**单独报告**（p.66 对介质层用的是「are to be defined」） | 2.4(h) | 必须 |
+| R20 | `FORM` 与 `ADD_TYPE` 的挠性默认值冲突时报 `matrix.form_conflict` | 2.4(g) | 建议 |
 
 ---
 

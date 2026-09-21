@@ -112,7 +112,10 @@ MATRIX_UNKNOWN_LAYER_TYPE = "matrix.unknown_layer_type"
 MATRIX_UNKNOWN_ADD_TYPE = "matrix.unknown_add_type"
 MATRIX_DANGLING_CU_REF = "matrix.dangling_cu_ref"
 MATRIX_UNKNOWN_FORM = "matrix.unknown_form"
-MATRIX_FORM_UNDECLARED = "matrix.form_undeclared"
+#: A layer states FORM=RIGID *and* a subtype whose default is FLEX.
+MATRIX_FORM_CONFLICT = "matrix.form_conflict"
+#: Spec p.66: dielectric layers "are to be defined as RIGID or FLEX".
+MATRIX_FORM_MISSING_DIELECTRIC = "matrix.form_missing_dielectric"
 
 # attribute definitions (misc/sysattr*, misc/userattr)
 ATTR_DUPLICATE_DEFINITION = "attr.duplicate_definition"
