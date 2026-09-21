@@ -274,13 +274,28 @@ class TestAbsoluteZ:
     def test_a_decorative_layer_does_not_take_the_stack_down_with_it(self):
         # Silkscreen and solder paste are printed on the board, not part of its
         # laminate; their absent thickness must not invalidate the copper Z.
+        # Their *own* extent is another matter: an assumed zero is unknown and
+        # has to say so (AGENTS note 8), while the copper below stays known.
         step = self._sized_step()
         step.layers.insert(0, layer("F.SILK", LayerType.SILK_SCREEN, 0))
         step.layers.insert(1, layer("F.PASTE", LayerType.SOLDER_PASTE, 0))
         stackup = Stackup(step)
-        assert stackup.z_extent(step.layer("F.SILK")).thickness_known is True
+        assert stackup.z_extent(step.layer("F.SILK")).thickness_known is False
+        assert stackup.z_extent(step.layer("F.PASTE")).thickness_known is False
         assert stackup.z_extent(step.layer("SIGNAL_1")).thickness_known is True
         assert stackup.z_extent(step.layer("SIGNAL_1")).start_mm == pytest.approx(0.0)
+
+    def test_a_stated_decorative_thickness_is_known(self):
+        # A paste layer whose stencil thickness the format states is a
+        # measurement, not an assumption.
+        step = self._sized_step()
+        paste = layer("F.PASTE", LayerType.SOLDER_PASTE, 0)
+        paste.attributes[".layer_dielectric"] = "0.12"
+        step.layers.insert(0, paste)
+        extent = Stackup(step).z_extent(step.layer("F.PASTE"))
+        assert extent.thickness_known is True
+        assert extent.thickness_mm == pytest.approx(0.12)
+        assert extent.source == ".layer_dielectric"
 
     def test_a_document_layer_has_no_z(self):
         step = self._sized_step()

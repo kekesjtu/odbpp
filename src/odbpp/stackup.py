@@ -36,7 +36,9 @@ walking the board layers top-down and accumulating each layer's thickness:
 with an assumed copper density), ``.layer_dielectric`` for dielectric and
 solder mask.  A structural layer whose thickness the format does not state
 marks every Z below it ``thickness_known=False``, so the reader can tell a
-measured stack from a partially assumed one.
+measured stack from a partially assumed one.  A *decorative* layer (paste,
+silkscreen, ...) without a stated thickness is marked unknown for itself -- its
+zero is an assumption -- while the copper positions around it stay known.
 """
 
 from __future__ import annotations
@@ -89,9 +91,12 @@ class ZExtent:
     opposite of the model's Y axis.  The origin is the top surface, so a copper
     layer's ``start_mm`` is where its copper begins, not where its centre is.
 
-    ``thickness_known`` is false when the value rests on a layer above (or the
-    layer itself) whose thickness the format does not state; the position is
-    then a best estimate rather than a measurement, and saying so is the point.
+    ``thickness_known`` is false when the layer's own thickness is not stated by
+    the format or when it rests on a structural layer above whose thickness is
+    not stated; the position is then a best estimate rather than a measurement,
+    and saying so is the point.  A decorative layer with an assumed zero
+    thickness is therefore unknown itself without making the copper planes below
+    it unknown.
     """
 
     start_mm: float
@@ -430,7 +435,13 @@ class Stackup:
         plane_top: dict[int, float] = {}
         plane_bottom: dict[int, float] = {}
         z = 0.0
-        known = True
+        # Whether the cumulative position reached so far rests only on stated
+        # thicknesses.  Two questions are kept apart on purpose: *where* a layer
+        # sits (does anything structural above it lack a thickness?) and *how
+        # thick* the layer itself is.  A decorative film with no stated thickness
+        # does not move the copper planes, so it must not invalidate their Z --
+        # but its own thickness is still an assumption and has to say so.
+        position_known = True
 
         # Drills are holes, not slabs: they take their Z from the copper planes
         # they connect, so they are skipped in the cumulative walk.
@@ -441,11 +452,10 @@ class Stackup:
             start = z
             end = z + value
             z = end
-            # A decorative layer with no stated thickness is a zero-height film
-            # on a surface whose position is still known; only a structural gap
-            # makes the plane positions below it uncertain.
+            known = stated and position_known
+            # Only a structural gap makes the plane positions below it uncertain.
             if not stated and self._is_structural(layer):
-                known = False
+                position_known = False
             out[layer.name] = ZExtent(start, end, known, source)
             index = self.copper_index(layer.name)
             if layer.is_copper and index is not None:
