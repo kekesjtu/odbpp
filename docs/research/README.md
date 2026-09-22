@@ -20,6 +20,8 @@ Release 8.1 Update 4, Siemens, 2024-07-16）为**唯一权威依据**。
 
 ## 复现调研结论的工具
 
+报告 13 中的 HTML 标签、零位小数和 profile 精度问题已修复，见 [14-review-fixes-2026-09-22.md](14-review-fixes-2026-09-22.md)，包含真实浏览器验证和四例重新导出结果。
+
 导出性能审阅见 [13-export-performance-review-2026-09-22.md](13-export-performance-review-2026-09-22.md)：重复边界计算与渲染的优化、四例产物兼容性及耗时对比，以及本轮发现的既有显示问题。可用 `tools/benchmark_export.py` 复测并比较文件 SHA-256。
 
 最新复审见 [12-fourth-review-2026-09-21.md](12-fourth-review-2026-09-21.md)：上次三个 P2 的独立复现均通过，本轮未发现明确新增回归问题。
