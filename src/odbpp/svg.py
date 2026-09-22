@@ -252,9 +252,17 @@ def render_svg(preview: StepPreview, *, options: Optional[SvgOptions] = None,
         source = [by_name[l.name] for l in layers if l.name in by_name]
     else:
         source = view.layers
+    return _render_svg(view, opts, source, _viewbox(view, digits))
+
+
+def _render_svg(view: StepPreview, opts: SvgOptions,
+                source: Sequence[LayerPreview],
+                viewport: tuple[float, float, float, float]) -> str:
+    """Render a regularised view with a shared whole-board viewport."""
+    digits = _render_digits(view, opts)
     chosen = _ordered(source, opts)
 
-    x0, y0, width, height = _viewbox(view, digits)
+    x0, y0, width, height = viewport
     out: list[str] = []
     out.append(
         f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -574,8 +582,6 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
                 title: Optional[str] = None,
                 source: str = "") -> str:
     """A single self-contained HTML page: SVG plus pan/zoom and layer toggles."""
-    import html as _html
-
     opts = options or SvgOptions()
     # Regularise once and use the same view for the page's metadata and for the
     # inlined SVG, so the header cannot describe rings or bounds the drawing no
@@ -584,6 +590,15 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
                               diagnostics=preview.diagnostics)
     ordered = _ordered(list(view.layers), opts)
     body = render_svg(view, options=opts, layers=ordered)
+
+    return _render_html(view, opts, ordered, body, title=title, source=source)
+
+
+def _render_html(view: StepPreview, opts: SvgOptions,
+                 ordered: Sequence[LayerPreview], body: str, *,
+                 title: Optional[str] = None, source: str = "") -> str:
+    """Wrap an already rendered SVG, using metadata from the same view."""
+    import html as _html
 
     name = title or view.step.name
     bounds = view.bounds or (0, 0, 0, 0)
@@ -741,18 +756,27 @@ def write_outputs(
             handle.write("\n")
         outputs.json = path
 
+    # The standalone SVG and the viewer contain exactly the same drawing.
+    # Keep reuse local to this write: previews and rendering options can change
+    # between calls, so a persistent render cache would be unsafe.
+    viewport = (_viewbox(draw_view, draw_digits)
+                if want_svg or want_html or per_layer_svg else None)
+    drawing = (_render_svg(draw_view, opts, draw_view.layers, viewport)
+               if want_svg or want_html else "")
     if want_svg:
         path = os.path.join(out_dir, f"{stem}.svg")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(render_svg(draw_view, options=opts))
+            handle.write(drawing)
         outputs.svg = path
 
     if want_html:
         path = os.path.join(out_dir, f"{stem}.html")
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(render_html(draw_view, options=opts,
-                                     source=getattr(job, "source_path", "")))
+            handle.write(_render_html(draw_view, opts, _ordered(draw_view.layers, opts),
+                                      drawing, source=getattr(job, "source_path", "")))
         outputs.html = path
+
+    del drawing
 
     if per_layer_svg:
         layer_dir = os.path.join(out_dir, "layers")
@@ -761,7 +785,7 @@ def write_outputs(
             safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in layer.name)
             path = os.path.join(layer_dir, f"{safe}.svg")
             with open(path, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(render_svg(draw_view, options=opts, layers=[layer]))
+                handle.write(_render_svg(draw_view, opts, [layer], viewport))
             outputs.layer_svgs.append(path)
 
     return outputs

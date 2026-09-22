@@ -254,7 +254,7 @@ class StepPreview:
 
     @property
     def bounds(self) -> Optional[tuple[float, float, float, float]]:
-        boxes = [l.bounds for l in self.layers if l.bounds is not None]
+        boxes = [box for l in self.layers if (box := l.bounds) is not None]
         if not boxes:
             return None
         return (min(b[0] for b in boxes), min(b[1] for b in boxes),

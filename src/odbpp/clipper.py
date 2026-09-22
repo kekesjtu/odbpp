@@ -28,6 +28,7 @@ is the arc-preserving representation the parser produces.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Iterable, Iterator, Optional, Sequence
 
 import pyclipper
@@ -68,7 +69,11 @@ _FILL = pyclipper.PFT_NONZERO
 
 @dataclass(frozen=True)
 class Ring:
-    """A closed boundary, wound per spec p.39."""
+    """A closed boundary, wound per spec p.39.
+
+    Points and the ring are immutable, so derived measurements can be reused
+    safely. Regions remain mutable and deliberately do not cache aggregates.
+    """
 
     points: tuple[Point, ...]
     #: True when the ring bounds a void inside its containing island.
@@ -77,7 +82,7 @@ class Ring:
     def __len__(self) -> int:
         return len(self.points)
 
-    @property
+    @cached_property
     def area(self) -> float:
         """Absolute area in mm^2."""
         total = 0.0
@@ -88,7 +93,7 @@ class Ring:
             total += x1 * y2 - x2 * y1
         return abs(total) * 0.5
 
-    @property
+    @cached_property
     def bounds(self) -> tuple[float, float, float, float]:
         return bounding_box(self.points)
 

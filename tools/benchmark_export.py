@@ -22,8 +22,14 @@ def main():
     parser.add_argument("--case", action="append", dest="cases")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--per-layer-svg", action="store_true")
+    parser.add_argument("--compare", type=Path,
+                        help="Baseline benchmark.json; fail if artifact bytes differ")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    baseline = (json.loads(args.compare.read_text(encoding="utf-8"))
+                if args.compare else None)
+    if baseline and baseline["per_layer_svg"] != args.per_layer_svg:
+        parser.error("--per-layer-svg must match the baseline")
     cases = args.cases or ["minimal-test-odb", "kicad-kitchen-sink",
                            "kicad-video-odb.tgz", "designodb-rigidflex.tgz"]
     report = {"python": platform.python_version(), "profiled": args.profile,
@@ -57,12 +63,17 @@ def main():
                   "write_s": written - composed, "total_s": written - start,
                   "layers": len(preview.layers), "rings": preview.total_polygons,
                   "files": files}
+        if baseline is not None:
+            result["identical_artifacts"] = files == baseline["cases"][name]["files"]
         report["cases"][name] = result
         (args.output / "benchmark.json").write_text(
             json.dumps(report, indent=2), encoding="utf-8")
         print(name, {k: round(v, 3) for k, v in result.items() if k.endswith("_s")},
               flush=True)
         del preview, job
+    if baseline is not None and not all(
+            case["identical_artifacts"] for case in report["cases"].values()):
+        raise SystemExit("Export artifacts differ from the baseline")
 
 
 if __name__ == "__main__":

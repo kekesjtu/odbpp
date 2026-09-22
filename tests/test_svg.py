@@ -31,6 +31,39 @@ from conftest import sample_path
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
+@pytest.mark.parametrize("want_svg,want_html,per_layer", [
+    (True, True, True), (False, True, False), (True, False, False),
+    (False, False, True), (False, False, False),
+])
+@pytest.mark.parametrize("digits,include_empty", [(None, True), (2, False), (6, True)])
+def test_combined_writer_matches_independent_renderers(
+        tmp_path, want_svg, want_html, per_layer, digits, include_empty):
+    from pathlib import Path
+    from odbpp.export import step_to_json
+    import json
+
+    job, preview, _ = preview_of("minimal-test-odb")
+    options = SvgOptions(round_digits=digits, include_empty=include_empty)
+    outputs = write_outputs(preview, job, str(tmp_path), svg_options=options,
+                            want_svg=want_svg, want_html=want_html,
+                            per_layer_svg=per_layer)
+    assert json.loads(Path(outputs.json).read_text(encoding="utf-8")) == step_to_json(job, preview)
+    assert bool(outputs.svg) == want_svg
+    assert bool(outputs.html) == want_html
+    if want_svg:
+        assert Path(outputs.svg).read_text(encoding="utf-8") == render_svg(preview, options=options)
+    if want_html:
+        assert Path(outputs.html).read_text(encoding="utf-8") == render_html(
+            preview, options=options, source=job.source_path)
+    if per_layer:
+        for filename in outputs.layer_svgs:
+            text = Path(filename).read_text(encoding="utf-8")
+            name = layer_groups(parse(text))[0].get("data-name")
+            assert text == render_svg(preview, options=options, layers=[preview.layer(name)])
+    else:
+        assert outputs.layer_svgs == []
+
+
 def preview_of(name: str, **options):
     diagnostics = Diagnostics()
     job = load_job(str(sample_path(name)), diagnostics=diagnostics)

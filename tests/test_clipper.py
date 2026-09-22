@@ -46,6 +46,26 @@ from odbpp.units import UnitSystem
 # helpers
 # ---------------------------------------------------------------------------
 
+
+def test_measurements_follow_region_edits_after_reading():
+    """Caching immutable rings must not freeze the mutable region's totals."""
+    from dataclasses import replace
+
+    ring = Ring(((0, 0), (0, 1), (1, 1), (1, 0)), False)
+    region = Region([ring])
+    assert region.area == 1
+    assert region.bounds == (0, 0, 1, 1)
+    moved = replace(ring, points=((2, 0), (2, 2), (4, 2), (4, 0)))
+    region.rings.append(moved)
+    assert region.area == 5
+    assert region.bounds == (0, 0, 4, 2)
+    region.rings[:] = [moved]
+    assert region.area == 4
+    assert region.bounds == (2, 0, 4, 2)
+    region.rings.clear()
+    assert region.area == 0
+    assert region.bounds is None
+
 def square(x0: float, y0: float, x1: float, y1: float):
     return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
 
