@@ -97,6 +97,60 @@ class TestSerialisationResolution:
             layers=[layer.name], round_digits=6))
         return job, preview
 
+    def test_profile_collapse_is_reported_without_mutating_source(self):
+        from copy import deepcopy
+        from odbpp.clipper import Region, Ring, to_surface_geometry
+
+        job, preview, _ = preview_of("minimal-test-odb")
+        preview.step.profile = to_surface_geometry(Region([
+            Ring(((0, 0), (0, 1), (0.00002, 1), (0.00002, 0)), False)]))
+        original = deepcopy(preview.step.profile)
+        coarse = step_to_json(job, preview, round_digits=4)
+        assert coarse["steps"][0]["profile"]["polygons"] == []
+        warnings = [d for d in coarse["diagnostics"]
+                    if d["code"] == "export.degenerate_ring" and "profile:" in d["message"]]
+        assert len(warnings) == 1
+        assert step_to_json(job, preview, round_digits=4)["diagnostics"] == coarse["diagnostics"]
+        fine = step_to_json(job, preview, round_digits=6)
+        from shapely.geometry import Polygon
+        shape = Polygon(fine["steps"][0]["profile"]["polygons"][0]["points"])
+        assert shape.is_valid
+        assert shape.area == pytest.approx(0.00002)
+        assert preview.step.profile == original
+
+    def test_profile_closing_gap_is_regularised_as_one_island(self):
+        from odbpp.clipper import region_from_rings, to_surface_geometry
+        from shapely.geometry import Polygon
+
+        job, preview, _ = preview_of("minimal-test-odb")
+        preview.step.profile = to_surface_geometry(region_from_rings([
+            ([(0, 0), (1, 0), (1, 1), (0, 1)], False),
+            ([(1.00002, 0), (2, 0), (2, 1), (1.00002, 1)], False),
+        ]))
+        polygons = step_to_json(job, preview, round_digits=4)["steps"][0]["profile"]["polygons"]
+        assert len(polygons) == 1
+        assert polygons[0]["island"]
+        shape = Polygon(polygons[0]["points"])
+        assert shape.is_valid
+        assert shape.area == pytest.approx(2)
+
+    def test_profile_holes_remain_explicit_and_non_degenerate(self):
+        from odbpp.clipper import region_from_rings, to_surface_geometry
+        from shapely.geometry import Polygon
+
+        job, preview, _ = preview_of("minimal-test-odb")
+        preview.step.profile = to_surface_geometry(region_from_rings([
+            ([(0, 0), (10, 0), (10, 10), (0, 10)], False),
+            ([(2, 2), (8, 2), (8, 8), (2, 8)], True),
+        ]))
+        polygons = step_to_json(job, preview, round_digits=0)["steps"][0]["profile"]["polygons"]
+        islands = [p["points"] for p in polygons if p["island"]]
+        holes = [p["points"] for p in polygons if not p["island"]]
+        assert len(islands) == len(holes) == 1
+        shape = Polygon(islands[0], holes)
+        assert shape.is_valid
+        assert shape.area == pytest.approx(64)
+
     def test_serialisation_defaults_to_the_model_resolution(self):
         from shapely.geometry import Polygon
 

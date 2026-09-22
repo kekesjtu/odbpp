@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from typing import Iterator, Optional, Sequence
-from .clipper import Ring, snap_to_grid
+from .clipper import Ring, region_from_geometry, snap_to_grid
 from .diagnostics import (
     EXPORT_DEGENERATE_RING,
     EXPORT_LAYER_FAILED,
@@ -43,7 +43,7 @@ from .diagnostics import (
 from .errors import LayerProfileError
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
-from .model import Job, Layer, Polygon, Step
+from .model import Job, Layer, Step
 from .stackup import Stackup, describe_span
 
 
@@ -658,7 +658,7 @@ def step_to_json(job: Job, preview: StepPreview, *,
             "name": preview.step.name,
             "bounds_mm": None if bounds is None
             else [_round(b, digits) for b in bounds],
-            "profile": _profile_json(preview.step, digits),
+            "profile": _profile_json(preview.step, digits, preview.diagnostics),
             "stackup": _stackup_json(view, digits),
             "layers": layers,
         }],
@@ -714,29 +714,29 @@ def _stackup_json(preview: StepPreview, round_digits: int) -> Optional[list[dict
     return out
 
 
-def _profile_json(step: Step, round_digits: int) -> Optional[dict]:
+def _profile_json(step: Step, round_digits: int,
+                  diagnostics: Optional[Diagnostics] = None) -> Optional[dict]:
     if step.profile is None:
         return None
-    from .geometry import geometry_points
-
-    polygons = geometry_points(step.profile)
+    # Profile boundaries need the same topology-safe quantisation as layers:
+    # rounding alone can collapse slivers or close a narrow gap between islands.
+    region, collapsed = snap_to_grid(region_from_geometry(step.profile), round_digits)
+    if collapsed and diagnostics is not None:
+        diagnostics.warn(
+            EXPORT_DEGENERATE_RING,
+            f"step {step.name!r} profile: {collapsed} ring(s) had no area left at "
+            f"the {round_digits}-decimal output grid and were dropped; "
+            f"the remaining geometry was re-regularised at that resolution",
+        )
     return {
         "polygons": [
             {
-                "island": polygon.is_island,
-                "points": [[_round(x, round_digits), _round(y, round_digits)]
-                           for x, y in _polygon_ring(polygon)],
+                "island": not ring.is_hole,
+                "points": _points_json(ring, round_digits),
             }
-            for polygon in polygons
+            for ring in region.rings
         ]
     }
-
-
-def _polygon_ring(polygon: Polygon) -> list[tuple[float, float]]:
-    points = list(polygon.points())
-    while len(points) > 1 and points[0] == points[-1]:
-        points.pop()
-    return points
 
 
 def _diagnostic_json(diagnostic: Diagnostic) -> dict:
