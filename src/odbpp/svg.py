@@ -175,7 +175,9 @@ def _fmt(value: float, digits: int) -> str:
     Trimming is not cosmetic: a busy layer has tens of thousands of coordinate
     pairs, and ``12.7000`` costs 20% more bytes than ``12.7`` for no information.
     """
-    text = f"{value:.{digits}f}".rstrip("0").rstrip(".")
+    text = f"{value:.{digits}f}"
+    if digits > 0:
+        text = text.rstrip("0").rstrip(".")
     return text if text not in ("", "-0") else "0"
 
 
@@ -549,7 +551,7 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
             f'<div class="row" data-name="{_escape(layer.name)}" '
             f'data-type="{layer.type_name}" data-rings="{len(layer.rings)}" '
             f'data-area="{layer.area_mm2:.3f}" data-colour="{colour}" '
-            f'{z_attributes}'
+            f'{z_attributes}>'
             f'<input type="checkbox"{checked}>'
             f'<span class="chip" style="background:{colour}"></span>'
             f'<span class="nm">{_escape(layer.name)}</span>'

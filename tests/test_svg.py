@@ -31,6 +31,59 @@ from conftest import sample_path
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
+@pytest.mark.parametrize("sample", ["minimal-test-odb", "fx_negative_layer"])
+def test_html_rows_contain_real_checkbox_elements(sample):
+    from html.parser import HTMLParser
+
+    class Rows(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.rows = {}
+            self.current = None
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "div" and attrs.get("class") == "row":
+                self.current = attrs["data-name"]
+                self.rows[self.current] = []
+            if tag == "input" and self.current is not None:
+                self.rows[self.current].append(attrs)
+
+        def handle_endtag(self, tag):
+            if tag == "div":
+                self.current = None
+
+    _, preview, _ = preview_of(sample)
+    parser = Rows()
+    parser.feed(render_html(preview))
+    assert set(parser.rows) == {layer.name for layer in preview.layers}
+    for name, inputs in parser.rows.items():
+        assert len(inputs) == 1
+        assert inputs[0]["type"] == "checkbox"
+        assert ("checked" in inputs[0]) == (not preview.layer(name).is_empty)
+
+
+def test_zero_digit_coordinates_preserve_integer_zeros():
+    from odbpp.clipper import Ring
+    from odbpp.svg import _fmt
+
+    assert [_fmt(v, 0) for v in (10, 100, -20, -0.1, 0, 12.7)] == [
+        "10", "100", "-20", "0", "0", "13"]
+    ring = Ring(((0, 0), (0, 20), (100, 20), (100, 0)), False)
+    assert path_data([ring], 0) == "M0 0L0 20L100 20L100 0Z"
+
+
+def test_zero_digit_svg_viewport_keeps_its_scale():
+    from odbpp.svg import _viewbox
+
+    _, preview, _ = preview_of("minimal-test-odb")
+    options = SvgOptions(round_digits=0)
+    root = parse(render_svg(preview, options=options))
+    from odbpp.export import regularise_preview
+    expected = _viewbox(regularise_preview(preview, 0), 0)
+    assert list(map(float, root.get("viewBox").split())) == [round(v) for v in expected]
+
+
 @pytest.mark.parametrize("want_svg,want_html,per_layer", [
     (True, True, True), (False, True, False), (True, False, False),
     (False, False, True), (False, False, False),
