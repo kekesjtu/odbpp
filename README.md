@@ -62,6 +62,10 @@ python -m odbpp export <path> --layer top --layer bottom --only-json
 滚轮缩放、拖拽平移、逐层开关，以及 all / none / copper / isolate / invert /
 wireframe 快捷按钮和实时毫米坐标读数。
 
+导出性能测量、兼容性验证和当前已知显示问题见
+[2026-09-22 审阅报告](docs/research/13-export-performance-review-2026-09-22.md)。
+其中逐层 SVG 导出已复用整板视口，JSON/SVG/HTML 对四例样本与优化前逐字节一致。
+
 
 退出码：`0` 无错误，`1` 加载成功但存在 error 级诊断，`2` 直接失败。
 **诊断是结果的一部分**——任何被丢弃或修补的数据都会以稳定 code 记录，
@@ -169,7 +173,7 @@ for layer in step.layers:
 ## 测试
 
 ```bash
-python -m pytest                       # 520 项，含真实样本（约 4 分钟）
+python -m pytest                       # 564 项，含真实样本（约 4 分钟）
 python -m pytest -k "not RealCases"    # 跳过真实样本，约 40 s
 ```
 
