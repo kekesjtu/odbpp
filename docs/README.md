@@ -1,4 +1,4 @@
-# docs/ — 官方格式说明
+# docs/ — 格式说明与项目文档
 
 ## `ODB++_Format_User_Guide.pdf`
 
@@ -38,6 +38,11 @@ python tools/fetch_spec.py --verify   # 只校验现有文件
 ## `docs/research/`
 
 调研报告目录，索引见 [`research/README.md`](research/README.md)。
+
+## 审阅与修复记录
+
+- [`reviews/`](reviews/README.md)：按时间排列的问题审阅及性能测量。
+- [`fixes/`](fixes/README.md)：对应问题的修复与验证记录。
 
 ## 本项目对规范的引用约定
 

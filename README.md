@@ -63,10 +63,13 @@ python -m odbpp export <path> --layer top --layer bottom --only-json
 wireframe 快捷按钮和实时毫米坐标读数。
 
 导出性能测量、兼容性验证和当时发现的显示问题见
-[2026-09-22 审阅报告](docs/research/13-export-performance-review-2026-09-22.md)。
+[2026-09-22 审阅报告](docs/reviews/13-export-performance-review-2026-09-22.md)。
 其中逐层 SVG 导出已复用整板视口，性能优化阶段 JSON/SVG/HTML 对四例样本与优化前逐字节一致。
 上述显示问题及 profile 输出精度问题已修复，见
-[修复与验证记录](docs/research/14-review-fixes-2026-09-22.md)。
+[修复与验证记录](docs/fixes/14-review-fixes-2026-09-22.md)。
+
+修改预览生成代码后，需要重新执行 `export` 更新已有 HTML；旧文件不会自动刷新。
+`out/index.html` 链接到本地四例的当前导出结果。
 
 
 退出码：`0` 无错误，`1` 加载成功但存在 error 级诊断，`2` 直接失败。
@@ -156,7 +159,7 @@ for layer in step.layers:
 | 路径 | 内容 |
 |---|---|
 | `cases/` | ODB++ v8.1 真实样本（4 例，见 `cases/README.md`） |
-| `docs/` | 官方规范 PDF（不入库）+ `docs/research/` 调研报告 |
+| `docs/` | 官方规范 PDF（不入库）、`research/` 调研、`reviews/` 审阅、`fixes/` 修复记录 |
 | `external/` | 参考用开源项目（不入库，按需 clone，见 `external/README.md`） |
 | `out/` | 导出结果（不入库） |
 | `src/odbpp/` | 解析器本体 |
