@@ -45,8 +45,8 @@ designodb-rigidflex  SIGNAL 7 | DIELECTRIC 9 | DRILL 7 | DOCUMENT 4 | SOLDER_MAS
 
 ### 2.1 `minimal-test-odb`
 
-- 仅 2 个铜层，`F 0`/无钻孔/无符号。
-- 价值：**最小闭环回归**。任何格式化/IO 层改动都应先跑通此例。
+- 仅 2 个铜层，含 21 个 `P`、6 个 `L`、2 个 `A`；无钻孔、介质层或自定义符号。
+- 价值：**基础二维图元回归**。任何格式化/IO 层改动都应先跑通此例；它不能验证介质与钻孔的 Z 语义。
 
 ### 2.2 `kicad-kitchen-sink`
 
