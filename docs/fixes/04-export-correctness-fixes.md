@@ -1,6 +1,6 @@
-# 审阅问题修复（2026-09-22）
+# 04 · 导出正确性问题修复（2026-09-22）
 
-基线 `f7d6717`，修复报告 13 确认的三项问题，保留此前的导出性能优化。
+基线 `f7d6717`，修复[审阅记录 05](../reviews/05-export-performance-review.md) 确认的三项问题，保留此前的导出性能优化。
 
 ## 修改
 
@@ -36,4 +36,4 @@ conda run --no-capture-output -n odbpp python tools/benchmark_export.py --output
 conda run --no-capture-output -n odbpp python -m pytest -p no:cacheprovider --basetemp=build/review-fixes-full
 ```
 
-提交：`5c79294` 修复预览；`3ba6cb3` 修复 step profile 输出。没有重写 JSON 编码器或几何合成算法；报告 13 的后续性能空间属于可继续优化的方向，不是本轮待修缺陷。
+提交：`5c79294` 修复预览；`3ba6cb3` 修复 step profile 输出。没有重写 JSON 编码器或几何合成算法；[审阅记录 05](../reviews/05-export-performance-review.md) 的后续性能空间属于可继续优化的方向，不是本轮待修缺陷。

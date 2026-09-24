@@ -3,7 +3,7 @@
 本目录存放用于开发与回归验证的 ODB++ **v8.1** 输入样本。所有样本的 `misc/info` 均声明
 `ODB_VERSION_MAJOR=8` / `ODB_VERSION_MINOR=1`，即符合本项目锁定的目标格式版本。
 
-> 分析结论与逐例观察详见 `docs/research/03-cases-inventory-and-observations.md`。
+> 分析结论与逐例观察详见 `docs/research/03-case-inventory.md`。
 
 ## 1. 清单
 

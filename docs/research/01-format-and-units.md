@@ -24,7 +24,7 @@
 即 `docs/` 中已存在的是最新官方规范，无需另行下载。
 
 **本项目以该 PDF 为唯一权威依据。** 社区二手文档存在实质性错误，不可作为实现依据，
-详见 `04-open-source-reference-survey.md` 第 5 节。
+详见 `04-open-source-survey.md` 第 5 节。
 
 ---
 

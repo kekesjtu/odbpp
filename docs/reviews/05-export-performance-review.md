@@ -1,6 +1,6 @@
-# 导出性能审阅与优化（2026-09-22）
+# 05 · 导出性能审阅与优化（2026-09-22）
 
-后续状态：本文确认的三项既有问题已修复，见 [14-review-fixes-2026-09-22.md](../fixes/14-review-fixes-2026-09-22.md)。本文保留当时的审阅与基准记录。
+后续状态：本文确认的三项既有问题已修复，见 [04-export-correctness-fixes.md](../fixes/04-export-correctness-fixes.md)。本文保留当时的审阅与基准记录。
 
 基线：`71ab51e`。复用现有四个真实样本、官方 8.1 规范及开源参考调研；本轮不改变格式语义、离散化容差、布尔拓扑、单位、叠层 Z 或诊断。
 
@@ -46,7 +46,7 @@ conda run --no-capture-output -n odbpp python -m pytest -p no:cacheprovider --ba
 
 - **P1：HTML 图层行缺少 `>`**（`svg.py::_layer_rows`）。`data-*` 属性后直接拼接 `<input ...>`，导致 input 被解析成 div 的属性。对 minimal 样本的基线 HTML 用标准库 `HTMLParser` 解析，实际 input 数为 0；查看器随后对 `row.querySelector('input')` 的结果调用事件方法，存在初始化失败问题。现有测试主要检查字符串存在，未验证浏览器 DOM 与交互。这是本轮确认的既有功能缺陷，应另行修复并补浏览器/DOM 级回归；本次没有改变生成 HTML，以便性能提交能与基线逐字节对照。
 - **P2：零位小数 SVG 数字格式错误**（`svg.py::_fmt`）。无小数点时仍执行 `rstrip('0')`，实测 `_fmt(10, 0) == '1'`、`_fmt(100, 0) == '1'`、`_fmt(-20, 0) == '-2'`。影响 `--digits 0` 或显式零位 SVG 精度的坐标、视口和 Z 属性；默认四位导出不受此问题影响。另行修复会改变对应产物，需要专门的数值回归。
-- **已有的 profile 精度缺口仍在**（`export.py::_profile_json`）：step profile 逐点取整，未走层实体的重新规整流程，低精度可能产生退化。延续报告 11/12 的已知限制。
+- **已有的 profile 精度缺口仍在**（`export.py::_profile_json`）：step profile 逐点取整，未走层实体的重新规整流程，低精度可能产生退化。延续[修复记录 03](../fixes/03-output-consistency-fixes.md) 与[审阅记录 04](04-verification-review.md) 的已知限制。
 - **后续性能空间**：JSON 使用标准库缩进流式编码，合成阶段仍有大量 Clipper union 与坐标转换。本轮没有重写 JSON 编码器或几何算法，优先保证输出兼容。
 
 本轮兼容性结论只针对已有合成测试和四个样本；不代表所有 ODB++ 输入已完成 CAM 对照或浏览器验收。

@@ -12,7 +12,7 @@ cross-file concerns rather than per-file syntax:
   no downstream code sees a raw unit.
 
 It also applies the two robustness rules discovered by measuring the cases
-(``docs/research/03-cases-inventory-and-observations.md``):
+(``docs/research/03-case-inventory.md``):
 
 * **R1** -- entity lookup is case insensitive, because the matrix writes
   ``F.CU`` where the directory is ``f.cu``.

@@ -63,10 +63,10 @@ python -m odbpp export <path> --layer top --layer bottom --only-json
 wireframe 快捷按钮和实时毫米坐标读数。
 
 导出性能测量、兼容性验证和当时发现的显示问题见
-[2026-09-22 审阅报告](docs/reviews/13-export-performance-review-2026-09-22.md)。
+[2026-09-22 审阅报告](docs/reviews/05-export-performance-review.md)。
 其中逐层 SVG 导出已复用整板视口，性能优化阶段 JSON/SVG/HTML 对四例样本与优化前逐字节一致。
 上述显示问题及 profile 输出精度问题已修复，见
-[修复与验证记录](docs/fixes/14-review-fixes-2026-09-22.md)。
+[修复与验证记录](docs/fixes/04-export-correctness-fixes.md)。
 
 修改预览生成代码后，需要重新执行 `export` 更新已有 HTML；旧文件不会自动刷新。
 `out/index.html` 链接到本地四例的当前导出结果。

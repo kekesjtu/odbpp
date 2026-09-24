@@ -7,7 +7,7 @@ On top of that, individual member files may *themselves* be gzip-compressed
 magic number rather than by the file name.
 
 Two behaviours here exist to handle real-world data (see
-``docs/research/03-cases-inventory-and-observations.md``):
+``docs/research/03-case-inventory.md``):
 
 * **Case-insensitive lookup.**  ``matrix/matrix`` declares layer names in upper
   case (``F.CU``) while the on-disk directories are lower case (``f.cu``).  This
