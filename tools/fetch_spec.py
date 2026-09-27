@@ -73,7 +73,7 @@ def verify(path: str = TARGET) -> bool:
         print(f"  version : {meta.get('/Software Release ')}")
         print(f"  revised : {meta.get('/Revised')}")
     except ImportError:
-        print("  (install pypdf for page-count verification: pip install pypdf)")
+        print("  (install pypdf for page-count verification: uv sync --all-extras)")
 
     if pages != "?" and pages != str(EXPECTED_PAGES):
         print(f"PAGE COUNT MISMATCH: expected {EXPECTED_PAGES}, got {pages}")

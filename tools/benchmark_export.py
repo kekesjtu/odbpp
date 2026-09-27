@@ -1,6 +1,6 @@
 """Time complete exports and fingerprint every artifact for regression checks.
 
-Run from the repository root in the odbpp conda environment. Profiling is
+Run from the repository root with ``uv run --all-extras``. Profiling is
 optional because cProfile substantially distorts Python-heavy timings.
 """
 from __future__ import annotations

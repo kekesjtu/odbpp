@@ -25,27 +25,24 @@ ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**�
 ## 快速开始
 
 ```bash
-conda activate odbpp
-pip install -e .            # 运行时依赖（pyclipper）随包安装
-pip install -e ".[test]"    # 追加 pytest
-pip install -e ".[test,geometry]"   # 再追加 shapely/numpy（测试拓扑校验、工具用）
+uv sync --all-extras         # 按 uv.lock 安装项目及测试/工具依赖到 .venv/
 
 # 结构总览（层清单、图元类型统计、诊断）
-python -m odbpp summarize cases/kicad-kitchen-sink
+uv run --all-extras python -m odbpp summarize cases/kicad-kitchen-sink
 
 # 机器可读的结构转储
-python -m odbpp summarize cases/kicad-kitchen-sink --format json --json out/ks.json
+uv run --all-extras python -m odbpp summarize cases/kicad-kitchen-sink --format json --json out/ks.json
 
 # 其它子命令
-python -m odbpp info        <path>          # job root / 单位 / ODB++ 版本
-python -m odbpp layers      <path> [--step S]
-python -m odbpp symbols     <path>
-python -m odbpp diagnostics <path>
+uv run --all-extras python -m odbpp info        <path>          # job root / 单位 / ODB++ 版本
+uv run --all-extras python -m odbpp layers      <path> [--step S]
+uv run --all-extras python -m odbpp symbols     <path>
+uv run --all-extras python -m odbpp diagnostics <path>
 
 # 导出预览：<out>/<step>.json / .svg / .html
-python -m odbpp export cases/kicad-video-odb.tgz -o out/video
-python -m odbpp export cases/designodb-rigidflex.tgz --exclude-type DOCUMENT                       --per-layer-svg --minimum-stroke 0.05
-python -m odbpp export <path> --layer top --layer bottom --only-json
+uv run --all-extras python -m odbpp export cases/kicad-video-odb.tgz -o out/video
+uv run --all-extras python -m odbpp export cases/designodb-rigidflex.tgz --exclude-type DOCUMENT --per-layer-svg --minimum-stroke 0.05
+uv run --all-extras python -m odbpp export <path> --layer top --layer bottom --only-json
 ```
 
 `export` 的主要选项：
@@ -178,8 +175,8 @@ for layer in step.layers:
 ## 测试
 
 ```bash
-python -m pytest                       # 571 项，含真实样本（约 4 分钟）
-python -m pytest -k "not RealCases"    # 跳过真实样本，约 40 s
+uv run --all-extras python -m pytest                       # 含真实样本
+uv run --all-extras python -m pytest -k "not RealCases"    # 跳过真实样本
 ```
 
 真实样本缺失时相关测试自动 skip（`conftest.case_path`），因此裁剪过

@@ -40,7 +40,7 @@ def extract(pdf_path: str, out_path: str) -> int:
     try:
         from pypdf import PdfReader
     except ImportError:  # pragma: no cover - dependency hint
-        sys.exit("pypdf is required:  pip install pypdf")
+        sys.exit("pypdf is required: uv sync --all-extras")
 
     reader = PdfReader(pdf_path)
     parts = []

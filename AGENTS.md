@@ -48,7 +48,7 @@
 ## 注意事项
 
 1. 清理每次任务生成且确认不再需要的临时文件；对于历史结果保留迭代的最终版本避免混淆。
-2. 使用本机 conda 创建虚拟环境 odbpp，并在该环境中工作。
+2. 使用 uv 管理项目依赖，在项目根目录执行 `uv sync --all-extras`，并通过 `uv run --all-extras` 运行命令；虚拟环境位于 `.venv/`。
 3. 分步进行 git commit，敏捷开发。
 4. 由 docs/ 中的官方 ODB++ 格式说明文件可知，在 ODB++ 中，copper weight 字段的数值和物理含义并不是固定不变的，而是跟随当前环境定义的单位制（Metric or Imperial）发生变化：  
     - 英制模式（UNITS=INCH）：单位：ounce per square foot（即行业常说的 $\text{oz/ft}^2$，盎司/oz）。物理属性：属于面密度/重量概念。
