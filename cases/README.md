@@ -3,6 +3,12 @@
 本目录存放用于开发与回归验证的 ODB++ **v8.1** 输入样本。所有样本的 `misc/info` 均声明
 `ODB_VERSION_MAJOR=8` / `ODB_VERSION_MINOR=1`，即符合本项目锁定的目标格式版本。
 
+新增的 [KiCad 小型正向案例集](kicad-positive/README.md)含六块独立源板、
+七份原生导出 ZIP（其中一块板同时导出 MM/INCH）及七份单独标明
+事后裁剪的干净 ZIP。每块板的设计参数与几何预期位于
+[`kicad-positive/notes/`](kicad-positive/notes/)，普通 pytest
+通过 `tests/test_kicad_positive_cases.py` 只读取这些固定 ZIP。
+
 > 分析结论与逐例观察详见 `docs/research/03-case-inventory.md`。
 
 ## 1. 清单
@@ -13,8 +19,9 @@
 | 2 | `kicad-kitchen-sink/` | 展开目录 | `MM` | KiCad EDA 9.99 | 37 | 2 | 1 | 1 | 0 | `pcb` |
 | 3 | `kicad-video-odb.tgz` | tar+gzip | `MM` | KiCad EDA 9.0.3 | 28 | 4 | 3 | 1 | 0 | `pcb` |
 | 4 | `designodb-rigidflex.tgz` | tar+gzip | `INCH` | Xpedition xPCB Layout → Valor NPI 10.0 | 43 | 10 | 9 | 7 | 123 | `cellular_flip-phone` |
+| 5 | [`kicad-positive/`](kicad-positive/README.md) | 7 对原生/干净 ZIP | `MM`/`INCH` | KiCad EDA 10.0.6 | 每包 3–10 物理层 | 2/4 | 1/3 | 0/1/3 | 0 | `PCB` |
 
-覆盖矩阵（用例 1/2/3/4）：
+覆盖矩阵（既有用例 1/2/3/4，新小型案例集见上方独立清单）：
 
 - **单位制**：Metric（1、2、3）、Imperial（4）→ 覆盖 AGENTS 约束 4 的双向换算。
 - **输入形态**：展开目录（1、2）、压缩包（3、4）→ 覆盖 AGENTS 数据流入口的两种形态。

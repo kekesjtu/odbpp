@@ -14,6 +14,7 @@ Release 8.1 Update 4, Siemens, 2024-07-16）为**唯一权威依据**。
 | [06-simple-test-cases.md](06-simple-test-cases.md) | KiCad 导出、手写最小夹具的操作路线；公开简单样本筛选与建议的五级案例序列 | 「如何构造简单案例、哪里有现成案例」 |
 | [07-kicad-cli-positive-tests.md](07-kicad-cli-positive-tests.md) | KiCad CLI 生成解析器正常路径测试的能力边界、独立预期值和最小实施方案 | 「能否用 KiCad CLI 生成正向单元测试」 |
 | [08-viewer-reverse-engineering.md](08-viewer-reverse-engineering.md) | 已安装 Siemens ODB++ Viewer 2604 的内部解析逆向可行性、黑盒对照路线与许可边界 | 「能否直接逆向 Viewer 解析逻辑」 |
+| [09-kicad-native-positive-suite.md](09-kicad-native-positive-suite.md) | KiCad 10.0.6 ABI 核验、小型源板、双组 ZIP 的审定与回归结论 | 「小型原生案例集如何复现和证明可用」 |
 
 问题审阅与性能测量已移至 [`../reviews/`](../reviews/README.md)，修复记录已移至
 [`../fixes/`](../fixes/README.md)。本目录只保留格式、样本、开源参考及实现假设的调研材料。
