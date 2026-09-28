@@ -31,7 +31,7 @@ uv sync --all-extras         # 按 uv.lock 安装项目及测试/工具依赖到
 uv run --all-extras python -m odbpp summarize cases/kicad-kitchen-sink
 
 # 机器可读的结构转储
-uv run --all-extras python -m odbpp summarize cases/kicad-kitchen-sink --format json --json out/ks.json
+uv run --all-extras python -m odbpp summarize cases/kicad-kitchen-sink --format json --json build/ks-summary.json
 
 # 其它子命令
 uv run --all-extras python -m odbpp info        <path>          # job root / 单位 / ODB++ 版本
@@ -39,10 +39,14 @@ uv run --all-extras python -m odbpp layers      <path> [--step S]
 uv run --all-extras python -m odbpp symbols     <path>
 uv run --all-extras python -m odbpp diagnostics <path>
 
-# 导出预览：<out>/<step>.json / .svg / .html
-uv run --all-extras python -m odbpp export cases/kicad-video-odb.tgz -o out/video
-uv run --all-extras python -m odbpp export cases/designodb-rigidflex.tgz --exclude-type DOCUMENT --per-layer-svg --minimum-stroke 0.05
-uv run --all-extras python -m odbpp export <path> --layer top --layer bottom --only-json
+# 同步 cases/ 对应的完整预览及 out/index.html
+uv run --all-extras python tools/sync_out.py --prune
+# 解析器或预览代码修改后，强制重建全部预览
+uv run --all-extras python tools/sync_out.py --force
+
+# 临时或筛选导出放在 build/，不覆盖 out/ 的完整案例产物
+uv run --all-extras python -m odbpp export cases/designodb-rigidflex.tgz -o build/rigidflex-filtered --exclude-type DOCUMENT --per-layer-svg --minimum-stroke 0.05
+uv run --all-extras python -m odbpp export <path> -o build/selected-layers --layer top --layer bottom --only-json
 ```
 
 `export` 的主要选项：
@@ -65,8 +69,10 @@ wireframe 快捷按钮和实时毫米坐标读数。
 上述显示问题及 profile 输出精度问题已修复，见
 [修复与验证记录](docs/fixes/04-export-correctness-fixes.md)。
 
-修改预览生成代码后，需要重新执行 `export` 更新已有 HTML；旧文件不会自动刷新。
-`out/index.html` 链接到本地四例的当前导出结果。
+修改预览生成代码后，使用 `tools/sync_out.py --force` 更新已有产物。
+`out/index.html` 链接到四个既有样本和七个 KiCad 小型 ZIP 的当前导出结果。
+每个逻辑案例仅保留 JSON、合并 SVG、可交互 HTML；KiCad 小型案例从
+`cases/kicad-positive/clean/` 导出，`native/` 的成对 ZIP 保留作原生对照。
 
 
 退出码：`0` 无错误，`1` 加载成功但存在 error 级诊断，`2` 直接失败。
@@ -80,7 +86,7 @@ from odbpp import load_job, build_step_preview, write_outputs
 
 job = load_job("cases/designodb-rigidflex.tgz")        # INCH，43 层
 preview = build_step_preview(job)                      # 合成各层为正向多边形
-write_outputs(preview, job, "out/rigidflex")           # JSON + SVG + HTML
+write_outputs(preview, job, "build/rigidflex")         # JSON + SVG + HTML
 
 top = preview.layer("SIGNAL_1")
 print(top.area_mm2, len(top.rings), top.bounds)        # 单位一律 mm
@@ -155,13 +161,13 @@ for layer in step.layers:
 
 | 路径 | 内容 |
 |---|---|
-| `cases/` | ODB++ v8.1 真实样本（4 例，见 `cases/README.md`） |
+| `cases/` | ODB++ v8.1 输入：4 个既有样本及 7 个 KiCad 小型导出（见 `cases/README.md`） |
 | `docs/` | 官方规范 PDF（不入库）、`research/` 调研、`reviews/` 审阅、`fixes/` 修复记录 |
 | `external/` | 参考用开源项目（不入库，按需 clone，见 `external/README.md`） |
-| `out/` | 导出结果（不入库） |
+| `out/` | 与逻辑案例一一对应的导出结果及索引（不入库，由 `tools/sync_out.py` 维护） |
 | `src/odbpp/` | 解析器本体 |
 | `tests/` | 单元测试 + `tests/fixtures/` 合成样本 |
-| `tools/` | 规范 PDF 抽取/校验、case 普查、审阅证据收集（`review_current_project.py`） |
+| `tools/` | 规范 PDF 获取/抽取、案例普查、性能测量和 `out/` 同步 |
 
 ## 中间 JSON 携带的层叠与属性语义
 
