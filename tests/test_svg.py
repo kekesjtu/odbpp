@@ -396,6 +396,22 @@ class TestPresentation:
 # ---------------------------------------------------------------------------
 
 class TestHtml:
+    def test_layer_order_control_preserves_type_default_and_exposes_stackup_rows(self):
+        from odbpp.svg import _ordered
+
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        text = render_html(preview)
+        assert '<option value="type">By type</option>' in text
+        assert '<option value="stackup">Top to bottom</option>' in text
+        rows = re.findall(
+            r'<div class="row" data-name="([^"]*)" '
+            r'data-type="[^"]*" data-row="(\d+)"', text)
+        assert [name for name, _ in rows] == [
+            layer.name for layer in _ordered(preview.layers, SvgOptions())]
+        assert {name: int(row) for name, row in rows} == {
+            layer.name: layer.layer.ref.row for layer in preview.layers}
+        assert "Number(a.dataset.row) - Number(b.dataset.row)" in text
+
     def test_it_is_a_complete_document(self):
         _job, preview, _diag = preview_of("minimal-test-odb")
         text = render_html(preview)

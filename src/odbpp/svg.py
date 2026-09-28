@@ -347,6 +347,10 @@ html,body{margin:0;height:100%;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,
   border-radius:4px;padding:3px 7px;font:inherit;font-size:11px;cursor:pointer}
 #tools button:hover{background:#232c36;border-color:#3d4954}
 #tools button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
+#sorter{display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid #232a31;
+  color:#7d8590;font-size:11px}
+#sort-order{flex:1;min-width:0;background:#1a2129;color:#c9d1d9;border:1px solid #2c353f;
+  border-radius:4px;padding:3px 5px;font:inherit;cursor:pointer}
 #layers{flex:1;overflow:auto;padding:4px 0}
 .row{display:flex;align-items:center;gap:7px;padding:3px 10px;cursor:pointer;white-space:nowrap}
 .row:hover{background:#161c22}
@@ -450,6 +454,14 @@ _JS = r"""
 
   // ---- layer list -------------------------------------------------------
   var rows = Array.prototype.slice.call(document.querySelectorAll('.row'));
+  var layerList = document.getElementById('layers');
+  document.getElementById('sort-order').addEventListener('change', function(e){
+    var sorted = rows.slice();
+    if (e.target.value === 'stackup') {
+      sorted.sort(function(a, b){ return Number(a.dataset.row) - Number(b.dataset.row); });
+    }
+    sorted.forEach(function(row){ layerList.appendChild(row); });
+  });
   var groups = {};
   Array.prototype.forEach.call(document.querySelectorAll('.odb-layer'), function(g){
     groups[g.dataset.name] = g;
@@ -549,7 +561,8 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
         )
         rows.append(
             f'<div class="row" data-name="{_escape(layer.name)}" '
-            f'data-type="{layer.type_name}" data-rings="{len(layer.rings)}" '
+            f'data-type="{layer.type_name}" data-row="{layer.layer.ref.row}" '
+            f'data-rings="{len(layer.rings)}" '
             f'data-area="{layer.area_mm2:.3f}" data-colour="{colour}" '
             f'{z_attributes}>'
             f'<input type="checkbox"{checked}>'
@@ -665,6 +678,12 @@ def _render_html(view: StepPreview, opts: SvgOptions,
       <button id="zout" title="zoom out">&minus;</button>
       <button id="fit" title="fit to window (f)">fit</button>
     </div>
+    <label id="sorter" for="sort-order">Layer order
+      <select id="sort-order" aria-label="Layer order">
+        <option value="type">By type</option>
+        <option value="stackup">Top to bottom</option>
+      </select>
+    </label>
     <div id="layers">{_layer_rows(view, opts, ordered)}</div>
   </div>
   <div id="stage">
