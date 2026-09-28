@@ -1,10 +1,9 @@
-"""Keep one preview per logical ODB++ case and rebuild out/index.html.
+"""Keep one preview per ODB++ input and rebuild out/index.html.
 
 Run through ``uv run --all-extras python tools/sync_out.py`` from the project
 root. Existing valid previews are reused; pass ``--force`` to regenerate them.
-The KiCad positive suite uses its clean ZIPs as preview inputs. The paired
-native ZIPs remain in cases/ for provenance and are intentionally not exported
-again to out/ because they describe the same boards.
+KiCad native and curated clean ZIPs have separate preview directories, so the
+source of every output remains visible and the two versions can be compared.
 """
 
 from __future__ import annotations
@@ -30,8 +29,9 @@ def case_inputs() -> list[tuple[str, Path]]:
             found.append((item.name, item))
         elif item.is_file() and item.suffix.lower() in {".zip", ".tgz"}:
             found.append((item.name, item))
-    for item in sorted((CASES / "kicad-positive" / "clean").glob("*.zip")):
-        found.append((f"kicad-positive/{item.stem}", item))
+    for variant in ("native", "clean"):
+        for item in sorted((CASES / "kicad-positive" / variant).glob("*.zip")):
+            found.append((f"kicad-positive/{variant}/{item.stem}", item))
     if not found:
         raise RuntimeError("no ODB++ cases found")
     return found
@@ -68,21 +68,24 @@ def render_index(rows: list[tuple[str, Path, Path, dict]]) -> str:
         "td,th{padding:10px;text-align:left;border-bottom:1px solid #dde4ef}"
         "a{color:#135baf}small{color:#465569}</style>",
         "<h1>ODB++ 案例导出</h1>",
-        "<p>每个逻辑案例保留一份 JSON、SVG 和可切换图层的 HTML。"
-        "KiCad 小型案例由 clean/ ZIP 导出；native/ ZIP 保留在 cases/ 作原生对照。</p>",
-        "<table><tr><th>案例与输入</th><th>层数</th><th>结果</th></tr>",
+        "<p>每份输入保留 JSON、SVG 和可切换图层的 HTML。"
+        "KiCad 原生 ZIP 与事后裁剪 ZIP 分组导出，可分别核对。</p>",
+        "<table><tr><th>案例与输入</th><th>版本</th><th>层数</th><th>结果</th></tr>",
     ]
     for name, source, preview_dir, data in rows:
         relative = preview_dir.relative_to(OUT).as_posix()
         stem = data["steps"][0]["name"]
         layer_count = len(data["steps"][0]["layers"])
         source_rel = source.relative_to(ROOT).as_posix()
+        variant = ("KiCad 原生（未修改）" if "/native/" in source_rel else
+                   "事后裁剪（非原生）" if "/clean/" in source_rel else "既有样本")
         links = " · ".join(
             f'<a href="{escape(relative)}/{escape(stem)}.{ext}">{label}</a>'
             for ext, label in (("html", "预览"), ("json", "JSON"), ("svg", "SVG"))
         )
         lines.append(f"<tr><td>{escape(name)}<br><small>{escape(source_rel)}"
-                     f"</small></td><td>{layer_count}</td><td>{links}</td></tr>")
+                     f"</small></td><td>{variant}</td><td>{layer_count}</td>"
+                     f"<td>{links}</td></tr>")
     lines += ["</table>", "<p><small>运行 tools/sync_out.py 更新；"
               "修改解析器后使用 --force 重新生成。</small></p>", "</html>"]
     return "\n".join(lines) + "\n"
@@ -96,8 +99,13 @@ def prune_unmatched(inputs: list[tuple[str, Path]]) -> None:
     candidates = [p for p in OUT.iterdir() if p.name not in keep_top]
     suite = OUT / "kicad-positive"
     if suite.is_dir():
-        candidates += [p for p in suite.iterdir()
-                       if f"kicad-positive/{p.name}" not in expected]
+        variants = {"native", "clean"}
+        candidates += [p for p in suite.iterdir() if p.name not in variants]
+        for variant in variants:
+            group = suite / variant
+            if group.is_dir():
+                candidates += [p for p in group.iterdir()
+                               if f"kicad-positive/{variant}/{p.name}" not in expected]
     for path in candidates:
         if path.is_symlink() or not path.resolve().is_relative_to(root):
             raise RuntimeError(f"refusing to remove path outside out/: {path}")
