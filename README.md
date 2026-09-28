@@ -70,9 +70,9 @@ wireframe 快捷按钮和实时毫米坐标读数。
 [修复与验证记录](docs/fixes/04-export-correctness-fixes.md)。
 
 修改预览生成代码后，使用 `tools/sync_out.py --force` 更新已有产物。
-`out/index.html` 链接到四个既有样本和七个 KiCad 小型 ZIP 的当前导出结果。
-每个逻辑案例仅保留 JSON、合并 SVG、可交互 HTML；KiCad 小型案例从
-`cases/kicad-positive/clean/` 导出，`native/` 的成对 ZIP 保留作原生对照。
+`out/index.html` 链接到四个既有样本及 KiCad 小型案例的原生、裁剪两组导出。
+每份输入仅保留 JSON、合并 SVG、可交互 HTML；KiCad 输出分别位于
+`out/kicad-positive/native/` 与 `out/kicad-positive/clean/`，避免混淆来源。
 
 
 退出码：`0` 无错误，`1` 加载成功但存在 error 级诊断，`2` 直接失败。
@@ -164,7 +164,7 @@ for layer in step.layers:
 | `cases/` | ODB++ v8.1 输入：4 个既有样本及 7 个 KiCad 小型导出（见 `cases/README.md`） |
 | `docs/` | 官方规范 PDF（不入库）、`research/` 调研、`reviews/` 审阅、`fixes/` 修复记录 |
 | `external/` | 参考用开源项目（不入库，按需 clone，见 `external/README.md`） |
-| `out/` | 与逻辑案例一一对应的导出结果及索引（不入库，由 `tools/sync_out.py` 维护） |
+| `out/` | 与案例输入一一对应的导出结果及索引（不入库，由 `tools/sync_out.py` 维护） |
 | `src/odbpp/` | 解析器本体 |
 | `tests/` | 单元测试 + `tests/fixtures/` 合成样本 |
 | `tools/` | 规范 PDF 获取/抽取、案例普查、性能测量和 `out/` 同步 |

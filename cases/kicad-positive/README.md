@@ -43,3 +43,7 @@ KiCad 10 保存时会强制保留空 Margin 和双面 Courtyard，因此原生�
 
 普通 pytest 只读固定 ZIP，无需本机安装 KiCad。负极性、层级 profile
 和递归自定义符号等非 KiCad 导出语义仍由 `tests/fixtures/` 的手写夹具覆盖。
+
+项目预览同步后，原生与裁剪 ZIP 分别写入
+`out/kicad-positive/native/<案例名>/` 和
+`out/kicad-positive/clean/<案例名>/`；`out/index.html` 显示对应版本。
