@@ -17,6 +17,9 @@ import subprocess
 import sys
 
 from odbpp.visualize import unique_image_stem
+from odbpp.equiv import rectify_step_outline
+from odbpp.rectify import RectifyOptions
+from odbpp.diagnostics import Diagnostics
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,8 +70,30 @@ def image_names(layers: list[str]) -> set[str]:
     return {f"{unique_image_stem(name, used)}.png" for name in layers}
 
 
+def coarse_grid_counts(document: dict, px: int, py: int, target: int) -> tuple[int, int]:
+    """Choose a target grid while preserving every forced region boundary.
+
+    This is an explicit batch planning mode; exact --nx/--ny retain their
+    existing semantics and are never increased by this helper.
+    """
+    diagnostics = Diagnostics()
+    outline = rectify_step_outline(document["steps"][0], px, py, RectifyOptions(),
+                                   diagnostics=diagnostics)
+    if not outline.ok or not outline.rectangles or diagnostics.errors:
+        raise RuntimeError("cannot plan a coarse grid: " + "; ".join(
+            str(item) for item in diagnostics.errors))
+    xs = {x for r in outline.rectangles for x in (r.x0, r.x1)}
+    ys = {y for r in outline.rectangles for y in (r.y0, r.y1)}
+    nx, ny = max(target, len(xs) - 1), max(target, len(ys) - 1)
+    if nx > px or ny > py:
+        raise RuntimeError(f"forced region boundaries need {nx}x{ny} cells, "
+                           f"exceeding raster {px}x{py}")
+    return nx, ny
+
+
 def existing_equivalence(directory: Path, preview: Path, *,
-                         px: int, py: int, nx: int, ny: int) -> dict | None:
+                         px: int, py: int, nx: int, ny: int,
+                         draw_grid: bool = False) -> dict | None:
     """Reuse only a complete result for this JSON and this raster/grid choice."""
     stem = preview.stem
     csv = directory / f"{stem}.MaterialMap.csv"
@@ -79,6 +104,8 @@ def existing_equivalence(directory: Path, preview: Path, *,
     if csv.stat().st_mtime_ns < preview.stat().st_mtime_ns:
         return None
     try:
+        if ("热图灰线标出 CSV 单元边界" in gallery.read_text(encoding="utf-8")) != draw_grid:
+            return None
         data = json.loads(meta.read_text(encoding="utf-8"))
         expected_source = preview.relative_to(ROOT).as_posix()
         actual_source = data["source"]["path"].replace("\\", "/")
@@ -139,7 +166,7 @@ def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
         "逐层光栅掩膜和 kx/ky/kz 热图。"
         "KiCad 原生 ZIP 与事后裁剪 ZIP 分组导出，可分别核对。</p>",
         "<table><tr><th>案例与输入</th><th>版本</th><th>层数</th>"
-        "<th>等效层</th><th>结果</th></tr>",
+        "<th>等效层</th><th>XY 网格</th><th>结果</th></tr>",
     ]
     for name, source, preview_dir, data, equivalent in rows:
         relative = preview_dir.relative_to(OUT).as_posix()
@@ -162,8 +189,11 @@ def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
                                for r in equivalent["layers"])
         lines.append(f"<tr><td>{escape(name)}<br><small>{escape(source_rel)}"
                      f"</small></td><td>{variant}</td><td>{layer_count}</td>"
-                     f"<td>{equivalent_count}</td><td>{links}</td></tr>")
-    lines += ["</table>", "<p><small>运行 tools/sync_out.py --px 400 --py 400 更新；"
+                     f"<td>{equivalent_count}</td>"
+                     f"<td>{equivalent['grid']['nx']}×{equivalent['grid']['ny']}</td>"
+                     f"<td>{links}</td></tr>")
+    lines += ["</table>", "<p><small>运行 tools/sync_out.py --px 400 --py 400 --coarse-grid 40 "
+              "生成粗网格；表中为各 case 实际网格数。"
               "修改解析器后使用 --force 重新生成。</small></p>", "</html>"]
     return "\n".join(lines) + "\n"
 
@@ -207,9 +237,20 @@ def main() -> None:
                         help="X cells per board (default: px)")
     parser.add_argument("--ny", type=int, default=None,
                         help="Y cells per board (default: py)")
+    parser.add_argument("--coarse-grid", type=int, default=None, metavar="N",
+                        help="target N cells per direction; use more only when "
+                             "forced region boundaries require it; outlines heatmap cells")
+    parser.add_argument("--heatmap-grid", action="store_true",
+                        help="outline each CSV cell in heatmaps")
     parser.add_argument("--prune", action="store_true",
                         help="remove out/ entries with no corresponding case")
     args = parser.parse_args()
+    if args.coarse_grid is not None:
+        if args.nx is not None or args.ny is not None:
+            parser.error("--coarse-grid cannot be combined with exact --nx/--ny")
+        if not 1 <= args.coarse_grid <= min(args.px, args.py):
+            parser.error("require 1 <= coarse-grid <= min(px, py)")
+    draw_grid = args.heatmap_grid or args.coarse_grid is not None
     nx = args.nx if args.nx is not None else args.px
     ny = args.ny if args.ny is not None else args.py
     if (args.px < 1 or args.py < 1 or not 1 <= nx <= args.px
@@ -234,16 +275,24 @@ def main() -> None:
         else:
             print(f"reuse  {name}", flush=True)
         preview = valid[0]
+        case_nx, case_ny = (coarse_grid_counts(valid[1], args.px, args.py, args.coarse_grid)
+                            if args.coarse_grid is not None else (nx, ny))
+        print(f"grid   {name}: {case_nx}x{case_ny}"
+              + (f" (target {args.coarse_grid}x{args.coarse_grid}; region boundaries preserved)"
+                 if args.coarse_grid is not None else ""), flush=True)
         equivalent = (None if args.force or args.force_equivalent
                       or preview_regenerated else
                       existing_equivalence(output, preview, px=args.px,
-                                           py=args.py, nx=nx, ny=ny))
+                                           py=args.py, nx=case_nx, ny=case_ny,
+                                           draw_grid=draw_grid))
         if equivalent is None:
             command = [sys.executable, "-m", "odbpp", "equivalent",
                        "--from-json", preview.relative_to(ROOT).as_posix(),
                        "--px", str(args.px), "--py", str(args.py),
-                       "--nx", str(nx), "--ny", str(ny),
+                       "--nx", str(case_nx), "--ny", str(case_ny),
                        "-o", output.relative_to(ROOT).as_posix()]
+            if draw_grid:
+                command.append("--heatmap-grid")
             print(f"equiv  {name}", flush=True)
             subprocess.run(command, cwd=ROOT, check=True)
             meta = json.loads((output / f"{preview.stem}.MaterialMap.meta.json")
@@ -251,7 +300,8 @@ def main() -> None:
             prune_stale_images(output, [r["name"] for r in meta["layers"]
                                         if r["status"] == "equivalent"])
             equivalent = existing_equivalence(output, preview, px=args.px,
-                                               py=args.py, nx=nx, ny=ny)
+                                               py=args.py, nx=case_nx, ny=case_ny,
+                                               draw_grid=draw_grid)
             if equivalent is None:
                 raise RuntimeError(f"equivalence was not complete: {output}")
         else:

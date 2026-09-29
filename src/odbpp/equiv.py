@@ -68,6 +68,7 @@ __all__ = [
     "LayerReport",
     "EquivalenceResult",
     "equivalence_from_document",
+    "rectify_step_outline",
     "write_materialmap",
     "write_metadata",
 ]
@@ -329,6 +330,24 @@ def _region_from_polygons(polygons: Sequence[Mapping[str, Any]]) -> Region:
         rings.append((points, not bool(polygon.get("island", True))))
     return Region([r for r in (Ring(points, is_hole) for points, is_hole in rings)
                    if len(r) >= 3])
+
+
+def rectify_step_outline(step: Mapping[str, Any], px: int, py: int,
+                         options: RectifyOptions, *,
+                         diagnostics: Optional[Diagnostics] = None) -> RectifyResult:
+    """Prepare the same outline for equivalence and batch grid planning."""
+    step_domain = _domain_index(step).get("step_profile")
+    if step_domain is None:
+        raise EquivalenceError(
+            f"step {step.get('name')!r} has no step_profile domain; the board outline "
+            "is required to size the raster and rectangularise the board")
+    profile = _region_from_polygons(step_domain.get("polygons"))
+    bounds = profile.bounds
+    if options.tolerance_mm is None and bounds is not None:
+        pitch_x = (bounds[2] - bounds[0]) / px
+        pitch_y = (bounds[3] - bounds[1]) / py
+        options = replace(options, tolerance_mm=2.0 * max(pitch_x, pitch_y))
+    return rectify_region(profile, options, diagnostics=diagnostics)
 
 
 def _overlaps(layer_start: float, layer_end: float,
@@ -727,23 +746,9 @@ def equivalence_from_document(
     layers = _layer_index(step)
 
     # --- board outline ------------------------------------------------------
-    step_domain = domains.get("step_profile")
-    if step_domain is None:
-        raise EquivalenceError(
-            f"step {step_name!r} has no step_profile domain; the board outline "
-            f"is required to size the raster and rectangularise the board")
-    profile = _region_from_polygons(step_domain.get("polygons"))
     px, py = options.grid.px, options.grid.py
-    profile_bounds = profile.bounds
-    rectify_options = options.rectify
-    if rectify_options.tolerance_mm is None and profile_bounds is not None:
-        # Auto: the staircase step is twice the pixel pitch, the coarsest value
-        # that still leaves every forced interval a raster sample.
-        pitch_x = (profile_bounds[2] - profile_bounds[0]) / px
-        pitch_y = (profile_bounds[3] - profile_bounds[1]) / py
-        rectify_options = replace(rectify_options,
-                                  tolerance_mm=2.0 * max(pitch_x, pitch_y))
-    rectification = rectify_region(profile, rectify_options, diagnostics=diags)
+    rectification = rectify_step_outline(step, px, py, options.rectify,
+                                        diagnostics=diags)
     if not rectification.rectangles:
         return EquivalenceResult(
             cells=[], layers=[], grid=build_grid([], options.grid,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import csv as csv_module
 from pathlib import Path
 import shutil
 import sys
@@ -65,3 +66,38 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     changed = json.loads(meta.read_text(encoding="utf-8"))
     assert changed["raster"]["px"] == 20
     assert (changed["grid"]["nx"], changed["grid"]["ny"]) == (10, 16)
+
+    monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16",
+                                      "--coarse-grid", "4"])
+    sync_out.main()
+    coarse = json.loads(meta.read_text(encoding="utf-8"))
+    assert (coarse["grid"]["nx"], coarse["grid"]["ny"]) == (4, 4)
+    with csv.open(encoding="utf-8", newline="") as handle:
+        records = list(csv_module.DictReader(handle))
+    assert len(records) == 32
+    assert {int(r["pixel_count"]) for r in records} == {16}
+    assert "4×4" in (out / "index.html").read_text(encoding="utf-8")
+    assert sync_out.existing_equivalence(result, preview, px=16, py=16,
+                                         nx=4, ny=4, draw_grid=True) is not None
+    assert sync_out.existing_equivalence(result, preview, px=16, py=16,
+                                         nx=4, ny=4) is None
+    before = csv.stat().st_mtime_ns
+    sync_out.main()
+    assert csv.stat().st_mtime_ns == before
+
+
+def test_coarse_grid_preserves_hole_boundaries():
+    from test_visualize import document, rect, hole
+
+    data = document([], domains=[{
+        "id": "step_profile", "polygons": [rect(0, 0, 10, 10), hole(2, 2, 4, 4)]}])
+    assert sync_out.coarse_grid_counts(data, 100, 100, 1) == (3, 3)
+    assert sync_out.coarse_grid_counts(data, 100, 100, 10) == (10, 10)
+
+
+def test_coarse_grid_cannot_override_exact_counts(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "100", "--py", "100",
+                                      "--coarse-grid", "10", "--nx", "5"])
+    with pytest.raises(SystemExit) as exc:
+        sync_out.main()
+    assert exc.value.code == 2

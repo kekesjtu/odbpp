@@ -172,6 +172,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_eq.add_argument("--heatmap-shared-scale", action="store_true",
                       help="use one colour scale for every layer instead of one "
                            "per layer")
+    p_eq.add_argument("--heatmap-grid", action="store_true",
+                      help="outline the CSV cells in the heat maps")
     p_eq.add_argument("--no-gallery", dest="gallery", action="store_false",
                       default=True,
                       help="do not write the per-run HTML gallery")
@@ -193,6 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="width of one panel in pixels (default 720)")
     p_map.add_argument("--shared-scale", action="store_true",
                        help="use one colour scale for every layer")
+    p_map.add_argument("--grid", action="store_true",
+                       help="outline the CSV cells in the heat maps")
     p_map.add_argument("--no-gallery", dest="gallery", action="store_false",
                        default=True,
                        help="do not write the gallery HTML next to the PNGs")
@@ -773,6 +777,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         options_for_maps = HeatmapOptions(
             panel_width_px=args.heatmap_panel_width,
             shared_scale=args.heatmap_shared_scale,
+            draw_grid=args.heatmap_grid,
         )
         if args.heatmap:
             report = render_heatmaps(csv_path, os.path.join(out_dir, "heatmaps"),
@@ -877,6 +882,8 @@ def _gallery_note(result, args) -> str:
         parts.append("本次未生成掩膜 PNG（--no-raster-png）")
     if not args.heatmap:
         parts.append("本次未生成热图（--no-heatmap）")
+    elif args.heatmap_grid:
+        parts.append("热图灰线标出 CSV 单元边界")
     return "；".join(parts) + "。掩膜灰阶：黑=铜/钻孔，白=基底，灰=该层在此无计算域。"
 
 
@@ -898,7 +905,8 @@ def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         return 2
     try:
         options = HeatmapOptions(panel_width_px=args.panel_width,
-                                 shared_scale=args.shared_scale)
+                                 shared_scale=args.shared_scale,
+                                 draw_grid=args.grid)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

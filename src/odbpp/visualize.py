@@ -531,6 +531,9 @@ class HeatmapOptions:
     #: is the default because it resolves the layer; shared makes layers
     #: comparable to each other at the cost of contrast.
     shared_scale: bool = False
+    #: Outline only cells present in the CSV; missing layer domains stay blank.
+    draw_grid: bool = False
+    grid_colour: Rgb = (110, 110, 110)
     font_scale: int = 2
     margin_px: int = 14
     gap_px: int = 18
@@ -675,6 +678,13 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
             bottom = panel_h - ys[band]
             for y in range(top, bottom):
                 canvas.blit_row(panel_y + y, panel_x, rgb)
+        if options.draw_grid:
+            for cell in range(len(series)):
+                col, band = cols[cell], rows[cell]
+                if xs[col + 1] > xs[col] and ys[band + 1] > ys[band]:
+                    canvas.frame(panel_x + xs[col], panel_y + panel_h - ys[band + 1],
+                                 panel_x + xs[col + 1], panel_y + panel_h - ys[band],
+                                 options.grid_colour)
         canvas.frame(panel_x, panel_y, panel_x + panel_w, panel_y + panel_h,
                      options.frame_colour)
 

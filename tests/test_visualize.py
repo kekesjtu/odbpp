@@ -511,6 +511,25 @@ class TestHeatmapRendering:
         return render_heatmaps(str(csv_path), str(tmp_path / out),
                                options=options, layers=layers)
 
+    def test_grid_outlines_csv_cells_and_leaves_missing_domains_blank(self, tmp_path):
+        domains = [
+            {"id": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "left", "polygons": [rect(0, 0, 5, 10)]},
+        ]
+        report = self._report(tmp_path, document([
+            {"name": "CU", "domain_id": "left", "polygons": []},
+            {"name": "FR", "type": "DIELECTRIC", "polygons": []},
+        ], domains=domains), draw_grid=True)
+        rows = decode_png(report.images[0].path)[3]
+        for body, _ in panels(rows, HeatmapOptions().frame_colour):
+            x0, y0 = body[0] - 1, body[1] - 1
+            # CSV cells have width/height 50 px. The first interior vertical
+            # boundary is visible, but cell interiors retain their data colour.
+            assert rgb(rows, x0 + 50, y0 + 25) == HeatmapOptions().grid_colour
+            assert rgb(rows, x0 + 25, y0 + 25) != HeatmapOptions().grid_colour
+            # The absent right half has neither colour data nor grid outlines.
+            assert rgb(rows, x0 + 150, y0 + 25) == NO_DATA_COLOUR
+
     def test_one_image_per_layer_with_three_directions(self, tmp_path):
         report = self._report(tmp_path, document([
             {"name": "CU", "polygons": [rect(0, 0, 10, 10)]},
