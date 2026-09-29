@@ -47,7 +47,8 @@ def existing_preview(directory: Path, source: Path) -> tuple[Path, dict] | None:
         output_source = data["source"]["path"].replace("\\", "/")
         steps = data["steps"]
         stem = json_files[0].stem
-        if (data["schema"] != "odbpp/preview-1" or data["units"] != "mm"
+        if (data["schema"] not in ("odbpp/preview-1", "odbpp/preview-2")
+                or data["units"] != "mm"
                 or output_source != authored_source or len(steps) != 1
                 or not (directory / f"{stem}.svg").is_file()
                 or not (directory / f"{stem}.html").is_file()):

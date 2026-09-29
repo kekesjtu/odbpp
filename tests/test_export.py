@@ -624,3 +624,53 @@ class TestSerialisedTopology:
                 net += area if polygon["island"] else -area
             if layer["polygons"]:
                 assert layer["area_mm2"] == pytest.approx(net, abs=0.01), layer["name"]
+
+
+class TestComputationalDomains:
+    """AGENTS constraint 7: the JSON states each layer's calculation domain.
+
+    A copper layer's polygons are a *pattern*; they do not say where the layer
+    exists.  The domain array is that answer, and it follows the constraint 3
+    priority (layer profile, else step profile, never a silent fallback).
+    """
+
+    def test_the_step_profile_is_shared_not_copied_per_layer(self):
+        _job, preview, _diag = preview_of("minimal-test-odb")
+        step = step_to_json(_job, preview)["steps"][0]
+        ids = [d["id"] for d in step["domains"]]
+        assert ids == ["step_profile"]
+        for layer in step["layers"]:
+            assert layer["domain_id"] == "step_profile"
+            assert layer["domain_source"] == "step_profile"
+            assert layer["domain_error"] is None
+
+    def test_the_step_profile_domain_keeps_its_holes(self):
+        from shapely.geometry import Polygon
+
+        _job, preview, _diag = preview_of("kicad-kitchen-sink")
+        step = step_to_json(_job, preview)["steps"][0]
+        domain = step["domains"][0]
+        assert domain["source"] == "step_profile"
+        islands = [p for p in domain["polygons"] if p["island"]]
+        holes = [p for p in domain["polygons"] if not p["island"]]
+        assert islands and holes
+        shape = Polygon(islands[0]["points"], [h["points"] for h in holes])
+        assert shape.is_valid
+        assert domain["area_mm2"] == pytest.approx(shape.area, abs=0.01)
+
+    def test_an_unparsable_layer_profile_is_never_replaced_by_the_step_profile(self):
+        # fx_bad_layer_profile's dielectric profile parses but is empty; the
+        # loader records that as an error and the layer must not silently inherit
+        # the step outline.  The equivalence consumer detects the failure by the
+        # layer missing from ``layers`` while still being in the stack.
+        from odbpp.diagnostics import Diagnostics
+
+        diagnostics = Diagnostics()
+        job = load_job(str(fixture_path("fx_bad_layer_profile")),
+                       diagnostics=diagnostics)
+        preview = build_step_preview(job, diagnostics=diagnostics)
+        step = step_to_json(job, preview)["steps"][0]
+        names = [l["name"] for l in step["layers"]]
+        assert "DIELECTRIC_1" not in names
+        assert "DIELECTRIC_1" in step_to_json(job, preview)["summary"]["failed_layers"]
+        assert "DIELECTRIC_1" in [row["name"] for row in step["stackup"]]

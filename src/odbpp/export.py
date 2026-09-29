@@ -63,7 +63,19 @@ __all__ = [
 
 #: Identifies the JSON layout, so a consumer can reject a newer file rather than
 #: misread it.
-SCHEMA = "odbpp/preview-1"
+#:
+#: ``preview-2`` adds the per-step ``domains`` array and the per-layer
+#: ``domain_id``/``domain_source`` fields.  A material-equivalence consumer needs
+#: each physical layer's two-dimensional *computational domain* on its own: the
+#: copper polygons are a pattern, not a domain, and the region outside the board
+#: must never be read as base laminate (AGENTS constraint 7).  ``preview-1`` had
+#: no such field, so a consumer that needs it must reject the old schema rather
+#: than guess.
+SCHEMA = "odbpp/preview-2"
+
+#: Schemas this module still knows how to *read*.  Writing always uses
+#: :data:`SCHEMA`; reading a newer value is an error in the consumer, not here.
+KNOWN_SCHEMAS = ("odbpp/preview-1", "odbpp/preview-2")
 
 
 @dataclass(frozen=True)
@@ -588,6 +600,12 @@ def layer_to_json(preview: LayerPreview, *, round_digits: Optional[int] = None) 
             "source": extent.source,
         },
         "base_from_profile": geometry.used_base,
+        # Which step/domain this layer's equivalence computation is confined to.
+        # Filled in by :func:`step_to_json` (which has the step), left ``None``
+        # for a bare :func:`layer_to_json` call so the key always exists.
+        "domain_id": None,
+        "domain_source": None,
+        "domain_error": None,
         "feature_records": geometry.records,
         "polarity_runs": geometry.polarity_runs,
         # AGENTS constraint 3: the dielectric's own Z interval decided which
@@ -624,6 +642,12 @@ def step_to_json(job: Job, preview: StepPreview, *,
     digits = _preview_digits(preview, round_digits)
     view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
     layers = [layer_to_json(l, round_digits=digits) for l in view.layers]
+    domains, domain_of_layer = _domains_json(view, digits)
+    for layer_json in layers:
+        info = domain_of_layer.get(layer_json["name"], {})
+        layer_json["domain_id"] = info.get("id")
+        layer_json["domain_source"] = info.get("source")
+        layer_json["domain_error"] = info.get("error")
     # Derived from the written layers, not from the pre-regularisation model, so
     # the summary, the step bounds and the layer array cannot disagree.
     boxes = [l["bounds_mm"] for l in layers if l["bounds_mm"] is not None]
@@ -659,6 +683,7 @@ def step_to_json(job: Job, preview: StepPreview, *,
             "bounds_mm": None if bounds is None
             else [_round(b, digits) for b in bounds],
             "profile": _profile_json(preview.step, digits, preview.diagnostics),
+            "domains": domains,
             "stackup": _stackup_json(view, digits),
             "layers": layers,
         }],
@@ -728,14 +753,106 @@ def _profile_json(step: Step, round_digits: int,
             f"the {round_digits}-decimal output grid and were dropped; "
             f"the remaining geometry was re-regularised at that resolution",
         )
-    return {
-        "polygons": [
-            {
-                "island": not ring.is_hole,
-                "points": _points_json(ring, round_digits),
+    return {"polygons": _region_polygons_json(region, round_digits)}
+
+
+def _region_polygons_json(region, round_digits: int) -> list[dict]:
+    """Serialise a :class:`~odbpp.clipper.Region` as explicit island/hole rings."""
+    return [
+        {
+            "island": not ring.is_hole,
+            "points": _points_json(ring, round_digits),
+        }
+        for ring in region.rings
+    ]
+
+
+def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], dict]:
+    """The computational domains available to this step, and which layer uses which.
+
+    AGENTS constraint 7: a material-equivalence consumer needs each physical
+    layer's two-dimensional calculation domain separately from its material
+    *pattern*.  The copper polygons are a pattern -- where the metal is -- and
+    they say nothing about where the layer exists at all.  This array is that
+    domain, resolved with the constraint 3 priority rule:
+
+    * a valid layer profile wins (``source: layer_profile``);
+    * otherwise the step profile applies (``source: step_profile``);
+    * a layer profile that exists but cannot be parsed is *not* silently
+      replaced by the step profile: it sets ``domain_error`` and leaves
+      ``domain_id`` null.
+
+    The step profile is emitted once and shared by every layer that falls back to
+    it, rather than copied per layer, so a 43-layer rigid-flex board does not
+    repeat the same polygon set 40 times.
+
+    Returns ``(domains, mapping)`` where *mapping* is keyed by layer name.
+    """
+    from .clipper import region_from_geometry
+
+    domains: list[dict] = []
+    mapping: dict[str, dict] = {}
+    seen: dict[int, str] = {}
+
+    step = preview.step
+    step_domain_id: Optional[str] = None
+    if step.profile is not None:
+        step_domain_id = "step_profile"
+        region, _collapsed = snap_to_grid(
+            region_from_geometry(step.profile), round_digits
+        )
+        domains.append(_domain_json(step_domain_id, "step_profile", None,
+                                    region, round_digits))
+
+    for layer_preview in preview.layers:
+        layer = layer_preview.layer
+        if layer.profile_error is not None:
+            mapping[layer.name] = {
+                "id": None,
+                "source": None,
+                "error": f"layer profile could not be parsed: {layer.profile_error}",
             }
-            for ring in region.rings
-        ]
+            continue
+        if layer.profile is not None:
+            # Two layers sharing one profile object (rare, but a step can be
+            # authored that way) get one entry keyed by object identity.
+            key = id(layer.profile)
+            domain_id = seen.get(key)
+            if domain_id is None:
+                domain_id = f"layer_profile:{layer.name}"
+                region, _collapsed = snap_to_grid(
+                    region_from_geometry(layer.profile), round_digits
+                )
+                domains.append(_domain_json(domain_id, "layer_profile",
+                                            layer.name, region, round_digits))
+                seen[key] = domain_id
+            mapping[layer.name] = {"id": domain_id, "source": "layer_profile",
+                                   "error": None}
+            continue
+        if step_domain_id is not None:
+            mapping[layer.name] = {"id": step_domain_id, "source": "step_profile",
+                                   "error": None}
+            continue
+        mapping[layer.name] = {
+            "id": None,
+            "source": None,
+            "error": "neither a layer profile nor a step profile is available",
+        }
+
+    return domains, mapping
+
+
+def _domain_json(domain_id: str, source: str, layer_name: Optional[str],
+                 region, round_digits: int) -> dict:
+    bounds = region.bounds
+    return {
+        "id": domain_id,
+        "source": source,
+        "layer": layer_name,
+        "area_mm2": _round(region.area, round_digits + 2),
+        "bounds_mm": None if bounds is None
+        else [_round(b, round_digits) for b in bounds],
+        "polygons": _region_polygons_json(region, round_digits),
     }
 
 
