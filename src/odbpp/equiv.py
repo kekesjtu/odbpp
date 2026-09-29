@@ -57,7 +57,7 @@ from .errors import OdbError
 from .export import KNOWN_SCHEMAS
 from .grid import BoardGrid, GridOptions, build_grid
 from .materials import MaterialBook, ResolvedMaterials
-from .raster import RasterAxis, region_edges
+from .raster import LayerMask, RasterAxis, region_edges
 from .rectify import RectifyOptions, RectifyResult, rectify_region
 
 __all__ = [
@@ -526,6 +526,7 @@ def _evaluate_layer(
     emit: Callable[[EquivalentCell], None],
     *,
     warn_partial: bool,
+    mask: Optional[LayerMask] = None,
 ) -> tuple[int, int, int]:
     """Emit one layer's cells; return ``(count, partial_count, cell_without_pixel)``."""
     k1, k2 = materials.k1, materials.k2
@@ -575,18 +576,22 @@ def _evaluate_layer(
             y = y_axis.centre(b)
             dom_row = bytearray(width)
             black_row = bytearray(width)
-            for span in domain_scan.spans_at(y):
+            dom_spans = domain_scan.spans_at(y)
+            black_spans = black_scan.spans_at(y)
+            for span in dom_spans:
                 a0, a1 = x_axis.pixel_index(span[0]), x_axis.pixel_index(span[1])
                 if a1 > a0:
                     dom_row[a0:a1] = b"\x01" * (a1 - a0)
                     dom_diff[a0] += 1
                     dom_diff[a1] -= 1
-            for span in black_scan.spans_at(y):
+            for span in black_spans:
                 a0, a1 = x_axis.pixel_index(span[0]), x_axis.pixel_index(span[1])
                 if a1 > a0:
                     black_row[a0:a1] = b"\x01" * (a1 - a0)
                     black_diff[a0] += 1
                     black_diff[a1] -= 1
+            if mask is not None:
+                mask.set_spans(b, dom_spans, black_spans, x_axis)
 
             for cell in band_cells:
                 index = ranges.get(cell.i)
@@ -687,6 +692,7 @@ def equivalence_from_document(
     *,
     diagnostics: Optional[Diagnostics] = None,
     cell_sink: Optional[Callable[[EquivalentCell], None]] = None,
+    mask_sink: Optional[Callable[[str, LayerMask], None]] = None,
 ) -> EquivalenceResult:
     """Equivalent every copper and dielectric layer of *document*.
 
@@ -694,6 +700,11 @@ def equivalence_from_document(
     cell is handed to the callback as it is produced and the result carries no
     cells: a board-wide grid at high ``px``/``py`` can hold millions of them, and
     the caller writing a CSV only ever needs one at a time.
+
+    *mask_sink* receives ``(layer name, LayerMask)`` once per equivalented layer,
+    holding exactly the black/white raster that layer's cells were computed from.
+    The callback owns the mask from then on, so a caller that writes an image can
+    drop it immediately and never keep 43 of them resident.
     """
     diags = diagnostics if diagnostics is not None else Diagnostics()
     schema = document.get("schema")
@@ -911,17 +922,23 @@ def equivalence_from_document(
                     f"ignored in v1",
                 )
 
+        mask = LayerMask(px, py) if mask_sink is not None else None
         cell_count, partial, no_pixel = _evaluate_layer(
             name, type_name, domain, black, report.drill_overlays,
             z_start, z_end, thickness_known, materials,
             grid, x_axis, y_axis, diags, emit,
             warn_partial=options.warn_partial_domains,
+            mask=mask,
         )
         report.status = "equivalent"
         report.cell_count = cell_count
         report.partial_cells = partial
         cell_without_pixel += no_pixel
         reports.append(report)
+        if mask is not None:
+            # Hand the raster over as soon as the layer is done; the sink writes
+            # it out and drops it, so only one layer mask is ever resident.
+            mask_sink(name, mask)
 
     if cell_without_pixel:
         fatal = True

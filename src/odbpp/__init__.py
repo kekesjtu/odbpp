@@ -12,6 +12,11 @@ has three stages, each usable on its own:
 3. **Render** -- :func:`render_svg` / :func:`render_html` / :func:`write_outputs`
    draw them, or take the composed polygons as JSON via
    :func:`step_to_json`.
+4. **Equivalent** -- :func:`equivalence_from_document` turns each copper and
+   dielectric layer into per-cell ``kx``/``ky``/``kz``/density/specific heat.
+5. **Publish** -- :func:`write_materialmap` writes ``MaterialMap.csv``, and
+   :func:`write_layer_mask` / :func:`render_heatmaps` draw the black/white
+   raster and the ``kx``/``ky``/``kz`` heat maps a person can look at.
 
 Quick start::
 
@@ -72,6 +77,7 @@ from .materials import (
     ResolvedMaterials,
 )
 from .rectify import Rect, RectifyOptions, RectifyResult, rectify_region
+from .raster import LayerMask
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .export import (
     PreviewOptions,
@@ -94,6 +100,19 @@ from .model import (
 )
 from .symbols import SymbolLibrary, is_standard_symbol, parse_standard_symbol
 from .svg import SvgOptions, render_html, render_svg, write_outputs
+from .visualize import (
+    GalleryEntry,
+    HeatmapImage,
+    HeatmapOptions,
+    HeatmapReport,
+    MaterialMapData,
+    VisualizeError,
+    gallery_entries,
+    read_materialmap,
+    render_heatmaps,
+    write_gallery_html,
+    write_layer_mask,
+)
 from .units import UnitScope, UnitSystem, copper_weight
 from .units import DEFAULT_COPPER_DENSITY_G_CM3
 
@@ -162,12 +181,25 @@ __all__ = [
     "RectifyResult",
     "Rect",
     "rectify_region",
+    "LayerMask",
     "Material",
     "MaterialBook",
     "ResolvedMaterials",
     "DEFAULT_COPPER",
     "DEFAULT_BASE",
     "PROJECT_DEFAULTS",
+    # visualisation of the equivalence (stage 5 pictures)
+    "HeatmapOptions",
+    "HeatmapImage",
+    "HeatmapReport",
+    "MaterialMapData",
+    "read_materialmap",
+    "render_heatmaps",
+    "write_layer_mask",
+    "GalleryEntry",
+    "gallery_entries",
+    "write_gallery_html",
+    "VisualizeError",
     # diagnostics
     "Diagnostic",
     "Diagnostics",

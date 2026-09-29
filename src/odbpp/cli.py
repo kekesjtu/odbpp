@@ -12,6 +12,9 @@ Commands
 ``diagnostics`` every warning/error collected while loading
 ``summarize``  all of the above, as text or JSON
 ``export``     compose the layers and write the mm JSON, SVG and HTML preview
+``equivalent`` compose, equivalent every physical layer, write the CSV and draw
+               the per-layer mask PNGs, heat maps and gallery
+``heatmap``    draw kx/ky/kz heat maps from an already written MaterialMap.csv
 
 ``summarize --format json`` is a *structural* dump -- file-level facts that make
 the parse reviewable.  ``export --json`` is the intermediate format from the
@@ -28,7 +31,7 @@ import sys
 from typing import Any, Optional, Sequence
 
 from . import __version__
-from .diagnostics import Diagnostics
+from .diagnostics import VISUALIZE_FAILED, Diagnostics
 from .errors import OdbError
 from .geometry import DEFAULT_SAGITTA_MM, SUPPORTED_SYMBOL_PREFIXES, TessellationOptions
 from .job import LoadOptions, load_job
@@ -149,7 +152,50 @@ def build_parser() -> argparse.ArgumentParser:
     p_eq.add_argument("--digits", type=int, default=4,
                       help="preview coordinate resolution when parsing ODB++ "
                            "(default 4)")
+    p_eq.add_argument("--no-raster-png", dest="raster_png",
+                      action="store_false", default=True,
+                      help="do not write the per-layer black/white raster PNGs "
+                           "under <out>/masks/")
+    p_eq.add_argument("--raster-scale", type=int, default=0, metavar="N",
+                      help="nearest-neighbour zoom for the mask PNGs "
+                           "(default 0 = auto, about 700 px on the long side; "
+                           "1 = exactly px x py)")
+    p_eq.add_argument("--no-heatmap", dest="heatmap", action="store_false",
+                      default=True,
+                      help="do not write the per-layer kx/ky/kz heat maps "
+                           "under <out>/heatmaps/")
+    p_eq.add_argument("--heatmap-panel-width", type=int, default=720,
+                      metavar="PX",
+                      help="width of one heat-map panel in pixels (default 720; "
+                           "height follows the board aspect ratio)")
+    p_eq.add_argument("--heatmap-shared-scale", action="store_true",
+                      help="use one colour scale for every layer instead of one "
+                           "per layer")
+    p_eq.add_argument("--no-gallery", dest="gallery", action="store_false",
+                      default=True,
+                      help="do not write the per-run HTML gallery")
     p_eq.set_defaults(json_out=None, format=None, max_records=5)
+
+    p_map = sub.add_parser(
+        "heatmap",
+        help="render per-layer kx/ky/kz heat maps from a MaterialMap CSV",
+        description="Read a MaterialMap.csv written by `equivalent` and draw one "
+                    "PNG per layer with kx, ky and kz side by side. The CSV is "
+                    "the interface: no ODB++ input is needed.",
+    )
+    p_map.add_argument("csv", help="MaterialMap.csv written by `equivalent`")
+    p_map.add_argument("-o", "--out", default=None,
+                       help="output directory (default: <csv dir>/heatmaps)")
+    p_map.add_argument("--layer", action="append", default=None, metavar="NAME",
+                       help="only these layers (repeatable)")
+    p_map.add_argument("--panel-width", type=int, default=720, metavar="PX",
+                       help="width of one panel in pixels (default 720)")
+    p_map.add_argument("--shared-scale", action="store_true",
+                       help="use one colour scale for every layer")
+    p_map.add_argument("--no-gallery", dest="gallery", action="store_false",
+                       default=True,
+                       help="do not write the gallery HTML next to the PNGs")
+    p_map.set_defaults(raster_png=False, heatmap=True)
 
     return parser
 
@@ -161,6 +207,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.command == "equivalent":
         return _run_equivalent(args, diagnostics)
+    if args.command == "heatmap":
+        return _run_heatmap(args, diagnostics)
 
     options = LoadOptions(step=args.step, load_features=not args.no_features)
 
@@ -518,6 +566,17 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     from .grid import GridOptions
     from .materials import MaterialBook
     from .rectify import RectifyOptions
+    from .visualize import (
+        GalleryEntry,
+        HeatmapOptions,
+        VisualizeError,
+        gallery_entries,
+        render_heatmaps,
+        safe_name,
+        write_gallery_html,
+        write_layer_mask,
+        z_text,
+    )
 
     # --- the intermediate document (the only interface the equivalence has) --
     source_schema = None
@@ -617,6 +676,23 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     metadata_path = os.path.join(out_dir, f"{stem}.MaterialMap.meta.json")
     temp_path = csv_path + ".tmp"
 
+    # Raster masks are written while the layers are equivalented, so only one
+    # mask is ever resident.  They go to a temporary name and are moved into
+    # place only once the whole run is known to be trustworthy, exactly like the
+    # CSV: a fatal run must not leave half a result behind.
+    masks_dir = os.path.join(out_dir, "masks")
+    mask_jobs: list[tuple[str, str, str]] = []
+    mask_scales: set[int] = set()
+
+    def mask_sink(name: str, mask) -> None:
+        if not args.raster_png:
+            return
+        os.makedirs(masks_dir, exist_ok=True)
+        final = os.path.join(masks_dir, f"{safe_name(name)}.png")
+        temp = final + ".tmp"
+        mask_scales.add(write_layer_mask(mask, temp, scale=args.raster_scale or None))
+        mask_jobs.append((name, temp, final))
+
     # Stream rows as they are produced: a board-wide grid can hold millions of
     # cells and holding them all just to write a CSV is pure waste.
     count = 0
@@ -632,17 +708,16 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
 
             result = equivalence_from_document(document, options,
                                                diagnostics=diagnostics,
-                                               cell_sink=sink)
+                                               cell_sink=sink,
+                                               mask_sink=mask_sink)
     except (EquivalenceError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        _discard(temp_path, [temp for _, temp, _ in mask_jobs])
         return 2
 
     if result.fatal:
         # An untrustworthy run must not look like a finished file.
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        _discard(temp_path, [temp for _, temp, _ in mask_jobs])
         print("error: the equivalence run is not trustworthy; no output written",
               file=sys.stderr)
         for item in diagnostics.errors:
@@ -652,6 +727,10 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     os.replace(temp_path, csv_path)
     write_metadata(result, metadata_path, source_path=source_path,
                    source_schema=source_schema, step_name=step_name)
+    mask_hrefs: dict[str, str] = {}
+    for name, temp, final in mask_jobs:
+        os.replace(temp, final)
+        mask_hrefs[name] = f"masks/{os.path.basename(final)}"
 
     equivalent_layers = [r for r in result.layers if r.status == "equivalent"]
     print(f"step {step_name!r}: {count} equivalent cell(s) over "
@@ -669,6 +748,49 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     print(f"wrote {csv_path} ({os.path.getsize(csv_path) / 1e6:.2f} MB)")
     print(f"wrote {metadata_path} "
           f"({os.path.getsize(metadata_path) / 1e6:.2f} MB)")
+    if mask_jobs:
+        scales = ", ".join(str(scale) for scale in sorted(mask_scales))
+        print(f"wrote {len(mask_jobs)} raster mask(s) -> {masks_dir} "
+              f"(zoom {scales} px per raster pixel; "
+              f"black=copper/drill, white=base, grey=no domain)")
+
+    # --- pictures of what was written --------------------------------------
+    # Rendered from the CSV file, not from the in-memory result: the picture is
+    # then a picture of the delivered data, and the two cannot drift apart.
+    images = []
+    try:
+        options_for_maps = HeatmapOptions(
+            panel_width_px=args.heatmap_panel_width,
+            shared_scale=args.heatmap_shared_scale,
+        )
+        if args.heatmap:
+            report = render_heatmaps(csv_path, os.path.join(out_dir, "heatmaps"),
+                                     options=options_for_maps)
+            images = report.images
+            print(f"wrote {len(images)} heat map(s) -> "
+                  f"{os.path.join(out_dir, 'heatmaps')}")
+            if report.data.skipped_invalid:
+                print(f"warning: {report.data.skipped_invalid} CSV row(s) were "
+                      f"unusable and left blank in the heat maps",
+                      file=sys.stderr)
+        if args.gallery:
+            entries = _gallery_entries(result, images, mask_hrefs, out_dir)
+            if entries:
+                gallery_path = os.path.join(out_dir, f"{stem}.images.html")
+                write_gallery_html(
+                    gallery_path,
+                    f"{stem} · 等效物性图例",
+                    entries,
+                    note=_gallery_note(result, args),
+                )
+                print(f"wrote {gallery_path}")
+    except (VisualizeError, ValueError, OSError) as exc:
+        # The CSV and the metadata are the deliverable; failing to draw a picture
+        # of them is a reported failure, not a silent one, and not a corrupt one.
+        print(f"warning: could not render the visualisations: {exc}",
+              file=sys.stderr)
+        diagnostics.warn(VISUALIZE_FAILED,
+                         f"the run is written, but its pictures are not: {exc}")
 
     errors = diagnostics.errors
     if errors:
@@ -676,3 +798,130 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         for item in errors:
             print(f"  {item}", file=sys.stderr)
     return 1 if errors else 0
+
+
+def _discard(*paths) -> None:
+    """Remove temporary files, ignoring the ones that never appeared."""
+    import os
+
+    stack = list(paths)
+    while stack:
+        item = stack.pop()
+        if isinstance(item, (list, tuple)):
+            stack.extend(item)
+            continue
+        try:
+            os.remove(item)
+        except OSError:
+            pass
+
+
+def _gallery_entries(result, images, mask_hrefs: dict, gallery_dir: str) -> list:
+    """One gallery entry per equivalented layer, with whatever was drawn."""
+    import os
+
+    from .visualize import GalleryEntry, format_z
+
+    by_name = {image.layer: image for image in images}
+    reports = [r for r in result.layers if r.status == "equivalent"]
+    entries = []
+    for position, report in enumerate(reports, start=1):
+        image = by_name.get(report.name)
+        heatmap = None
+        k_text = ""
+        if image is not None:
+            heatmap = os.path.relpath(image.path, gallery_dir).replace(os.sep, "/")
+            k_text = (f"k 范围 [{image.vmin:.4g}, {image.vmax:.4g}] W/(m·K)"
+                      f"（kx/ky/kz 同一色标）")
+        entries.append(GalleryEntry(
+            name=report.name,
+            index=position,
+            count=len(reports),
+            layer_type=report.type,
+            z_text=format_z(report.z_start_mm, report.z_end_mm,
+                            report.thickness_known),
+            k_text=k_text,
+            cells=report.cell_count,
+            heatmap=heatmap,
+            mask=mask_hrefs.get(report.name),
+        ))
+    return entries
+
+
+def _gallery_note(result, args) -> str:
+    """The provenance a picture cannot show: what was skipped and with what."""
+    skipped = [r for r in result.layers if r.status != "equivalent"]
+    parts = [f"raster {result.raster_px}x{result.raster_py}px",
+             f"grid {result.grid.nx}x{result.grid.ny}",
+             "drill_model=solid_copper（见 meta.json）"]
+    if result.rectification.tolerance_mm is not None:
+        parts.append(f"矩形化 tolerance={result.rectification.tolerance_mm:g} mm")
+    if skipped:
+        parts.append(f"{len(skipped)} 层未参与等效（逐层原因见 meta.json）")
+    if not args.raster_png:
+        parts.append("本次未生成掩膜 PNG（--no-raster-png）")
+    if not args.heatmap:
+        parts.append("本次未生成热图（--no-heatmap）")
+    return "；".join(parts) + "。掩膜灰阶：黑=铜/钻孔，白=基底，灰=该层在此无计算域。"
+
+
+def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
+    """Render kx/ky/kz heat maps from an already written MaterialMap.csv."""
+    import os
+
+    from .visualize import (
+        HeatmapOptions,
+        VisualizeError,
+        gallery_entries,
+        render_heatmaps,
+        write_gallery_html,
+    )
+
+    csv_path = args.csv
+    if not os.path.isfile(csv_path):
+        print(f"error: no such file: {csv_path}", file=sys.stderr)
+        return 2
+    try:
+        options = HeatmapOptions(panel_width_px=args.panel_width,
+                                 shared_scale=args.shared_scale)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    out_dir = args.out or os.path.join(
+        os.path.dirname(os.path.abspath(csv_path)), "heatmaps")
+    try:
+        report = render_heatmaps(csv_path, out_dir, options=options,
+                                 layers=args.layer)
+        gallery_path = None
+        if args.gallery:
+            gallery_path = write_gallery_html(
+                os.path.join(out_dir, "index.html"),
+                f"{os.path.basename(csv_path)} · kx/ky/kz 等效热导率热图",
+                gallery_entries(report, gallery_dir=out_dir),
+            )
+    except (VisualizeError, ValueError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    bounds = report.images[0]
+    print(f"{csv_path}: {len(report.images)} layer(s), "
+          f"{report.data.row_count} CSV row(s), "
+          f"grid {report.data.column_count}x{report.data.row_band_count} "
+          f"(x=[{report.data.x_edges[0]:g},{report.data.x_edges[-1]:g}] mm)")
+    for image in report.images:
+        scale = (f"k=[{image.vmin:.4g},{image.vmax:.4g}] W/(m.K)"
+                 if not options.shared_scale else "shared scale")
+        print(f"  {image.index}/{image.count} {image.layer:<24}"
+              f"cells={image.cells:<8}{scale}")
+    if report.data.skipped_invalid:
+        print(f"warning: {report.data.skipped_invalid} CSV row(s) were unusable "
+              f"and left blank in the heat maps", file=sys.stderr)
+    print(f"wrote {len(report.images)} heat map(s) -> {out_dir}")
+    if gallery_path:
+        print(f"wrote {gallery_path}")
+    if bounds.vmax <= bounds.vmin:
+        diagnostics.warn("visualize.flat_scale",
+                         f"layer {bounds.layer!r} has a single conductivity "
+                         f"value; its heat map is one flat colour")
+    return 0

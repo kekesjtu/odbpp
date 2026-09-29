@@ -22,11 +22,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Iterator, Optional, Sequence
 
 from .clipper import Region
 
-__all__ = ["RasterAxis", "region_edges", "spans_at", "span_to_pixels"]
+__all__ = ["RasterAxis", "LayerMask", "region_edges", "spans_at",
+           "span_to_pixels"]
 
 
 Edge = tuple[float, float, float, float]
@@ -118,3 +119,82 @@ def fill_row(spans: Iterable[tuple[float, float]], axis: RasterAxis,
         a0, a1 = span_to_pixels(span, axis)
         if a1 > a0:
             row[a0:a1] = b"\x01" * (a1 - a0)
+
+
+class LayerMask:
+    """One layer's black/white raster at the base pixel resolution.
+
+    This is the picture the equivalence formulas integrate over, kept so a
+    reviewer can *look* at what produced the numbers instead of inferring it
+    from the CSV.  Three tones, one byte each:
+
+    * :attr:`BLACK` (0) -- the copper/drill phase, material 1;
+    * :attr:`WHITE` (255) -- base laminate, material 2, inside the layer's
+      computational domain;
+    * :attr:`OUTSIDE` (160) -- no computational domain here: board-outside or
+      void.  It is *not* a third material; AGENTS constraint 7 forbids counting
+      it as base laminate, and the equivalence never does.
+
+    Rows are stored bottom-up (``row * px + column``, row 0 at the smallest
+    board Y) because that is the order the scanline visits them;
+    :meth:`top_down_rows` flips the picture for the PNG, whose first row is the
+    top of the image.  Rows are filled from scanline spans with slice assignment,
+    so building the mask stays at C speed even for a multi-megapixel board.
+    """
+
+    BLACK = 0
+    WHITE = 255
+    OUTSIDE = 160
+
+    def __init__(self, px: int, py: int) -> None:
+        if px < 1 or py < 1:
+            raise ValueError(f"mask size must be positive, got {px}x{py}")
+        self.px = int(px)
+        self.py = int(py)
+        self.pixels = bytearray([self.OUTSIDE]) * (self.px * self.py)
+
+    def set_spans(self, row: int,
+                  domain_spans: Iterable[tuple[float, float]],
+                  black_spans: Iterable[tuple[float, float]],
+                  axis: RasterAxis) -> None:
+        """Fill one pixel row from the domain and black-phase scanline spans."""
+        if not 0 <= row < self.py:
+            raise IndexError(f"row {row} outside the {self.py}-row mask")
+        base = row * self.px
+        pixels = self.pixels
+        for spans, value in ((domain_spans, self.WHITE), (black_spans, self.BLACK)):
+            fill = bytes([value])
+            for span in spans:
+                a0, a1 = span_to_pixels(span, axis)
+                if a1 > a0:
+                    pixels[base + a0:base + a1] = fill * (a1 - a0)
+
+    def top_down_rows(self, scale: int = 1) -> Iterator[bytes]:
+        """Yield rows for a PNG: top of the board first, pixels replicated.
+
+        *scale* is a nearest-neighbour zoom so a small raster is still viewable;
+        it never interpolates, because the mask is a sampling result.
+        """
+        if scale < 1:
+            raise ValueError(f"mask scale must be positive, got {scale}")
+        px = self.px
+        pixels = self.pixels
+        for row in range(self.py - 1, -1, -1):
+            line = bytes(pixels[row * px:(row + 1) * px])
+            if scale == 1:
+                yield line
+                continue
+            widened = bytearray(px * scale)
+            for offset in range(scale):
+                widened[offset::scale] = line
+            widened_bytes = bytes(widened)
+            for _ in range(scale):
+                yield widened_bytes
+
+    def tone_counts(self) -> dict[str, int]:
+        """Pixel count per tone, for reporting and for tests."""
+        return {
+            "black": self.pixels.count(self.BLACK),
+            "white": self.pixels.count(self.WHITE),
+            "outside": self.pixels.count(self.OUTSIDE),
+        }
