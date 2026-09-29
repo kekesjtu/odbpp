@@ -52,6 +52,10 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
   heatmaps/<layer>.png
 ```
 
+文件名由原层名转成文件系统安全的名称。若多个层名转成同一名称，按层序加
+`-2`、`-3` 等后缀；后缀本身与其他原层名冲突时继续寻找空闲名称，比较时忽略
+大小写。图例页仍显示原层名，并分别链接到正确的掩膜和热图。
+
 `odbpp heatmap <csv>` 是同一套渲染函数的另一种入口，输出 `heatmaps/*.png` 与
 `heatmaps/index.html`；`equivalent` 内部也是**重新读取刚写出的 CSV**再渲染，
 所以图像与交付数据不可能分叉。
@@ -156,8 +160,8 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 | 热图方向 | 铜在上半 → 图像上半为色标高端（与掩膜同向） |
 | 共享色标 | 单层尺度下全铜层居中；共享尺度下全铜层等于高端 |
 | 覆盖 | 另一层覆盖、本层不覆盖的列画成 `n/a` |
-| 文件名 | `A/B` 与 `A:B` 不会互相覆盖 |
-| CLI | `equivalent` 生成 masks/heatmaps/gallery；关图选项不生成；致命轮次不留 PNG/临时文件；`heatmap` 只读 CSV；缺文件退出码 2 |
+| 文件名 | `A/B`、`A:B`、`A_B-2` 与只差大小写的层名均不会互相覆盖；掩膜、热图及图例链接一致 |
+| CLI | `equivalent` 生成 masks/heatmaps/gallery，默认材料警告可在 stderr 看到；关图选项不生成；致命轮次不留 PNG/临时文件；`heatmap` 只读 CSV；缺文件退出码 2 |
 
 ## 7. 已知限制
 

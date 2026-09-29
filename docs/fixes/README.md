@@ -14,3 +14,4 @@
 | [05 物性等效修复](05-material-equivalence-fixes.md) | 本轮边界审阅 | 钻孔拓扑、域覆盖率、材料校验、矩形化致命、来源与公式 |
 | [06 矩形化 slab 丢失修复](06-rectify-slab-loss.md) | 可视化对照复现 | 亚容差狭缝丢 slab、跨缺口合并、`rectify.area_warning`/`slab_ambiguous` |
 | [07 图片长宽比修复](07-picture-aspect.md) | 全案例导出对照 | 掩膜被拉成正方形、热图被竖向拉伸、掩膜回调补上像素间距 |
+| [08 可视化导出审阅修复](08-visualization-output-review.md) | 等效器可视化审阅 | 层名碰撞时保留全部掩膜与热图、默认材料警告在命令行显示 |
