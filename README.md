@@ -1,11 +1,12 @@
 # odbpp
 
-ODB++ v8.1 → 统一的公制多边形模型（JSON）/ 分层矢量预览（SVG）→ PCB 物性等效（MaterialMap）。
+ODB++ v8.1 → 统一的公制多边形模型（JSON）/ 分层矢量预览（SVG）→ PCB 物性等效（MaterialMap），
+并为等效结果输出可直接观看的逐层黑白掩膜 PNG 与 `kx`/`ky`/`kz` 热图 PNG。
 
 当前状态：**五阶段数据流全部可用**。读取目录、`.tgz`/`.tar.gz`、`.zip` 形式的
 ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**的公制多边形，
 输出中间 JSON 与带图层开关、缩放平移的 HTML/SVG 预览；再从 JSON 出发，
-把铜层/介质层等效为逐网格的正交各向异性物性表。
+把铜层/介质层等效为逐网格的正交各向异性物性表，并附上逐层掩膜与热图。
 
 ```
 [ ODB++ 压缩包/目录 ]
@@ -23,7 +24,9 @@ ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**�
 [ 4. PCB 物性等效器 ]  ← 已实现  equivalence_from_document()
         │
         ▼
-[ 5. 等效结果 ]  MaterialMap.csv + MaterialMap.meta.json
+[ 5. 等效结果 ]  MaterialMap.csv + MaterialMap.meta.json   ← 数值唯一依据
+        │
+        └─ 只给人看：masks/<layer>.png、heatmaps/<layer>.png、<step>.images.html
 ```
 
 四个真实样本均已跑通，含 520k 图元 / 43 层的 INCH 刚挠结合板
@@ -90,6 +93,21 @@ uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
 | `--materials FILE` | JSON 材料配置：`global` 与 `layers.<name>` 覆盖（`copper`/`base` 各含 `k_w_mk`/`density_kg_m3`/`specific_heat_j_kgk`） |
 | `--copper-k` / `--copper-density` / `--copper-cp` 与 `--base-*` | 逐相命令行覆盖 |
 | `--no-warn-partial` | 关闭「计算域只覆盖部分网格单元」的默认告警（输出仍带覆盖率列） |
+| `--no-raster-png` / `--raster-scale N` | 逐层黑白掩膜 PNG：默认自动放大到约 700 px 长边，`1` 即 `px × py` |
+| `--no-heatmap` / `--heatmap-panel-width PX` / `--heatmap-shared-scale` | 逐层 `kx`/`ky`/`kz` 三面板热图；面板宽默认 720 px；共享色标便于层间比较 |
+| `--no-gallery` | 不写 `<step>.images.html` 图例页 |
+
+可视化产物只依赖 CSV，可以事后单独重画（不需要 ODB++ 输入，也不重算等效）：
+
+```bash
+uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
+    -o build/ks-eq/heatmaps --shared-scale --layer B.CU
+```
+
+掩膜三色语义：黑 = 铜/钻孔投影（材料 1），白 = 计算域内的基底（材料 2），
+灰 = 该层在这里**没有计算域**（不是 FR4）。热图三面板共用一条色标，
+浅灰 `n/a` 表示该层在此单元没有值。命令、色标、内存与失败处理详见
+[可视化文档](docs/equivalence/02-visualization.md)。
 
 输出 `*.MaterialMap.csv`（逐层逐单元 `kx/ky/kz/density/specific_heat`，并带
 `cell_area_mm2`/`domain_area_mm2`/`domain_coverage` 明确计算域覆盖率）与同名
@@ -165,8 +183,10 @@ for layer in step.layers:
 | **`svg.py`** | **渲染（数据流 3）**：SVG 与自包含 HTML 查看器 |
 | **`rectify.py`** | **矩形化**：step profile → 轴对齐阶梯 region，记录面积/形状误差并逐岛逐孔校验 |
 | **`grid.py`** | **整板网格**：region 边界强制格线，最大余数法按像素储备分配 `nx`/`ny` |
-| **`raster.py`** | **光栅化**：region 边界扫描线 + even-odd 像素中心判定 |
+| **`raster.py`** | **光栅化**：region 边界扫描线 + even-odd 像素中心判定；`LayerMask` 同时供等效与掩膜 PNG 使用 |
 | **`materials.py`** | **两相材料**：铜/基底默认值（带来源）、逐层 > 全局 > 默认的优先级与警告 |
+| **`png.py`** | **图像编码**：零依赖的 8 位灰度/RGB PNG 写入器 + RGB 画布 + 5×7 点阵字体 |
+| **`visualize.py`** | **等效结果可视化**：掩膜 PNG、`kx`/`ky`/`kz` 热图、图例页，并从已写出的 CSV 读取 |
 | **`equiv.py`** | **物性等效（数据流 4-5）**：逐层光栅 + 钻孔覆盖 + 串并联公式，流式输出 CSV 与 meta |
 | `cli.py` | `python -m odbpp` 子命令 |
 
@@ -210,6 +230,8 @@ for layer in step.layers:
     `grid.forced_lines_overflow`，绝不悄悄加格；每个单元必须完整落在一个 region 内。
 17. **单元必有采样。** 网格单元内无像素中心时报 `grid.cell_without_pixel`
     （致命），不静默取 0 或最近像素。
+18. **图不是数据。** 掩膜/热图 PNG 只是已写出 CSV 的另一种看法，从 CSV 重新读取渲染；
+    板外不画成 FR4（灰 = 无计算域），`n/a` 不画成低热导率，也不拿显示效果判断收敛。
 
 ## 目录
 

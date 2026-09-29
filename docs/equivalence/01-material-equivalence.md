@@ -14,7 +14,9 @@ AGENTS「总体数据流结构」的第 4、5 段。输入是解析器写出的�
         │  · 逐层黑白光栅           (raster.py)
         │  · 两材料 k / ρ / cp      (materials.py)
         ▼
-[ 5. MaterialMap.csv + meta.json ]
+[ 5. MaterialMap.csv + meta.json ]  ← 数值唯一依据
+        │                              (equiv.write_materialmap)
+        └─ 另出只给人看的图：masks/<layer>.png、heatmaps/<layer>.png (visualize.py)
 ```
 
 第一版只对**铜层**与**介质层**做等效。钻孔是跨层图案，不作为独立厚度层；
@@ -51,7 +53,12 @@ step profile 被分解成一串**轴对齐、内部互不重叠**的矩形 regio
 - **斜边离散**：横截面在条带内变化的条带（斜边、圆弧）按 `tolerance_mm` 细分成阶梯。
   顶点 x 坐标先吸附到 tolerance 网格（整数 key），因此每个子条带宽度恰为
   `tolerance` 的整数倍，最窄不小于一个 tolerance。这一步避免了「按固定步数均分导致
-  某些子条带窄于 tolerance、网格被迫过密」的问题。
+  某些子条带窄于 tolerance、网格被迫过密」的问题。本步最后一格的右边界直接取吸附
+  边界本身，不用 `起点 + 步长` 累加，避免浮点尾巴留下零宽子条带。
+- **交点先配对、后吸附**：一条扫描线的交点序列必须先按奇偶配对成「实体/空隙」，
+  再把每个端点吸附到容差网格，最后才合并被吸附到一起的相邻区间。顺序反过来时，
+  比 tolerance 还窄的空隙会把两个交点并成一个键，键数变奇数，**整条竖直条带被丢弃**；
+  相邻条带还会被跨缺口合并，把没测量到的轮廓当成实体。
 - **孔洞**：even-odd 区间配对，孔洞天然不产生矩形；孔洞被阶梯完全填平时单独报
   `rectify.hole_filled`。
 - **精度误差**：分别记录 `lost_area`（岛丢失）与 `gained_area`（孔被填），
@@ -68,6 +75,12 @@ perimeter × tolerance)`。前两项是用户可配的绝对/相对下限，第�
 上界——边界每点最多移动约一个 tolerance，故对称差不超过 `周长 × tolerance`。
 超过它才说明**确实丢了特征**（而不是「阶梯近似」），此时报 `rectify.area_error`。
 `max_absolute_area_error_mm2` 默认 0.5 mm²，`max_relative_area_error` 默认 0.01。
+
+周长上界在大板 + 粗容差下可能远宽于配置的相对上限，于是「移动了 2% 板面」也能通过。
+结果仍在周长上界内、但已超过配置上限时记 `rectify.area_warning`（warning 级，仍接受、
+仍写结果），使粗光栅下的轮廓损失至少可被看见——真实 case 的实测值见 §9.2/§9.3。
+若某条带仍无法判读（奇数交点，只可能来自自交/退化输入），记
+`rectify.slab_ambiguous`（error 级）并置 `ok=false`，绝不静默跳过。
 
 ## 3. 网格（`grid.py`）
 
@@ -189,6 +202,14 @@ CSV 无法表达或不宜逐行重复的信息：
 
 `materialmap-1` 的布局不接受此版本的覆盖率列；读取方必须按 schema 判断。
 
+### 7.3 图像产物（不参与数值）
+
+默认还会在 `<out>/` 下写：`masks/<layer>.png`（逐层黑白光栅）、
+`heatmaps/<layer>.png`（逐层 `kx|ky|kz` 三面板热图）、
+`<step>.images.html`（图例页：层名/类型/绝对 Z/k 范围/单元数）。
+它们只是同一张 CSV 的另一种看法，可以用 `--no-raster-png`/`--no-heatmap`/
+`--no-gallery` 关掉；语义、色标与失败处理见 [`02-visualization.md`](02-visualization.md)。
+
 ## 8. 诊断 code
 
 | code | 含义 |
@@ -198,6 +219,8 @@ CSV 无法表达或不宜逐行重复的信息：
 | `rectify.area_error` | 形状偏差超过精度允许的上界 |
 | `rectify.island_lost` | 某岛窄于 tolerance，被丢弃 |
 | `rectify.hole_filled` | 某孔窄于 tolerance，被填平 |
+| `rectify.area_warning` | 轮廓移动超过配置上限、但仍在周长上界内（仍接受） |
+| `rectify.slab_ambiguous` | 某条带交点为奇数，无法判读，已跳过（置 `ok=false`） |
 | `grid.forced_lines_overflow` | 强制边界数超过用户指定格数 |
 | `grid.no_board_cells` | 网格内没有板内单元 |
 | `grid.cell_without_pixel` | 网格单元内无像素中心（致命） |
@@ -214,6 +237,7 @@ CSV 无法表达或不宜逐行重复的信息：
 | `equiv.dielectric_features_ignored` | 介质层上非钻孔特征被忽略 |
 | `materials.default_used` | 某相/某物性字段使用了项目默认材料 |
 | `materials.invalid` | 材料字段非法（非有限正数/非数字），已退回默认值 |
+| `visualize.failed` | 掩膜/热图渲染失败（警告，CSV 与 meta 仍已写出） |
 
 退出码：`0` 无 error 级诊断；`1` 有 error 级诊断但结果已写出；`2` 致命
 （如无像素单元、钻孔跨度未知、**矩形化 `ok=false`**），**不写结果**。
@@ -256,27 +280,47 @@ CSV 无法表达或不宜逐行重复的信息：
 - **`designodb-rigidflex.tgz`（刚挠结合，43 层，23 个层级 profile）**：
   - step profile 跨整个「刚性 + 柔性」外形（x ∈ [-85.2, 78.15] mm），
     而刚性层各自的层级 profile 只覆盖 x ≥ -4.25 mm；
-  - 实测刚层单元数 73563、柔层（`FLEX_5`/`POLYIMIDE_BASE_11`/`FLEX_6`）89764，
-    柔层单元 x 起点到 -85.00 mm，刚层只到 -4.00 mm——**逐层计算域生效**；
+  - `--px 400 --py 400` 实测刚层单元数 74340、柔层
+    （`FLEX_5`/`POLYIMIDE_BASE_11`/`FLEX_6`）90541，柔层单元 x 起点到 -84.94 mm、
+    刚层只到 -4.08 mm——**逐层计算域生效**；
   - 每层绝对 Z 取自层叠，柔层与刚层 Z 不同，随 JSON 正确传递；
   - 默认材料警告 `materials.default_used` 出现 2 次（铜、基底各一）；
-  - 自动 tolerance = 0.8168 mm（= 2×像素间距），矩形化 `ok=true`，
-    强制网格线 51×40，无 `cell_without_pixel`。
+  - 自动 tolerance = 0.8168 mm（= 2×像素间距），矩形化 `ok=true`
+    （`lost` 47.71 mm²、`gained` 37.20 mm²）、强制网格线 51×40、
+    91508 个板内单元、19 个等效层各 74340 或 90541 单元，
+    无 `cell_without_pixel`、无 error 级诊断；
+  - 同一次运行出现 1 条 `rectify.area_warning`（相对误差 2.09%，仍在周长上界内）。
 
 ### 9.3 光栅分辨率收敛（`kicad-kitchen-sink`，逐层均值）
 
-| px=py | 单元数 | 耗时 | tol (mm) | B.CU kx | B.CU kz | DIELECTRIC_1 kx | F.CU kx |
+| px=py | 单元数/层 | 耗时 | tol (mm) | B.CU kx | B.CU kz | DIELECTRIC_1 kx | F.CU kx |
 |---|---|---|---|---|---|---|---|
-| 100 | 5912 | 0.1 s | 4.46 | 71.82 | 73.83 | 0.495 | 0.625 |
-| 200 | 23190 | 0.4 s | 2.23 | 72.48 | 73.71 | 0.466 | 0.665 |
-| 400 | 95913 | 1.4 s | 1.12 | 75.05 | 75.49 | 0.412 | 0.673 |
-| 800 | 399457 | 7.4 s | 0.56 | 75.06 | 75.24 | 0.415 | 0.714 |
+| 100 | 5989 | 0.1 s | 4.46 | 73.79 | 75.78 | 0.493 | 0.621 |
+| 200 | 23756 | 0.4 s | 2.23 | 73.45 | 74.68 | 0.462 | 0.656 |
+| 400 | 97000 | 1.7 s | 1.12 | 74.63 | 75.11 | 0.411 | 0.669 |
+| 800 | 399457 | 9.5 s | 0.56 | 75.06 | 75.24 | 0.415 | 0.714 |
 
-- 铜密集层 `B.CU`：400→800 时 `Δkx=0.012`（0.02%）、`Δkz=0.25`（0.3%），已收敛。
-- 介质层 `DIELECTRIC_1`：400→800 时 `Δkx=0.002`（0.5%），已收敛。
-- 稀疏铜层 `F.CU`：400→800 时 `Δkx=0.041`（6%）仍在变，因为其铜迹线宽度接近像素尺度，
+（耗时为本机库调用（`equivalence_from_document`，**不含** CSV 写出，因为 800 档的
+CSV 接近 1 GB）的墙钟时间；`px ≤ 200` 时网格单元内像素不足，CLI 视为致命
+`grid.cell_without_pixel` 并拒绝写结果，表中数值取自同一库路径。）
+
+轮廓误差随分辨率的收敛（同一 case，`lost`/`gained`/相对误差/告警）：
+
+| px=py | lost (mm²) | gained (mm²) | 相对误差 | 诊断 |
+|---|---|---|---|---|
+| 100 | 378.3 | 348.3 | 3.55 % | `rectify.area_warning` |
+| 200 | 203.0 | 212.7 | 2.03 % | `rectify.area_warning` |
+| 400 | 106.8 | 106.6 | 1.04 % | `rectify.area_warning` |
+| 800 | 49.1 | 54.2 | 0.50 % | 无 |
+
+- 铜密集层 `B.CU`：400→800 时 `Δkx=0.44`（0.6%）、`Δkz=0.13`（0.2%），已收敛。
+- 介质层 `DIELECTRIC_1`：400→800 时 `Δkx=0.004`（1.0%），已收敛。
+- 稀疏铜层 `F.CU`：400→800 时 `Δkx=0.045`（6.7%）仍在变，因为其铜迹线宽度接近像素尺度，
   属于**细特征**的预期慢收敛。结论与 AGENTS 验证要求一致：细走线/小孔需要更高
   `px/py`，**不能**只看 SVG 显示效果判断等效值正确。
+- 轮廓误差则随容差按阶梯规律下降（lost/gained 在 400 档起已对称，说明丢的是阶梯本身
+  而不是特征）；`px=400` 恰好在 1% 边上，`px=800` 才回到配置上限以内。
+  这正是 §2 新增 `rectify.area_warning` 想让人看到的东西。
 
 ## 10. 已知近似与限制
 
@@ -293,6 +337,10 @@ CSV 无法表达或不宜逐行重复的信息：
    `assumed_density_g_cm3`。
 6. **第一版范围**：SOLDERMASK / SOLDER PASTE / 丝印 / 导电胶 / 屏蔽等其他材料层
    暂不套用铜/FR4 模型，逐层给出跳过原因。
+
+可视化产物（掩膜 PNG、热图 PNG 与图例页）的语义、布局、内存与失败处理见
+[`02-visualization.md`](02-visualization.md)；本轮由可视化暴露并修掉的矩形化 slab
+丢失问题见 [`../fixes/06-rectify-slab-loss.md`](../fixes/06-rectify-slab-loss.md)。
 
 ## 11. 复现
 
@@ -318,3 +366,13 @@ uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
 （JSON：`global` 与 `layers.<name>` 覆盖）、逐相覆盖
 `--copper-k/--copper-density/--copper-cp` 与 `--base-*`、`--warn-partial`、
 `--digits`。
+
+可视化相关选项（详见 [`02-visualization.md`](02-visualization.md)）：
+`--no-raster-png`、`--raster-scale N`（0=自动约 700 px 长边）、`--no-heatmap`、
+`--heatmap-panel-width PX`、`--heatmap-shared-scale`、`--no-gallery`；
+已经写出 CSV 后要单独重画热图：
+
+```bash
+uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
+    -o build/ks-eq/heatmaps --shared-scale
+```
