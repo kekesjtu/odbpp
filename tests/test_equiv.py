@@ -191,6 +191,59 @@ class TestPixelSampling:
         assert "grid.cell_without_pixel" in diagnostics.codes()
 
 
+class TestPartialDomain:
+    def test_a_partial_cell_reports_coverage_instead_of_a_full_cell(self):
+        # The shared grid cell is the whole 10x10 board, but the layer's own
+        # computational domain covers only the left half.  The CSV must not
+        # imply the cell is solid FR4 over its full area.
+        domains = [
+            {"id": "step_profile", "source": "step_profile", "layer": None,
+             "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "half", "source": "layer_profile", "layer": "CU",
+             "polygons": [rect(0, 0, 5, 10)]},
+        ]
+        document = build_document(domains=domains, layers=[
+            {"name": "CU", "type": "SIGNAL", "domain_id": "half",
+             "polygons": []}])
+        diagnostics = Diagnostics()
+        result = run(document, px=10, py=10, nx=1, ny=1,
+                     diagnostics=diagnostics, warn_partial=True)
+        cell = result.cells[0]
+        assert cell.x0 == 0.0 and cell.x1 == pytest.approx(10.0)
+        assert cell.cell_area_mm2 == pytest.approx(100.0)
+        assert cell.domain_coverage == pytest.approx(0.5)
+        assert cell.domain_area_mm2 == pytest.approx(50.0)
+        assert cell.partial_domain is True
+        assert "equiv.partial_domain" in diagnostics.codes()
+
+    def test_partial_coverage_is_warned_by_default(self):
+        domains = [
+            {"id": "step_profile", "source": "step_profile", "layer": None,
+             "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "half", "source": "layer_profile", "layer": "CU",
+             "polygons": [rect(0, 0, 5, 10)]},
+        ]
+        document = build_document(domains=domains, layers=[
+            {"name": "CU", "type": "SIGNAL", "domain_id": "half",
+             "polygons": []}])
+        diagnostics = Diagnostics()
+        options = EquivalenceOptions(
+            grid=GridOptions(px=10, py=10, nx=1, ny=1),
+            materials=MaterialBook(diagnostics=diagnostics),
+            rectify=RectifyOptions(tolerance_mm=0.01),
+        )
+        assert options.warn_partial_domains is True
+        equivalence_from_document(document, options, diagnostics=diagnostics)
+        assert "equiv.partial_domain" in diagnostics.codes()
+
+    def test_a_fully_covered_cell_has_unit_coverage(self):
+        result = run(only_layer(polygons=[rect(0, 0, 10, 10)]), nx=1, ny=1)
+        cell = result.cells[0]
+        assert cell.domain_coverage == pytest.approx(1.0)
+        assert cell.partial_domain is False
+        assert cell.domain_area_mm2 == pytest.approx(cell.cell_area_mm2)
+
+
 # ---------------------------------------------------------------------------
 # drills
 # ---------------------------------------------------------------------------
@@ -246,6 +299,49 @@ class TestDrillProjection:
         result = run(document, diagnostics=diagnostics)
         assert result.fatal
         assert "equiv.drill_span_unknown" in diagnostics.codes()
+
+    def test_a_drill_spanning_two_planes_does_not_overlay_a_third(self):
+        # Three copper layers with no stated thickness: every best-effort Z is
+        # zero, so absolute-Z matching would project a C1-C2 drill into C3.  The
+        # authored copper-plane span must win, and the disagreement must be
+        # reported rather than silently producing a wrong layer.
+        layers = []
+        stackup = []
+        for index, name in enumerate(("C1", "C2", "C3")):
+            extent = {"start_mm": 0.0, "end_mm": 0.0,
+                      "thickness_known": False}
+            layers.append({"name": name, "type": "SIGNAL",
+                           "polygons": [],
+                           "copper_index": index, "z_span": None,
+                           "domain_id": "step_profile", "z_mm": extent})
+            stackup.append({"name": name, "type": "SIGNAL",
+                            "copper_index": index, "z_span": None,
+                            "z_mm": extent})
+        layers.append({"name": "D_1_2", "type": "DRILL",
+                       "polygons": [rect(4, 4, 6, 6)], "copper_index": None,
+                       "z_span": {"from_layer": "C1", "to_layer": "C2",
+                                  "copper_index": [0, 1]},
+                       "z_mm": {"start_mm": 0.0, "end_mm": 0.0,
+                                "thickness_known": True}})
+        stackup.append({"name": "D_1_2", "type": "DRILL",
+                        "copper_index": None,
+                        "z_span": {"from_layer": "C1", "to_layer": "C2",
+                                   "copper_index": [0, 1]},
+                        "z_mm": {"start_mm": 0.0, "end_mm": 0.0,
+                                 "thickness_known": True}})
+        document = build_document(layers=[])
+        document["steps"][0]["layers"] = layers
+        document["steps"][0]["stackup"] = stackup
+        diagnostics = Diagnostics()
+        result = run(document, diagnostics=diagnostics)
+        assert not result.fatal
+        by_layer = {}
+        for cell in result.cells:
+            by_layer.setdefault(cell.layer_name, []).append(cell)
+        assert any(c.copper_fraction > 0 for c in by_layer["C1"])
+        assert any(c.copper_fraction > 0 for c in by_layer["C2"])
+        assert all(c.copper_fraction == 0.0 for c in by_layer["C3"])
+        assert "equiv.drill_z_mismatch" in diagnostics.codes()
 
 
 # ---------------------------------------------------------------------------
@@ -334,8 +430,16 @@ class TestMaterials:
         assert pair.k1 == 400.0
         assert pair.k2 == pytest.approx(DEFAULT_BASE.k_w_mk)
         assert pair.provenance["copper"]["origin"] == "user_global"
-        # Only the base phase still falls back.
-        assert [d.code for d in diagnostics.items] == ["materials.default_used"]
+        # Copper's k is the user's, but its density and cp still fall back, so
+        # both phases raise the per-field default warning.
+        warnings = [d for d in diagnostics.items
+                    if d.code == "materials.default_used"]
+        assert len(warnings) == 2
+        assert "density_kg_m3" in warnings[0].message
+        assert "k_w_mk" not in warnings[0].message
+        copper_fields = pair.provenance["copper"]["fields"]
+        assert copper_fields["k_w_mk"]["origin"] == "user_global"
+        assert copper_fields["density_kg_m3"]["origin"] == "project_default"
 
     def test_a_layer_override_wins_over_a_global_override(self):
         book = MaterialBook({
@@ -358,6 +462,44 @@ class TestMaterials:
         result = run(document, materials=MaterialBook(
             {"global": {"copper": {"k_w_mk": 200.0}}}, diagnostics=diagnostics))
         assert all(c.kx == pytest.approx(200.0) for c in result.cells)
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"),
+                                     float("-inf"), 0.0, -1.0])
+    def test_a_non_finite_or_non_positive_override_is_rejected(self, bad):
+        diagnostics = Diagnostics()
+        book = MaterialBook({"global": {"copper": {"k_w_mk": bad}}},
+                            diagnostics=diagnostics)
+        assert "materials.invalid" in diagnostics.codes()
+        value = book.resolve("L1").k1
+        assert math.isfinite(value) and value > 0.0
+
+    def test_a_non_finite_material_never_reaches_the_output(self):
+        diagnostics = Diagnostics()
+        document = only_layer(polygons=[rect(0, 0, 10, 10)])
+        result = run(document, materials=MaterialBook(
+            {"global": {"copper": {"k_w_mk": float("nan"),
+                                     "density_kg_m3": float("inf")}}},
+            diagnostics=diagnostics))
+        assert result.cells and not result.fatal
+        for cell in result.cells:
+            for value in (cell.kx, cell.ky, cell.kz, cell.density,
+                          cell.specific_heat):
+                assert math.isfinite(value) and value > 0.0
+        assert "materials.invalid" in diagnostics.codes()
+
+    def test_provenance_is_recorded_per_field(self):
+        book = MaterialBook({
+            "global": {"copper": {"k_w_mk": 900.0}},
+            "layers": {"L1": {"base": {"density_kg_m3": 1900.0}}},
+        })
+        pair = book.resolve("L1")
+        copper = pair.provenance["copper"]["fields"]
+        assert copper["k_w_mk"]["origin"] == "user_global"
+        assert copper["k_w_mk"]["value"] == 900.0
+        assert copper["density_kg_m3"]["origin"] == "project_default"
+        base = pair.provenance["base"]["fields"]
+        assert base["density_kg_m3"]["origin"] == "layer_override"
+        assert base["k_w_mk"]["origin"] == "project_default"
 
 
 class TestAutoTolerance:
@@ -396,12 +538,16 @@ class TestOutput:
         assert len(csv_path.read_text(encoding="utf-8").splitlines()) == \
             1 + len(result.cells)
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        assert meta["schema"] == "odbpp/materialmap-1"
+        assert meta["schema"] == "odbpp/materialmap-2"
         assert meta["units"]["thermal_conductivity"] == "W/(m*K)"
         assert meta["drill_model"] == "solid_copper"
         assert meta["z_axis"].startswith("increases downward")
         assert "rectification" in meta and "materials" in meta
         assert meta["materials"]["by_layer"]
+        # A reader must be told what a partially covered cell means.
+        assert meta["coverage"]["columns"] == [
+            "cell_area_mm2", "domain_area_mm2", "domain_coverage"]
+        assert "not FR4" in meta["coverage"]["semantics"]
 
     def test_metadata_records_z_trust_and_thickness_source(self, tmp_path):
         document = build_document(layers=[
@@ -420,6 +566,22 @@ class TestOutput:
         meta = result.metadata()
         assert meta["rectification"]["ok"] is True
         assert "shape_deviation_mm2" in meta["rectification"]
+
+    def test_a_rectification_that_fills_a_hole_is_fatal(self):
+        # A 0.2 mm slot cannot survive a 5 mm tolerance; filling it changes the
+        # board shape, so the run must be marked untrustworthy, not written.
+        domains = [{
+            "id": "step_profile", "source": "step_profile", "layer": None,
+            "polygons": [rect(0, 0, 10, 10), hole(4.9, 0, 5.1, 10)],
+        }]
+        document = build_document(domains=domains, layers=[
+            {"name": "CU", "type": "SIGNAL", "polygons": []}])
+        diagnostics = Diagnostics()
+        result = run(document, px=20, py=20, tolerance=5.0,
+                     diagnostics=diagnostics)
+        assert result.rectification.ok is False
+        assert result.fatal is True
+        assert diagnostics.errors
 
 
 # ---------------------------------------------------------------------------
@@ -489,6 +651,25 @@ class TestCommandLine:
                      "-o", str(tmp_path)])
         assert code == 2
         assert not list(tmp_path.glob("*.csv"))
+
+    def test_a_rectification_failure_writes_no_csv(self, tmp_path):
+        from odbpp.cli import main
+
+        domains = [{
+            "id": "step_profile", "source": "step_profile", "layer": None,
+            "polygons": [rect(0, 0, 10, 10), hole(4.9, 0, 5.1, 10)],
+        }]
+        document = build_document(domains=domains, layers=[
+            {"name": "CU", "type": "SIGNAL", "polygons": []}])
+        preview = tmp_path / "board.json"
+        preview.write_text(json.dumps(document), encoding="utf-8")
+        out = tmp_path / "eq"
+        code = main(["equivalent", "--from-json", str(preview),
+                     "--px", "20", "--py", "20",
+                     "--rectify-tolerance", "5.0", "-o", str(out)])
+        assert code == 2
+        assert not list(out.glob("*.csv"))
+        assert not list(out.glob("*.tmp"))
 
     def test_px_py_are_required(self):
         from odbpp.cli import build_parser

@@ -42,6 +42,8 @@ from .clipper import Region, Ring, difference, intersection, union
 from .diagnostics import (
     EQUIV_DIELECTRIC_FEATURES,
     EQUIV_DRILL_SPAN_UNKNOWN,
+    EQUIV_DRILL_Z_FALLBACK,
+    EQUIV_DRILL_Z_MISMATCH,
     EQUIV_LAYER_EMPTY,
     EQUIV_LAYER_FAILED,
     EQUIV_LAYER_SKIPPED,
@@ -71,7 +73,9 @@ __all__ = [
 ]
 
 #: Schema of the sidecar metadata document.  Bumped when its layout changes.
-METADATA_SCHEMA = "odbpp/materialmap-1"
+#: ``materialmap-2`` adds the per-cell domain coverage columns and states their
+#: downstream meaning; a reader must not assume a ``materialmap-1`` layout.
+METADATA_SCHEMA = "odbpp/materialmap-2"
 
 #: The written CSV columns.  Deliberately self-describing: every quantity carries
 #: its unit in the header, because the file is meant to be readable without the
@@ -100,6 +104,9 @@ CSV_COLUMNS = [
     "pixel_rows",
     "pixel_cols",
     "pixel_count",
+    "cell_area_mm2",
+    "domain_area_mm2",
+    "domain_coverage",
     "partial_domain",
 ]
 
@@ -133,8 +140,9 @@ class EquivalenceOptions:
     grid: GridOptions
     materials: MaterialBook = field(default_factory=MaterialBook)
     rectify: RectifyOptions = field(default_factory=RectifyOptions)
-    #: Emit a warning for every partially covered cell (can be numerous).
-    warn_partial_domains: bool = False
+    #: Emit a warning for partially covered cells (on by default; a run that
+    #: silently drops board-outside area is worse than one noisy line).
+    warn_partial_domains: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +168,9 @@ class EquivalentCell:
     pixel_rows: int
     pixel_cols: int
     pixel_count: int
+    cell_area_mm2: float
+    domain_area_mm2: float
+    domain_coverage: float
     partial_domain: bool
 
     def csv_row(self) -> list:
@@ -171,7 +182,8 @@ class EquivalentCell:
             _r(self.copper_fraction, 6), _r(self.kx, 6), _r(self.ky, 6),
             _r(self.kz, 6), _r(self.density, 4), _r(self.specific_heat, 4),
             self.pixel_rows, self.pixel_cols, self.pixel_count,
-            int(self.partial_domain),
+            _r(self.cell_area_mm2, 6), _r(self.domain_area_mm2, 6),
+            _r(self.domain_coverage, 6), int(self.partial_domain),
         ]
 
     def as_dict(self) -> dict:
@@ -259,6 +271,17 @@ class EquivalenceResult:
             },
             "z_axis": "increases downward from the top of the stack, mm",
             "drill_model": "solid_copper",
+            "coverage": {
+                "columns": ["cell_area_mm2", "domain_area_mm2",
+                            "domain_coverage"],
+                "semantics": "cell_x0/y0/x1/y1 is the shared board-grid cell; "
+                             "the reported kx/ky/kz/density/specific_heat apply to "
+                             "the fraction domain_coverage of that cell which the "
+                             "layer's computational domain covers. The uncovered "
+                             "remainder is board-outside/void, not FR4: scale "
+                             "cell mass and heat capacity by domain_coverage and "
+                             "do not add a material there",
+            },
             "raster": {
                 "px": self.raster_px,
                 "py": self.raster_py,
@@ -349,6 +372,22 @@ class _Drill:
     z_start_mm: float
     z_end_mm: float
     region: Region
+    #: Half-open copper-plane interval ``(start, end)`` when the document
+    #: resolved ``START_NAME``/``END_NAME``; ``None`` when it did not, in which
+    #: case only absolute Z can be used (and only safely with a known thickness).
+    copper_span: Optional[tuple[int, int]] = None
+
+
+def _copper_span(row: Mapping[str, Any]) -> Optional[tuple[int, int]]:
+    """Read ``z_span.copper_index`` from a stackup row, if it is well formed."""
+    span = row.get("z_span")
+    index = span.get("copper_index") if isinstance(span, Mapping) else None
+    if isinstance(index, (list, tuple)) and len(index) == 2:
+        try:
+            return (int(index[0]), int(index[1]))
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _collect_drills(step: Mapping[str, Any],
@@ -384,8 +423,37 @@ def _collect_drills(step: Mapping[str, Any],
         drills.append(_Drill(name=name,
                              z_start_mm=float(extent["start_mm"]),
                              z_end_mm=float(extent["end_mm"]),
-                             region=_region_from_polygons(layer.get("polygons"))))
+                             region=_region_from_polygons(layer.get("polygons")),
+                             copper_span=_copper_span(row)))
     return drills, fatal
+
+
+def _topological_overlap(layer_type: str, layer_doc: Mapping[str, Any],
+                         drill: _Drill) -> Optional[bool]:
+    """Decide drill/layer overlap from copper-plane indices, or ``None``.
+
+    Absolute Z is a derived quantity: when a stack layer has no stated
+    thickness, several layers can share a best-effort ``start_mm == end_mm``,
+    and matching by Z would then mark a layer the drill never reaches.  The
+    copper-plane index is the topology the format authored, so it wins whenever
+    both sides expose one.  A copper layer is a plane, so it is covered
+    inclusively; a dielectric occupies the half-open interval between two planes.
+    """
+    span = drill.copper_span
+    if span is None:
+        return None
+    start, end = span
+    if layer_type in COPPER_TYPES:
+        index = layer_doc.get("copper_index")
+        if index is None:
+            return None
+        return start <= int(index) <= end
+    layer_span = layer_doc.get("z_span")
+    index = (layer_span.get("copper_index")
+             if isinstance(layer_span, Mapping) else None)
+    if not isinstance(index, (list, tuple)) or len(index) != 2:
+        return None
+    return max(int(index[0]), start) < min(int(index[1]), end)
 
 
 # ---------------------------------------------------------------------------
@@ -471,7 +539,7 @@ def _evaluate_layer(
     emitted = 0
     partial_cells = 0
     no_pixel = 0
-    warned_partial = False
+    min_coverage = 1.0
 
     for band in sorted(grid.cells_by_band):
         band_cells = grid.cells_by_band[band]
@@ -571,18 +639,14 @@ def _evaluate_layer(
             kz = phi * k1 + (1.0 - phi) * k2
             density = phi * d1 + (1.0 - phi) * d2
             specific_heat = (phi * d1 * c1 + (1.0 - phi) * d2 * c2) / density
-            full = (a1 - a0) * (b1 - b0)
-            partial = stat[1] < full
+            full = float((a1 - a0) * (b1 - b0))
+            cell_area = (cell.rect.x1 - cell.rect.x0) * (cell.rect.y1 - cell.rect.y0)
+            coverage = (stat[1] / full) if full else 0.0
+            coverage = min(1.0, max(0.0, coverage))
+            partial = coverage < 1.0 - 1e-9
             if partial:
                 partial_cells += 1
-                if warn_partial and not warned_partial:
-                    warned_partial = True
-                    diagnostics.warn(
-                        EQUIV_PARTIAL_DOMAIN,
-                        f"layer {name!r}: at least one grid cell is only "
-                        f"partially covered by the layer's computational domain; "
-                        f"only in-domain pixel centres were used",
-                    )
+                min_coverage = min(min_coverage, coverage)
             emit(EquivalentCell(
                 layer_name=name, layer_type=type_name, region_id=cell.region_id,
                 i=cell.i, j=cell.j,
@@ -593,9 +657,22 @@ def _evaluate_layer(
                 copper_fraction=phi, kx=kx, ky=ky, kz=kz,
                 density=density, specific_heat=specific_heat,
                 pixel_rows=rows, pixel_cols=columns,
-                pixel_count=int(stat[1]), partial_domain=partial,
+                pixel_count=int(stat[1]), cell_area_mm2=cell_area,
+                domain_area_mm2=coverage * cell_area,
+                domain_coverage=coverage, partial_domain=partial,
             ))
             emitted += 1
+
+    if partial_cells and warn_partial:
+        diagnostics.warn(
+            EQUIV_PARTIAL_DOMAIN,
+            f"layer {name!r}: {partial_cells} of {emitted} cell(s) are only "
+            f"partially covered by the layer's computational domain (minimum "
+            f"coverage {min_coverage:.4f}); only in-domain pixel centres were "
+            f"used, the cell rectangle is the shared grid cell, and the reported "
+            f"properties apply to the covered fraction only (see "
+            f"domain_coverage)",
+        )
 
     return emitted, partial_cells, no_pixel
 
@@ -683,7 +760,11 @@ def equivalence_from_document(
             diagnostics=diags, fatal=True)
 
     # --- layers -------------------------------------------------------------
-    drills, fatal = _collect_drills(step, diags)
+    drills, drill_fatal = _collect_drills(step, diags)
+    # A rectangularisation that lost an island or filled a hole produced a board
+    # outline that is not the outline being equivalented; the run must not write
+    # a plausible-looking CSV from it.
+    fatal = drill_fatal or not rectification.ok
     reports: list[LayerReport] = []
     cells: list[EquivalentCell] = []
     emit = cells.append if cell_sink is None else cell_sink
@@ -772,8 +853,40 @@ def equivalence_from_document(
         # dielectric it starts empty.  Drills are then unioned in for both.
         pattern = (_region_from_polygons(layer.get("polygons"))
                    if type_name in COPPER_TYPES else Region())
-        covering = [d for d in drills
-                    if _overlaps(z_start, z_end, d.z_start_mm, d.z_end_mm)]
+        # Match drills by copper-plane topology first.  When a layer has no
+        # stated thickness several layers can share a best-effort Z, and a
+        # Z-only match would project the drill into a layer it never reaches.
+        # Absolute Z is only a fallback for documents without a span, and it is
+        # safe only when the thickness is known.
+        covering: list[_Drill] = []
+        z_fallback = False
+        z_mismatch = False
+        for drill in drills:
+            topological = _topological_overlap(type_name, layer, drill)
+            by_z = _overlaps(z_start, z_end, drill.z_start_mm, drill.z_end_mm)
+            if topological is None:
+                matched = by_z
+                z_fallback = True
+            else:
+                matched = topological
+                if not thickness_known and topological != by_z:
+                    z_mismatch = True
+            if matched:
+                covering.append(drill)
+        if z_fallback and not thickness_known:
+            diags.warn(
+                EQUIV_DRILL_Z_FALLBACK,
+                f"layer {name!r}: its thickness is unknown and at least one "
+                f"drill has no copper-plane span, so drill coverage was decided "
+                f"by best-effort absolute Z and may be wrong",
+            )
+        if z_mismatch:
+            diags.warn(
+                EQUIV_DRILL_Z_MISMATCH,
+                f"layer {name!r}: a drill's copper-plane span and its "
+                f"best-effort absolute Z disagree because the layer thickness "
+                f"is unknown; the topological span was used",
+            )
         report.drill_overlays = [d.name for d in covering]
         black = pattern
         if covering:

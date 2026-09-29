@@ -89,10 +89,12 @@ uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
 | `--max-area-error-ratio` / `--max-area-error-mm2` | 矩形化误差判据的额外下限 |
 | `--materials FILE` | JSON 材料配置：`global` 与 `layers.<name>` 覆盖（`copper`/`base` 各含 `k_w_mk`/`density_kg_m3`/`specific_heat_j_kgk`） |
 | `--copper-k` / `--copper-density` / `--copper-cp` 与 `--base-*` | 逐相命令行覆盖 |
-| `--warn-partial` | 计算域只覆盖部分 region 时按警告而非错误处理 |
+| `--no-warn-partial` | 关闭「计算域只覆盖部分网格单元」的默认告警（输出仍带覆盖率列） |
 
-输出 `*.MaterialMap.csv`（逐层逐单元 `kx/ky/kz/density/specific_heat`）与同名
-`*.MaterialMap.meta.json`（单位、Z 可信状态、材料来源、矩形化误差、诊断）。
+输出 `*.MaterialMap.csv`（逐层逐单元 `kx/ky/kz/density/specific_heat`，并带
+`cell_area_mm2`/`domain_area_mm2`/`domain_coverage` 明确计算域覆盖率）与同名
+`*.MaterialMap.meta.json`（单位、Z 可信状态、材料来源、矩形化误差、诊断、
+覆盖率语义）。矩形化不通过（填孔/丢岛/超精度）时视为致命，不写任何结果。
 默认材料表、矩形化与网格规则、公式与验证见
 [物性等效器文档](docs/equivalence/01-material-equivalence.md)。
 

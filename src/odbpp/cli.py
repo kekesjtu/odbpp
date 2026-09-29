@@ -142,9 +142,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_eq.add_argument("--base-k", type=float, default=None, metavar="W/MK")
     p_eq.add_argument("--base-density", type=float, default=None, metavar="KG/M3")
     p_eq.add_argument("--base-cp", type=float, default=None, metavar="J/KG/K")
-    p_eq.add_argument("--warn-partial", action="store_true",
-                      help="warn about cells only partially covered by a "
-                           "layer's computational domain")
+    p_eq.add_argument("--no-warn-partial", dest="warn_partial",
+                      action="store_false", default=True,
+                      help="silence the warning about cells only partially "
+                           "covered by a layer's computational domain")
     p_eq.add_argument("--digits", type=int, default=4,
                       help="preview coordinate resolution when parsing ODB++ "
                            "(default 4)")
@@ -632,7 +633,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
             result = equivalence_from_document(document, options,
                                                diagnostics=diagnostics,
                                                cell_sink=sink)
-    except EquivalenceError as exc:
+    except (EquivalenceError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         if os.path.exists(temp_path):
             os.remove(temp_path)

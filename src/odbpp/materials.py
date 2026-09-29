@@ -18,8 +18,9 @@ falling back to it raises a warning instead of passing silently.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from .diagnostics import MATERIALS_DEFAULT_USED, MATERIALS_INVALID, Diagnostics
 
@@ -61,15 +62,17 @@ class Material:
     source: str
 
     def __post_init__(self) -> None:
-        if self.k_w_mk <= 0.0:
-            raise ValueError(f"{self.key}: k must be positive, got {self.k_w_mk!r}")
-        if self.density_kg_m3 <= 0.0:
-            raise ValueError(
-                f"{self.key}: density must be positive, got {self.density_kg_m3!r}")
-        if self.specific_heat_j_kgk <= 0.0:
-            raise ValueError(
-                f"{self.key}: specific heat must be positive, got "
-                f"{self.specific_heat_j_kgk!r}")
+        # A finite, strictly positive positive number: ``NaN`` and ``Inf`` must
+        # never survive into the equivalence formulas, because they would turn
+        # every output cell into a non-number while looking like a real value.
+        for field_name, value in (("k_w_mk", self.k_w_mk),
+                                  ("density_kg_m3", self.density_kg_m3),
+                                  ("specific_heat_j_kgk",
+                                   self.specific_heat_j_kgk)):
+            if not math.isfinite(value) or value <= 0.0:
+                raise ValueError(
+                    f"{self.key}: {field_name} must be a finite positive number, "
+                    f"got {value!r}")
 
     def as_dict(self) -> dict:
         return {
@@ -179,12 +182,21 @@ def _parse_override(data: Mapping[str, Any], where: str,
         if field_name not in data or data[field_name] is None:
             continue
         try:
-            values[field_name] = float(data[field_name])
+            value = float(data[field_name])
         except (TypeError, ValueError):
             diagnostics.error(MATERIALS_INVALID,
                               f"{where}.{field_name}: {data[field_name]!r} is not "
                               f"a number")
             return None
+        if not math.isfinite(value) or value <= 0.0:
+            # ``NaN``/``Inf`` slip past a bare ``<= 0`` check and ``0`` would
+            # raise later, out of reach of the equivalent command's handler.
+            diagnostics.error(
+                MATERIALS_INVALID,
+                f"{where}.{field_name}: {data[field_name]!r} must be a finite "
+                f"positive number; the phase falls back to its project default")
+            return None
+        values[field_name] = value
     override = _Override(**values)
     return None if override.is_empty else override
 
@@ -203,6 +215,9 @@ class MaterialBook:
                  diagnostics: Optional[Diagnostics] = None) -> None:
         self.diagnostics = diagnostics if diagnostics is not None else Diagnostics()
         self.defaults: dict[str, Material] = dict(PROJECT_DEFAULTS)
+        #: Whether ``defaults.<phase>`` replaced the built-in project default.
+        self._default_origin: dict[str, str] = {
+            "copper": "project_default", "base": "project_default"}
         self.global_overrides: dict[str, _Override] = {}
         self.layer_overrides: dict[str, dict[str, _Override]] = {}
         self._warned_defaults: set[str] = set()
@@ -225,6 +240,7 @@ class MaterialBook:
                         self.defaults[phase] = replace(
                             override.apply(base),
                             source=f"user-provided default ({phase})")
+                        self._default_origin[phase] = "user_default"
 
         glob = config.get("global")
         if isinstance(glob, Mapping):
@@ -256,43 +272,84 @@ class MaterialBook:
 
     # ------------------------------------------------------------ resolve
 
-    def _layer_default(self, phase: str) -> Material:
-        key = phase
+    def _layer_default(self, phase: str,
+                       fields: Sequence[str]) -> Material:
+        key = f"{phase}:{','.join(fields)}"
         if key not in self._warned_defaults:
             self._warned_defaults.add(key)
             self.used_project_default = True
+            default = self.defaults[phase]
             self.diagnostics.warn(
                 MATERIALS_DEFAULT_USED,
-                f"no user material configured for the {phase} phase; using the "
-                f"project default {self.defaults[phase].k_w_mk:g} W/(m*K), "
-                f"{self.defaults[phase].density_kg_m3:g} kg/m3, "
-                f"{self.defaults[phase].specific_heat_j_kgk:g} J/(kg*K) "
-                f"({self.defaults[phase].source})",
+                f"no user material configured for the {phase} phase's "
+                f"{', '.join(fields)}; using the project default "
+                f"k={default.k_w_mk:g} W/(m*K), "
+                f"density={default.density_kg_m3:g} kg/m3, "
+                f"cp={default.specific_heat_j_kgk:g} J/(kg*K) "
+                f"({default.source})",
             )
         return self.defaults[phase]
+
+    _FIELDS = ("k_w_mk", "density_kg_m3", "specific_heat_j_kgk")
 
     def resolve(self, layer_name: str) -> ResolvedMaterials:
         per_layer = self.layer_overrides.get(layer_name, {})
         provenance: dict[str, dict] = {}
         resolved: dict[str, Material] = {}
         for phase in ("copper", "base"):
-            base = self.defaults[phase]
-            origin = "project_default"
-            if phase in self.global_overrides:
-                base = self.global_overrides[phase].apply(base)
-                origin = "user_global"
-            if phase in per_layer:
-                base = per_layer[phase].apply(base)
-                origin = "layer_override"
-            if origin == "project_default":
-                base = self._layer_default(phase)
-            resolved[phase] = base
+            default = self.defaults[phase]
+            default_origin = self._default_origin.get(phase, "project_default")
+            # Per *field* precedence, so a user who overrides only copper's k is
+            # not reported as if the untouched density and cp were also theirs.
+            sources = (("user_global", self.global_overrides.get(phase)),
+                       ("layer_override", per_layer.get(phase)))
+            fields: dict[str, dict] = {}
+            for field_name in self._FIELDS:
+                value = getattr(default, field_name)
+                origin = default_origin
+                source = default.source
+                for origin_name, override in sources:
+                    if override is None:
+                        continue
+                    candidate = getattr(override, field_name)
+                    if candidate is not None:
+                        value = candidate
+                        origin = origin_name
+                        source = f"{origin_name} override"
+                fields[field_name] = {"value": value, "origin": origin,
+                                      "source": source}
+            fallback = [name for name in self._FIELDS
+                        if fields[name]["origin"] == "project_default"]
+            if fallback:
+                self._layer_default(phase, fallback)
+            origins = {fields[name]["origin"] for name in self._FIELDS}
+            if "layer_override" in origins:
+                overall = "layer_override"
+            elif "user_global" in origins:
+                overall = "user_global"
+            elif "user_default" in origins:
+                overall = "user_default"
+            else:
+                overall = "project_default"
+            overridden = [name for name in self._FIELDS
+                          if fields[name]["origin"] != default_origin]
+            source = (default.source if not overridden else "; ".join(
+                f"{name}={fields[name]['source']}" for name in overridden))
+            material = Material(
+                key=default.key, label=default.label,
+                k_w_mk=fields["k_w_mk"]["value"],
+                density_kg_m3=fields["density_kg_m3"]["value"],
+                specific_heat_j_kgk=fields["specific_heat_j_kgk"]["value"],
+                source=source,
+            )
+            resolved[phase] = material
             provenance[phase] = {
-                "origin": origin,
-                "source": base.source,
-                "k_w_mk": base.k_w_mk,
-                "density_kg_m3": base.density_kg_m3,
-                "specific_heat_j_kgk": base.specific_heat_j_kgk,
+                "origin": overall,
+                "source": source,
+                "k_w_mk": fields["k_w_mk"]["value"],
+                "density_kg_m3": fields["density_kg_m3"]["value"],
+                "specific_heat_j_kgk": fields["specific_heat_j_kgk"]["value"],
+                "fields": {name: dict(fields[name]) for name in self._FIELDS},
             }
         return ResolvedMaterials(black=resolved["copper"], white=resolved["base"],
                                  provenance=provenance)

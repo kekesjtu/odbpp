@@ -114,12 +114,15 @@ FR-4 是一个材料族而非化合物，默认值只代表典型值；真实叠
 `docs/derivation/密度和热容等效热模型推导.md` 的像素离散形式：
 
 ```text
-kx = 1 / mean_rows( 1 / mean_cols_in_row( k ) )      # 行内串联、行间并联
-ky = 1 / mean_cols( 1 / mean_rows_in_col( k ) )      # 列内串联、列间并联
+kx = mean_rows( 1 / mean_cols_in_row( 1 / k ) )      # 行内串联、行间并联
+ky = mean_cols( 1 / mean_rows_in_col( 1 / k ) )      # 列内串联、列间并联
 kz = φ·k1 + (1-φ)·k2                                 # 柱间并联
 ρ  = φ·ρ1 + (1-φ)·ρ2                                 # 体积分数加权
 cp = ( φ·ρ1·cp1 + (1-φ)·ρ2·cp2 ) / ρ                 # 质量加权
 ```
+
+即每一像素行内对 `1/k` 取列平均后再取倒数（行内调和/串联），对行取算术平均
+（行间并联）；`ky` 对称。切勿写成对行平均再取倒数的形式。
 
 黑/白由该层的正向实体图案与该层计算域共同决定：
 
@@ -131,7 +134,13 @@ cp = ( φ·ρ1·cp1 + (1-φ)·ρ2·cp2 ) / ρ                 # 质量加权
 与某物理层 Z 区间相交的钻孔，其**投影**在该层内视为**全铜、全黑**（`drill_model =
 solid_copper`）。规则对铜层与介质层同样适用：先在黑/白掩膜上叠加钻孔，
 再统计 φ。绝不会把钻孔当空气，也不会重复扣除已从介质多边形中扣掉的孔。
-钻孔跨度无法确定时报 `equiv.drill_span_unknown`（致命），不擅自视为贯穿全板。
+
+匹配钻孔时**优先使用 JSON 的铜层序号／`z_span` 拓扑跨度**（铜层按平面序号
+包含端点，介质层按半开区间）：层厚缺失时多个层的最优估计 Z 可能同时为 0，
+只用绝对 Z 会把钻孔错误投到它并未到达的层。仅当文档没有提供跨度时才退回
+绝对 Z，并在层厚未知时记 `equiv.drill_match_z_fallback`；拓扑与 Z 结论不一致
+时记 `equiv.drill_z_mismatch` 并以拓扑为准。钻孔跨度完全无法确定时报
+`equiv.drill_span_unknown`（致命），不擅自视为贯穿全板。
 
 ## 7. 输出
 
@@ -145,27 +154,40 @@ cell_x0_mm, cell_y0_mm, cell_x1_mm, cell_y1_mm,
 z_start_mm, z_end_mm, z_thickness_known,
 copper_area_fraction, kx_w_mk, ky_w_mk, kz_w_mk,
 density_kg_m3, specific_heat_j_kgk,
-pixel_rows, pixel_cols, pixel_count, partial_domain
+pixel_rows, pixel_cols, pixel_count,
+cell_area_mm2, domain_area_mm2, domain_coverage, partial_domain
 ```
+
+`cell_x0_mm`…`cell_y1_mm` 是**全板共享网格单元**的边界，不随逐层计算域收缩。
+第 6 节求得的 `kx`/`ky`/`kz`/`density`/`specific_heat` 是该单元内**被该层计算域
+覆盖部分**的物性。`domain_coverage = domain_area_mm2 / cell_area_mm2` 明确给出
+覆盖比例；板外剩余部分不是 FR4。下游计算单元质量与热容时必须乘以
+`domain_coverage`，不得把未覆盖部分当作基底材料补足。
 
 该布局是本项目自己的设计：参考 `docs/Flotherm_reference_MaterialMap.csv`
 看了「需要表达什么」，没有照抄，也不以 Flotherm 可导入为目标。
 
-### 7.2 `*.MaterialMap.meta.json`（`odbpp/materialmap-1`）
+### 7.2 `*.MaterialMap.meta.json`（`odbpp/materialmap-2`）
 
 CSV 无法表达或不宜逐行重复的信息：
 
 - `units`：长度/面积/k/ρ/cp 的统一单位（一律 mm、mm²、W/(m·K)、kg/m³、J/(kg·K)）；
 - `z_axis`：绝对 Z 方向约定（自顶面向下）；
 - `drill_model`：固定 `solid_copper`；
+- `coverage`：`cell_area_mm2`/`domain_area_mm2`/`domain_coverage` 三列的下游语义
+  （覆盖部分才是该层材料，剩余为板外/空洞，按覆盖率折算质量与热容）；
 - `raster`：`px`/`py`/`pixel_step_mm`/`board_bounds_mm`/`sampling`；
 - `grid`：`nx`/`ny`/强制线与总数/`region_count`/`cell_count`/网格线坐标；
 - `rectification`：`tolerance_mm`/原始与矩形化面积/`lost`/`gained`/`net`/
   `shape_deviation`/`relative_area_error`/`ok`/矩形清单；
 - `materials`：`defaults`（数值+来源）与 `by_layer`（每层实际取值及来源）；
+  每层 provenance 的 `fields.<name>` 逐字段记录 `value`/`origin`/`source`，
+  因此只覆盖铜的热导率时，其密度与比热仍显式标记为 `project_default`；
 - `layers[]`：每层 `status`（`equivalent`/`skipped`/`failed`）、`reason`、
   `domain_id`、`domain_source`、`z_mm`、`drill_overlays`、`cell_count`；
 - `diagnostics[]`：稳定 code 的诊断列表（level/code/message/path）。
+
+`materialmap-1` 的布局不接受此版本的覆盖率列；读取方必须按 schema 判断。
 
 ## 8. 诊断 code
 
@@ -184,15 +206,19 @@ CSV 无法表达或不宜逐行重复的信息：
 | `equiv.layer_skipped` | 某层按规则跳过（附原因） |
 | `equiv.missing_domain` | 引用的计算域不存在 |
 | `equiv.drill_span_unknown` | 钻孔 Z 跨度无法确定（致命） |
+| `equiv.drill_match_z_fallback` | 无拓扑跨度、只能按绝对 Z 匹配且层厚未知 |
+| `equiv.drill_z_mismatch` | 拓扑跨度与绝对 Z 结论不一致（以拓扑为准） |
 | `equiv.layer_z_unknown` | 层 Z 区间缺失，只能 best-effort |
-| `equiv.partial_domain` | 计算域只覆盖部分 region |
+| `equiv.partial_domain` | 计算域只覆盖部分网格单元（默认按层汇总告警） |
 | `equiv.layer_empty` | 该层在其计算域内没有任何实体 |
 | `equiv.dielectric_features_ignored` | 介质层上非钻孔特征被忽略 |
-| `materials.default_used` | 使用了项目默认材料 |
-| `materials.invalid` | 材料字段非法，已退回默认值 |
+| `materials.default_used` | 某相/某物性字段使用了项目默认材料 |
+| `materials.invalid` | 材料字段非法（非有限正数/非数字），已退回默认值 |
 
 退出码：`0` 无 error 级诊断；`1` 有 error 级诊断但结果已写出；`2` 致命
-（如无像素单元、钻孔跨度未知），**不写结果**。
+（如无像素单元、钻孔跨度未知、**矩形化 `ok=false`**），**不写结果**。
+矩形化只要被填平孔洞、丢失岛或形状偏差超精度，即视为输入与精度不相容，
+不再输出 CSV，也不会带错导出。
 
 ## 9. 验证
 
@@ -209,6 +235,18 @@ CSV 无法表达或不宜逐行重复的信息：
 
 并验证：任意单元的 `kx`/`ky`/`kz`/`ρ`/`cp` 均为有限正数，且落在该单元所用
 `k1`、`k2`（及密度/热容）之间。
+
+边界（`tests/test_equiv.py`）：
+
+- 三层铜均无厚度、Z 同时为 0 时，跨 C1–C2 钻孔**不覆盖 C3**，并记
+  `equiv.drill_z_mismatch`（拓扑跨度优先）；
+- 计算域只覆盖单元一半时，`domain_coverage≈0.5`、`domain_area_mm2` 为半格，
+  且默认出现 `equiv.partial_domain` 告警；
+- `k1=NaN/Inf/0/负数` 均记 `materials.invalid` 并退回默认值，输出仍为有限正数；
+- 矩形化填平窄孔时 `rectification.ok=false`、`result.fatal=true`，
+  等效命令退出码 2 且不写 CSV/临时文件；
+- 只覆盖铜的 `k` 时，provenance 逐字段标记 `k=user_global`、
+  `density/cp=project_default`。
 
 ### 9.2 真实 case
 

@@ -11,3 +11,4 @@
 | [02 复审问题修复](02-followup-review-fixes.md) | [审阅 02](../reviews/02-followup-review.md) | 几何问题、绝对 Z 和英制铜厚 |
 | [03 输出一致性修复](03-output-consistency-fixes.md) | [审阅 03](../reviews/03-output-consistency-review.md) | 厚度标记与导出一致性 |
 | [04 导出正确性修复](04-export-correctness-fixes.md) | [审阅 05](../reviews/05-export-performance-review.md) | HTML 控件、零位精度和 profile 规整 |
+| [05 物性等效修复](05-material-equivalence-fixes.md) | 本轮边界审阅 | 钻孔拓扑、域覆盖率、材料校验、矩形化致命、来源与公式 |
