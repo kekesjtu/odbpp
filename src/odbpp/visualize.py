@@ -53,7 +53,11 @@ __all__ = [
     "VisualizeError",
     "NO_DATA",
     "NO_DATA_COLOUR",
+    "MASK_TARGET_PX",
+    "MASK_MAX_PIXELS",
+    "MaskImage",
     "auto_mask_scale",
+    "mask_image_size",
     "write_layer_mask",
     "MaterialMapData",
     "LayerSeries",
@@ -133,15 +137,45 @@ def safe_name(name: str) -> str:
     return out
 
 
+#: Longest side, in pixels, an automatically scaled mask picture aims for.
+MASK_TARGET_PX = 700
+#: Ceiling on a mask picture, so a very fine raster on a narrow board cannot
+#: ask for a gigapixel PNG.
+MASK_MAX_PIXELS = 4_000_000
+
+
 # ---------------------------------------------------------------------------
 # material masks
 # ---------------------------------------------------------------------------
 
-def auto_mask_scale(mask: LayerMask, target: int = 700) -> int:
-    """Nearest-neighbour zoom that brings a small raster up to ~*target* pixels.
+@dataclass(frozen=True)
+class MaskImage:
+    """What one written mask PNG contains, for reporting and for the CLI."""
+
+    width: int
+    height: int
+    zoom_x: float
+    zoom_y: float
+
+    @property
+    def size_text(self) -> str:
+        return f"{self.width}x{self.height}"
+
+    @property
+    def isotropic_zoom(self) -> Optional[float]:
+        """The single zoom factor, when both axes got the same one."""
+        if math.isclose(self.zoom_x, self.zoom_y, rel_tol=1e-9):
+            return self.zoom_x
+        return None
+
+
+def auto_mask_scale(mask: LayerMask, target: int = MASK_TARGET_PX) -> int:
+    """Isotropic nearest-neighbour zoom that brings a raster up to ~*target*.
 
     A 20x20 raster is unreadable at 1:1; a 2000x2000 one is already large.  The
-    zoom never interpolates, so the picture stays a sampling result.
+    zoom never interpolates, so the picture stays a sampling result.  It is only
+    used when no pixel pitch is known: an isotropic zoom stretches a board whose
+    X and Y raster pitches differ, see :func:`mask_image_size`.
     """
     if target < 1:
         raise ValueError(f"mask target size must be positive, got {target}")
@@ -149,15 +183,60 @@ def auto_mask_scale(mask: LayerMask, target: int = 700) -> int:
     return max(1, int(round(target / longest)))
 
 
+def mask_image_size(mask: LayerMask,
+                    pixel_step_mm: tuple[float, float]) -> tuple[int, int]:
+    """Output size, in pixels, of a mask that keeps the board's proportions.
+
+    ``pixel_step_mm`` is the physical size of one raster pixel along X and Y.
+    The scale is the coarsest one that both reaches the target size and never
+    puts two raster pixels on one output pixel (that would sample features
+    away); if that is still larger than :data:`MASK_MAX_PIXELS`, it is reduced,
+    and the caller is expected to say so rather than pretend.
+    """
+    step_x, step_y = (float(value) for value in pixel_step_mm)
+    if not (step_x > 0.0 and step_y > 0.0):
+        raise ValueError(
+            f"pixel step must be positive, got {pixel_step_mm!r}")
+    width_mm = mask.px * step_x
+    height_mm = mask.py * step_y
+    scale = max(MASK_TARGET_PX / max(width_mm, height_mm),
+                1.0 / min(step_x, step_y))
+    width = max(1, int(round(width_mm * scale)))
+    height = max(1, int(round(height_mm * scale)))
+    if width * height > MASK_MAX_PIXELS:
+        scale *= math.sqrt(MASK_MAX_PIXELS / (width * height))
+        width = max(1, int(round(width_mm * scale)))
+        height = max(1, int(round(height_mm * scale)))
+    return width, height
+
+
 def write_layer_mask(mask: LayerMask, path: str,
-                     scale: Optional[int] = None) -> int:
-    """Write one layer mask as a greyscale PNG; return the scale used."""
-    zoom = auto_mask_scale(mask) if scale is None else int(scale)
-    if zoom < 1:
-        raise ValueError(f"mask scale must be positive, got {zoom}")
+                     scale: Optional[int] = None,
+                     pixel_step_mm: Optional[tuple[float, float]] = None
+                     ) -> MaskImage:
+    """Write one layer mask as a greyscale PNG; return the size it was given.
+
+    An explicit *scale* is an isotropic nearest-neighbour zoom of the raster.
+    Giving *pixel_step_mm* instead keeps the board's physical proportions,
+    which is what makes a mask comparable with its heat map (and with the board
+    it came from).
+    """
+    if scale is not None:
+        zoom = int(scale)
+        if zoom < 1:
+            raise ValueError(f"mask scale must be positive, got {zoom}")
+        write_greyscale_png(path, mask.px * zoom, mask.py * zoom,
+                            mask.top_down_rows(zoom))
+        return MaskImage(mask.px * zoom, mask.py * zoom, float(zoom), float(zoom))
+    if pixel_step_mm is not None:
+        width, height = mask_image_size(mask, pixel_step_mm)
+        write_greyscale_png(path, width, height,
+                            mask.resampled_rows(width, height))
+        return MaskImage(width, height, width / mask.px, height / mask.py)
+    zoom = auto_mask_scale(mask)
     write_greyscale_png(path, mask.px * zoom, mask.py * zoom,
                         mask.top_down_rows(zoom))
-    return zoom
+    return MaskImage(mask.px * zoom, mask.py * zoom, float(zoom), float(zoom))
 
 
 # ---------------------------------------------------------------------------
@@ -471,21 +550,17 @@ def _format(value: float) -> str:
     return text
 
 
-def _pixel_edges(edges: Sequence[float], scale: float,
-                 used: Optional[set[int]] = None) -> list[int]:
-    """Pixel boundaries for *edges*, widening only intervals that carry data.
+def _pixel_edges(edges: Sequence[float], scale: float) -> list[int]:
+    """Pixel boundaries for *edges*, rounded cumulatively.
 
-    Rounding can collapse a narrow cell onto a single pixel; such a cell must
-    still be visible, so its interval is widened to one pixel.  An interval that
-    carries no data for this layer -- a column no cell spans -- is left at its
-    true (often zero) width instead of being inflated into a misleading stripe.
+    Rounding every edge against the same origin keeps the frame the board's
+    size in both axes.  A cell narrower than one pixel can therefore end up with
+    no pixel of its own when the grid is finer than the panel: the picture is a
+    view, the CSV is the data, and stretching the panel to keep every cell
+    visible would misreport the board's proportions (ask for a wider
+    ``panel_width_px`` when every cell must be seen).
     """
-    pixels = [int(round((value - edges[0]) * scale)) for value in edges]
-    for index in range(1, len(pixels)):
-        if pixels[index] <= pixels[index - 1] and (used is None
-                                                   or (index - 1) in used):
-            pixels[index] = pixels[index - 1] + 1
-    return pixels
+    return [int(round((value - edges[0]) * scale)) for value in edges]
 
 
 def _z_label(series: LayerSeries) -> str:
@@ -522,8 +597,8 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
     height_mm = data.y_edges[-1] - data.y_edges[0]
     scale = options.panel_width_px / width_mm
     scale = min(scale, options.max_panel_px / max(width_mm, height_mm))
-    xs = _pixel_edges(data.x_edges, scale, set(cols))
-    ys = _pixel_edges(data.y_edges, scale, set(rows))
+    xs = _pixel_edges(data.x_edges, scale)
+    ys = _pixel_edges(data.y_edges, scale)
     panel_w = xs[-1]
     panel_h = ys[-1]
 

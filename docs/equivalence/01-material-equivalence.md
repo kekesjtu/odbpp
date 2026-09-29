@@ -368,7 +368,8 @@ uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
 `--digits`。
 
 可视化相关选项（详见 [`02-visualization.md`](02-visualization.md)）：
-`--no-raster-png`、`--raster-scale N`（0=自动约 700 px 长边）、`--no-heatmap`、
+`--no-raster-png`、`--raster-scale N`（默认 0 = 自动约 700 px 长边且保持板的长宽比；
+N 为强制各向同性 N 倍）、`--no-heatmap`、
 `--heatmap-panel-width PX`、`--heatmap-shared-scale`、`--no-gallery`；
 已经写出 CSV 后要单独重画热图：
 

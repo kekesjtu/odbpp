@@ -93,7 +93,7 @@ uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
 | `--materials FILE` | JSON 材料配置：`global` 与 `layers.<name>` 覆盖（`copper`/`base` 各含 `k_w_mk`/`density_kg_m3`/`specific_heat_j_kgk`） |
 | `--copper-k` / `--copper-density` / `--copper-cp` 与 `--base-*` | 逐相命令行覆盖 |
 | `--no-warn-partial` | 关闭「计算域只覆盖部分网格单元」的默认告警（输出仍带覆盖率列） |
-| `--no-raster-png` / `--raster-scale N` | 逐层黑白掩膜 PNG：默认自动放大到约 700 px 长边，`1` 即 `px × py` |
+| `--no-raster-png` / `--raster-scale N` | 逐层黑白掩膜 PNG：默认自动取到约 700 px 长边且**保持板的长宽比**；`N` 强制各向同性 N 倍放大（会拉伸非方形板） |
 | `--no-heatmap` / `--heatmap-panel-width PX` / `--heatmap-shared-scale` | 逐层 `kx`/`ky`/`kz` 三面板热图；面板宽默认 720 px；共享色标便于层间比较 |
 | `--no-gallery` | 不写 `<step>.images.html` 图例页 |
 

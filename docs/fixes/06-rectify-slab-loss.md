@@ -21,6 +21,9 @@
 真实 case：kicad-kitchen-sink、designodb-rigidflex 均无 error 级诊断；
 `--px 400` 两者各出现 1 条 `rectify.area_warning`（详见 §4）。
 
+同一轮真实 case 对照还发现了两类**图本身**的缺陷（不按物理比例绘制），
+已单独记在 [`07-picture-aspect.md`](07-picture-aspect.md)。
+
 ---
 
 ## 1. [P1] 先吸附再配对 → 整条 slab 被丢弃

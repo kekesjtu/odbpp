@@ -35,6 +35,7 @@ from odbpp.visualize import (
     VisualizeError,
     auto_mask_scale,
     gallery_entries,
+    mask_image_size,
     read_materialmap,
     render_heatmaps,
     safe_name,
@@ -251,6 +252,23 @@ class TestLayerMask:
             LayerMask(0, 1)
         with pytest.raises(ValueError):
             list(LayerMask(1, 1).top_down_rows(0))
+        with pytest.raises(ValueError):
+            list(LayerMask(1, 1).resampled_rows(0, 2))
+
+    def test_resampled_rows_stretch_the_axes_independently(self):
+        mask = LayerMask(2, 2)
+        mask.pixels[0:2] = bytes([LayerMask.BLACK, LayerMask.WHITE])   # bottom
+        mask.pixels[2:4] = bytes([LayerMask.WHITE, LayerMask.BLACK])   # top
+        # Top row first, X doubled, Y left alone: the board proportions, not a
+        # uniform zoom.
+        assert list(mask.resampled_rows(4, 2)) == [
+            bytes([LayerMask.WHITE, LayerMask.WHITE, LayerMask.BLACK, LayerMask.BLACK]),
+            bytes([LayerMask.BLACK, LayerMask.BLACK, LayerMask.WHITE, LayerMask.WHITE]),
+        ]
+
+    def test_resampled_rows_refuses_an_empty_picture(self):
+        with pytest.raises(ValueError):
+            list(LayerMask(2, 2).resampled_rows(2, 0))
 
     def test_auto_scale_never_shrinks_and_targets_a_viewable_size(self):
         assert auto_mask_scale(LayerMask(10, 10), target=700) == 70
@@ -259,17 +277,22 @@ class TestLayerMask:
 
 class TestMaskFromEquivalence:
     def test_the_mask_is_the_raster_the_formulas_integrated(self, tmp_path):
-        captured: list[tuple[str, LayerMask]] = []
-        result = run(document([{"name": "CU", "polygons": [rect(0, 0, 10, 5)]}]),
-                     px=4, py=4, mask_sink=lambda name, mask: captured.append((name, mask)))
+        captured: list[tuple[str, LayerMask, tuple[float, float]]] = []
+        result = run(document([{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}],
+                              profile=rect(0, 0, 10, 5)),
+                     px=4, py=4,
+                     mask_sink=lambda name, mask, step: captured.append(
+                         (name, mask, step)))
         assert not result.fatal
-        assert [name for name, _ in captured] == ["CU"]
-        mask = captured[0][1]
+        assert [name for name, _, _ in captured] == ["CU"]
+        name, mask, step = captured[0]
         assert (mask.px, mask.py) == (4, 4)
+        # The physical size of one raster pixel travels with the mask, because
+        # a picture that keeps the board's proportions needs both.
+        assert step == pytest.approx((2.5, 1.25))
         rows = list(mask.top_down_rows())
-        # Board Y up: the copper is the bottom half, so it is the last rows here.
-        assert rows[:2] == [bytes([LayerMask.WHITE]) * 4] * 2
-        assert rows[2:] == [bytes([LayerMask.BLACK]) * 4] * 2
+        # Board Y up: the copper fills the board, so every pixel is black.
+        assert rows == [bytes([LayerMask.BLACK]) * 4] * 4
 
     def test_board_outside_the_domain_stays_grey_not_white(self):
         domains = [
@@ -281,7 +304,7 @@ class TestMaskFromEquivalence:
         captured: list[LayerMask] = []
         run(document([{"name": "CU", "polygons": [rect(0, 0, 10, 10)],
                        "domain_id": "left"}], domains=domains),
-            px=4, py=4, mask_sink=lambda name, mask: captured.append(mask))
+            px=4, py=4, mask_sink=lambda name, mask, step: captured.append(mask))
         mask = captured[0]
         # Left half in the domain (and copper), right half has no domain at all.
         rows = list(mask.top_down_rows())
@@ -294,7 +317,7 @@ class TestMaskFromEquivalence:
         run(document([
             {"name": "CU", "polygons": [rect(0, 0, 10, 10)]},
             {"name": "DOC", "type": "DOCUMENT", "polygons": [rect(0, 0, 1, 1)]},
-        ]), mask_sink=lambda name, mask: captured.append(name))
+        ]), mask_sink=lambda name, mask, step: captured.append(name))
         assert captured == ["CU"]
 
     def test_mask_png_has_the_expected_size_and_tones(self, tmp_path):
@@ -304,12 +327,50 @@ class TestMaskFromEquivalence:
         holder = Holder()
         run(document([{"name": "CU", "polygons": [rect(0, 0, 10, 5)]}]),
             px=4, py=4,
-            mask_sink=lambda name, mask: setattr(holder, "mask", mask))
-        assert write_layer_mask(holder.mask, str(tmp_path / "m.png"), scale=2) == 2
+            mask_sink=lambda name, mask, step: setattr(holder, "mask", mask))
+        image = write_layer_mask(holder.mask, str(tmp_path / "m.png"), scale=2)
+        assert (image.width, image.height) == (8, 8)
+        assert image.isotropic_zoom == 2.0
         width, height, colour, rows = decode_png(tmp_path / "m.png")
         assert (width, height, colour) == (8, 8, 0)
         assert grey(rows, 0, 0) == LayerMask.WHITE
         assert grey(rows, 0, height - 1) == LayerMask.BLACK
+
+    def test_the_picture_keeps_the_board_proportions(self, tmp_path):
+        # The raster counts 4 pixels along a 10 mm side and 4 along a 5 mm one,
+        # so one raster pixel is 2.5 mm wide and 1.25 mm tall.  Drawing both axes
+        # at the same zoom would show the board as a square.
+        class Holder:
+            mask: LayerMask
+            step: tuple[float, float] = (0.0, 0.0)
+
+        holder = Holder()
+        run(document([{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}],
+                     profile=rect(0, 0, 10, 5)),
+            px=4, py=4,
+            mask_sink=lambda name, mask, step: (
+                setattr(holder, "mask", mask), setattr(holder, "step", step)))
+        image = write_layer_mask(holder.mask, str(tmp_path / "m.png"),
+                                 pixel_step_mm=holder.step)
+        width, height, _, _ = decode_png(tmp_path / "m.png")
+        assert (width, height) == (image.width, image.height)
+        assert width / height == pytest.approx(10 / 5, rel=0.02)
+        # One zoom per axis: the raster pixels are not square, but the output
+        # pixels are, and both axes end up at the same pixels per millimetre.
+        assert image.zoom_x / image.zoom_y == pytest.approx(2.5 / 1.25, rel=0.02)
+        # Same pixels per millimetre on both axes -- that is what keeps the
+        # proportions, so the zoom over a raster pixel differs by the pitch ratio.
+        assert (image.zoom_x / holder.step[0]
+                == pytest.approx(image.zoom_y / holder.step[1], rel=0.02))
+        assert image.isotropic_zoom is None
+
+    def test_one_output_pixel_per_raster_pixel_is_never_undersampled(self):
+        # A fine raster on a narrow board: the proportions are kept without
+        # ever putting two raster pixels on one output pixel.
+        mask = LayerMask(400, 400)
+        width, height = mask_image_size(mask, (0.4084, 0.1082))
+        assert width >= mask.px and height >= mask.py
+        assert width / height == pytest.approx(163.36 / 43.28, rel=0.01)
 
 
 # ---------------------------------------------------------------------------
@@ -593,7 +654,7 @@ class TestGallery:
 # ---------------------------------------------------------------------------
 
 class TestCommandLine:
-    def test_equivalent_writes_masks_heatmaps_and_a_gallery(self, tmp_path):
+    def test_equivalent_writes_masks_heatmaps_and_a_gallery(self, tmp_path, capsys):
         from odbpp.cli import main
 
         code = main(["equivalent", str(case_path("minimal-test-odb")),
@@ -607,9 +668,12 @@ class TestCommandLine:
         for path in masks:
             width, height, colour, _ = decode_png(path)
             assert colour == 0
-            assert width == height and width >= 16 * 16
+            # 100 x 75 mm of rectified board at 7 px/mm, so the picture keeps the
+            # board's proportions instead of forcing a square.
+            assert (width, height) == (700, 525)
         for path in maps:
             assert decode_png(path)[2] == 2
+        assert "up to 700x525 px" in capsys.readouterr().out
         assert not list(tmp_path.rglob("*.tmp"))
 
     def test_the_visualisations_can_be_turned_off(self, tmp_path):

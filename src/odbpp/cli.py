@@ -157,9 +157,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="do not write the per-layer black/white raster PNGs "
                            "under <out>/masks/")
     p_eq.add_argument("--raster-scale", type=int, default=0, metavar="N",
-                      help="nearest-neighbour zoom for the mask PNGs "
-                           "(default 0 = auto, about 700 px on the long side; "
-                           "1 = exactly px x py)")
+                      help="isotropic nearest-neighbour zoom for the mask PNGs, "
+                           "stretching a non-square board (default 0 = auto: "
+                           "about 700 px on the long side, board proportions "
+                           "kept; 1 = exactly px x py)")
     p_eq.add_argument("--no-heatmap", dest="heatmap", action="store_false",
                       default=True,
                       help="do not write the per-layer kx/ky/kz heat maps "
@@ -569,6 +570,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     from .visualize import (
         GalleryEntry,
         HeatmapOptions,
+        MaskImage,
         VisualizeError,
         gallery_entries,
         render_heatmaps,
@@ -682,15 +684,17 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     # CSV: a fatal run must not leave half a result behind.
     masks_dir = os.path.join(out_dir, "masks")
     mask_jobs: list[tuple[str, str, str]] = []
-    mask_scales: set[int] = set()
+    mask_images: list[MaskImage] = []
 
-    def mask_sink(name: str, mask) -> None:
+    def mask_sink(name: str, mask, pixel_step_mm) -> None:
         if not args.raster_png:
             return
         os.makedirs(masks_dir, exist_ok=True)
         final = os.path.join(masks_dir, f"{safe_name(name)}.png")
         temp = final + ".tmp"
-        mask_scales.add(write_layer_mask(mask, temp, scale=args.raster_scale or None))
+        mask_images.append(write_layer_mask(
+            mask, temp, scale=args.raster_scale or None,
+            pixel_step_mm=pixel_step_mm))
         mask_jobs.append((name, temp, final))
 
     # Stream rows as they are produced: a board-wide grid can hold millions of
@@ -749,10 +753,15 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     print(f"wrote {metadata_path} "
           f"({os.path.getsize(metadata_path) / 1e6:.2f} MB)")
     if mask_jobs:
-        scales = ", ".join(str(scale) for scale in sorted(mask_scales))
+        zooms = {image.isotropic_zoom for image in mask_images}
+        if len(zooms) == 1 and None not in zooms:
+            shape = f"zoom {zooms.pop():g} px per raster pixel"
+        else:
+            widest = max(image.width for image in mask_images)
+            tallest = max(image.height for image in mask_images)
+            shape = (f"up to {widest}x{tallest} px, board proportions kept")
         print(f"wrote {len(mask_jobs)} raster mask(s) -> {masks_dir} "
-              f"(zoom {scales} px per raster pixel; "
-              f"black=copper/drill, white=base, grey=no domain)")
+              f"({shape}; black=copper/drill, white=base, grey=no domain)")
 
     # --- pictures of what was written --------------------------------------
     # Rendered from the CSV file, not from the in-memory result: the picture is

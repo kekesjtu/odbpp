@@ -191,6 +191,47 @@ class LayerMask:
             for _ in range(scale):
                 yield widened_bytes
 
+    def resampled_rows(self, width: int, height: int) -> Iterator[bytes]:
+        """Yield *height* rows of *width* bytes, top of the board first.
+
+        Nearest neighbour, no interpolation, but the two axes are resampled
+        independently: the raster counts pixels along X and Y with different
+        physical pitches, so replicating both by the same integer would stretch
+        a 163 x 43 mm board into a square.  Source rows are cached because
+        upsampling makes several output rows share one.
+        """
+        if width < 1 or height < 1:
+            raise ValueError(
+                f"image size must be positive, got {width}x{height}")
+        px, py = self.px, self.py
+        pixels = self.pixels
+        # (source column, how many output columns it fills), in order.
+        runs: list[tuple[int, int]] = []
+        for index in range(width):
+            source = (index * px) // width
+            if runs and runs[-1][0] == source:
+                runs[-1] = (source, runs[-1][1] + 1)
+            else:
+                runs.append((source, 1))
+        cache: dict[int, bytes] = {}
+        for row in range(height):
+            source = (row * py) // height
+            line = cache.get(source)
+            if line is None:
+                start = (py - 1 - source) * px
+                source_line = pixels[start:start + px]
+                if width == px:
+                    line = bytes(source_line)
+                else:
+                    out = bytearray(width)
+                    offset = 0
+                    for column, run in runs:
+                        out[offset:offset + run] = source_line[column:column + 1] * run
+                        offset += run
+                    line = bytes(out)
+                cache[source] = line
+            yield line
+
     def tone_counts(self) -> dict[str, int]:
         """Pixel count per tone, for reporting and for tests."""
         return {

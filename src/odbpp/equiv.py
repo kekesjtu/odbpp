@@ -692,7 +692,7 @@ def equivalence_from_document(
     *,
     diagnostics: Optional[Diagnostics] = None,
     cell_sink: Optional[Callable[[EquivalentCell], None]] = None,
-    mask_sink: Optional[Callable[[str, LayerMask], None]] = None,
+    mask_sink: Optional[Callable[[str, LayerMask, tuple[float, float]], None]] = None,
 ) -> EquivalenceResult:
     """Equivalent every copper and dielectric layer of *document*.
 
@@ -701,10 +701,12 @@ def equivalence_from_document(
     cells: a board-wide grid at high ``px``/``py`` can hold millions of them, and
     the caller writing a CSV only ever needs one at a time.
 
-    *mask_sink* receives ``(layer name, LayerMask)`` once per equivalented layer,
-    holding exactly the black/white raster that layer's cells were computed from.
-    The callback owns the mask from then on, so a caller that writes an image can
-    drop it immediately and never keep 43 of them resident.
+    *mask_sink* receives ``(layer name, LayerMask, pixel_step_mm)`` once per
+    equivalented layer, holding exactly the black/white raster that layer's cells
+    were computed from plus the physical size of one raster pixel along X and Y
+    (a picture that keeps the board's proportions needs both).  The callback owns
+    the mask from then on, so a caller that writes an image can drop it
+    immediately and never keep 43 of them resident.
     """
     diags = diagnostics if diagnostics is not None else Diagnostics()
     schema = document.get("schema")
@@ -938,7 +940,7 @@ def equivalence_from_document(
         if mask is not None:
             # Hand the raster over as soon as the layer is done; the sink writes
             # it out and drops it, so only one layer mask is ever resident.
-            mask_sink(name, mask)
+            mask_sink(name, mask, (dx, dy))
 
     if cell_without_pixel:
         fatal = True
