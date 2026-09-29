@@ -1,6 +1,6 @@
 # docs/ — 格式说明与项目文档
 
-Markdown 文档按 `research/`、`reviews/`、`fixes/` 分类。每个目录独立从 `01`
+Markdown 文档按 `research/`、`reviews/`、`fixes/`、`equivalence/` 分类。每个目录独立从 `01`
 连续编号，文件名统一为 `NN-kebab-case-topic.md`；日期保留在正文标题或元信息中。
 同一轮审阅与修复通过各目录的索引互相链接，不再共用一个跨目录序号。
 
@@ -42,6 +42,11 @@ python tools/fetch_spec.py --verify   # 只校验现有文件
 ## `docs/research/`
 
 调研报告目录，索引见 [`research/README.md`](research/README.md)。
+
+## `docs/equivalence/`
+
+物性等效器（数据流 4-5）的实现说明、默认参数依据与验证记录，索引见
+[`equivalence/README.md`](equivalence/README.md)。
 
 ## 审阅与修复记录
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from odbpp.diagnostics import Diagnostics
-from odbpp.rectify import RectifyOptions, rectify_region
+from odbpp.rectify import (DEFAULT_TOLERANCE_MM, RectifyOptions,
+                           rectify_region)
 from odbpp.clipper import region_from_rings
 
 
@@ -61,4 +62,20 @@ class TestRectify:
             RectifyOptions(tolerance_mm=0.25))
         assert len(result.rectangles) > 1
         assert result.net_area_error_mm2 == pytest.approx(0.0, abs=1.0)
+        assert result.ok
+
+    def test_the_tolerance_defaults_to_the_documented_value(self):
+        result = rectify_region(region(
+            ([(0, 0), (10, 0), (10, 10), (0, 10)], False)),
+            RectifyOptions())
+        assert result.tolerance_mm == pytest.approx(DEFAULT_TOLERANCE_MM)
+
+    def test_a_coarse_staircase_stays_within_the_perimeter_bound(self):
+        # A staircase that follows the outline cannot move more than roughly a
+        # tolerance per unit of boundary length, so a coarse tolerance that is
+        # still faithful is not an error.
+        result = rectify_region(region((
+            [(0, 0), (10, 0), (10, 10), (5, 10)], False)),
+            RectifyOptions(tolerance_mm=2.0))
+        assert result.shape_deviation_mm2 > 0.0
         assert result.ok

@@ -1,21 +1,29 @@
 # odbpp
 
-ODB++ v8.1 → 统一的公制多边形模型（JSON）/ 分层矢量预览（SVG）。
+ODB++ v8.1 → 统一的公制多边形模型（JSON）/ 分层矢量预览（SVG）→ PCB 物性等效（MaterialMap）。
 
-当前状态：**三阶段数据流全部可用**。读取目录、`.tgz`/`.tar.gz`、`.zip` 形式的
+当前状态：**五阶段数据流全部可用**。读取目录、`.tgz`/`.tar.gz`、`.zip` 形式的
 ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**的公制多边形，
-输出中间 JSON 与带图层开关、缩放平移的 HTML/SVG 预览。
+输出中间 JSON 与带图层开关、缩放平移的 HTML/SVG 预览；再从 JSON 出发，
+把铜层/介质层等效为逐网格的正交各向异性物性表。
 
 ```
 [ ODB++ 压缩包/目录 ]
         │
         ▼
 [ 1. ODB++ Parser ]  ← 已实现  load_job()
-        ├──────────────────────────────────┐
-        ▼                                  ▼
-[ 2. 中间格式 (.json) ]            [ 3. 分层矢量预览 (.svg/.html) ]
-  已实现  build_step_preview()        已实现  render_svg() / render_html()
-          step_to_json()                        write_outputs()
+        ├──────────────────────────────────────────┐
+        ▼                                          ▼
+[ 2. 中间格式 (.json) ]                [ 3. 分层矢量预览 (.svg/.html) ]
+  已实现  build_step_preview()            已实现  render_svg() / render_html()
+          step_to_json()                          write_outputs()
+   schema = odbpp/preview-2（含逐层计算域）
+        │
+        ▼
+[ 4. PCB 物性等效器 ]  ← 已实现  equivalence_from_document()
+        │
+        ▼
+[ 5. 等效结果 ]  MaterialMap.csv + MaterialMap.meta.json
 ```
 
 四个真实样本均已跑通，含 520k 图元 / 43 层的 INCH 刚挠结合板
@@ -58,6 +66,35 @@ uv run --all-extras python -m odbpp export <path> -o build/selected-layers --lay
 | `--digits N` | 坐标小数位，默认 4（0.1 µm）；同时是模型的**输出分辨率**：几何会先量化到该网格、布尔规整并复验拓扑，再序列化 |
 | `--minimum-stroke MM` | 把零宽（`r0`）图元按发丝线绘制；默认 0，即几何精确因而不可见 |
 | `--only-json` / `--per-layer-svg` | 只要 JSON / 额外每层一个 SVG |
+
+物性等效（数据流 4-5）：
+
+```bash
+# 一步到位：解析 + 等效。输入可以是 ODB++ 目录/压缩包
+uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
+    --px 800 --py 800 -o build/ks-eq
+
+# 或从已有 preview-2 JSON 起（推荐先 export --only-json，再多次试算）
+uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
+    --px 800 --py 800 --nx 400 --ny 400 -o build/ks-eq
+```
+
+`equivalent` 关键选项：
+
+| 选项 | 作用 |
+|---|---|
+| `--px` / `--py` | **必填**，整板 X/Y 方向光栅像素数（物理尺寸可不同） |
+| `--nx` / `--ny` | 整板网格格数，默认等于 `px`/`py`，须满足 `1 ≤ nx ≤ px`、`1 ≤ ny ≤ py` |
+| `--rectify-tolerance MM` | 外轮廓阶梯精度；默认自动取 2×像素间距 |
+| `--max-area-error-ratio` / `--max-area-error-mm2` | 矩形化误差判据的额外下限 |
+| `--materials FILE` | JSON 材料配置：`global` 与 `layers.<name>` 覆盖（`copper`/`base` 各含 `k_w_mk`/`density_kg_m3`/`specific_heat_j_kgk`） |
+| `--copper-k` / `--copper-density` / `--copper-cp` 与 `--base-*` | 逐相命令行覆盖 |
+| `--warn-partial` | 计算域只覆盖部分 region 时按警告而非错误处理 |
+
+输出 `*.MaterialMap.csv`（逐层逐单元 `kx/ky/kz/density/specific_heat`）与同名
+`*.MaterialMap.meta.json`（单位、Z 可信状态、材料来源、矩形化误差、诊断）。
+默认材料表、矩形化与网格规则、公式与验证见
+[物性等效器文档](docs/equivalence/01-material-equivalence.md)。
 
 `export` 产出的 HTML 是自包含的（CSS/JS/SVG 全部内联），可直接双击打开：
 滚轮缩放、拖拽平移、逐层开关，以及 all / none / copper / isolate / invert /
@@ -122,8 +159,13 @@ for layer in step.layers:
 | **`clipper.py`** | **平面布尔运算 + Minkowski 扫掠**：整数量化（1e-6 mm）、环方向归一、并/差/交、`stroke_paths`（圆符号精确带宽）、`sweep_paths`（方符号精确拖拽） |
 | **`expand.py`** | **图元 → 实心区域**：符号解析与放置、`L`/`A` 扫掠、极性与基底合成、按极性段与 stroke 定义批处理；介质层扣除相交钻孔投影 |
 | **`stackup.py`** | **层叠模型**：铜层序号、介质/钻孔的 Z 区间（半开）、相交判定，以及 `.layer_dielectric`/`.copper_weight` 的单位规范化 |
-| **`export.py`** | **中间格式（数据流 2）**：逐层流式合成 `StepPreview`，输出公制 JSON |
+| **`export.py`** | **中间格式（数据流 2）**：逐层流式合成 `StepPreview`，输出公制 JSON（`odbpp/preview-2`，含逐层计算域） |
 | **`svg.py`** | **渲染（数据流 3）**：SVG 与自包含 HTML 查看器 |
+| **`rectify.py`** | **矩形化**：step profile → 轴对齐阶梯 region，记录面积/形状误差并逐岛逐孔校验 |
+| **`grid.py`** | **整板网格**：region 边界强制格线，最大余数法按像素储备分配 `nx`/`ny` |
+| **`raster.py`** | **光栅化**：region 边界扫描线 + even-odd 像素中心判定 |
+| **`materials.py`** | **两相材料**：铜/基底默认值（带来源）、逐层 > 全局 > 默认的优先级与警告 |
+| **`equiv.py`** | **物性等效（数据流 4-5）**：逐层光栅 + 钻孔覆盖 + 串并联公式，流式输出 CSV 与 meta |
 | `cli.py` | `python -m odbpp` 子命令 |
 
 ## 几条不变式
@@ -156,13 +198,23 @@ for layer in step.layers:
 12. **写出的坐标就是验证过的坐标。** 序列化前先把几何量化到输出网格并
     重新 union/Simplify，`area_mm2`、`bounds_mm` 均由最终坐标重算；
     在目标分辨率下无面积的环被丢弃并记 `export.degenerate_ring`。
+13. **板外区域不是 FR4。** 等效器只接受 `odbpp/preview-2`；某层在某网格单元内
+    是否存在，由其**逐层计算域**决定，绝不用铜图案反推。
+14. **矩形化误差是显式数据。** 阶梯边界丢失/填平的面积、精度、以及每个岛/孔的
+    存亡都写进 meta；超过精度允许的上界报 `rectify.area_error`，不静默近似。
+15. **钻孔一律实心铜。** 与某层 Z 区间相交的钻孔投影在该层内按全铜处理
+    （`drill_model=solid_copper`），铜层与介质层同理；跨度未知时报错，不猜通孔。
+16. **网格不越权。** `nx`/`ny` 是用户指定的整板格数，region 强制边界放不下时报
+    `grid.forced_lines_overflow`，绝不悄悄加格；每个单元必须完整落在一个 region 内。
+17. **单元必有采样。** 网格单元内无像素中心时报 `grid.cell_without_pixel`
+    （致命），不静默取 0 或最近像素。
 
 ## 目录
 
 | 路径 | 内容 |
 |---|---|
 | `cases/` | ODB++ v8.1 输入：4 个既有样本及 7 个 KiCad 小型导出（见 `cases/README.md`） |
-| `docs/` | 官方规范 PDF（不入库）、`research/` 调研、`reviews/` 审阅、`fixes/` 修复记录 |
+| `docs/` | 官方规范 PDF（不入库）、`research/` 调研、`reviews/` 审阅、`fixes/` 修复记录、`equivalence/` 等效器文档与 `derivation/` 推导 |
 | `external/` | 参考用开源项目（不入库，按需 clone，见 `external/README.md`） |
 | `out/` | 与案例输入一一对应的导出结果及索引（不入库，由 `tools/sync_out.py` 维护） |
 | `src/odbpp/` | 解析器本体 |

@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import csv
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
 
 from .clipper import Region, Ring, difference, intersection, union
@@ -643,7 +643,17 @@ def equivalence_from_document(
             f"step {step_name!r} has no step_profile domain; the board outline "
             f"is required to size the raster and rectangularise the board")
     profile = _region_from_polygons(step_domain.get("polygons"))
-    rectification = rectify_region(profile, options.rectify, diagnostics=diags)
+    px, py = options.grid.px, options.grid.py
+    profile_bounds = profile.bounds
+    rectify_options = options.rectify
+    if rectify_options.tolerance_mm is None and profile_bounds is not None:
+        # Auto: the staircase step is twice the pixel pitch, the coarsest value
+        # that still leaves every forced interval a raster sample.
+        pitch_x = (profile_bounds[2] - profile_bounds[0]) / px
+        pitch_y = (profile_bounds[3] - profile_bounds[1]) / py
+        rectify_options = replace(rectify_options,
+                                  tolerance_mm=2.0 * max(pitch_x, pitch_y))
+    rectification = rectify_region(profile, rectify_options, diagnostics=diags)
     if not rectification.rectangles:
         return EquivalenceResult(
             cells=[], layers=[], grid=build_grid([], options.grid,
@@ -655,7 +665,6 @@ def equivalence_from_document(
     bounds = rectification.bounds
     assert bounds is not None
     x_min, y_min, x_max, y_max = bounds
-    px, py = options.grid.px, options.grid.py
     dx = (x_max - x_min) / px
     dy = (y_max - y_min) / py
     x_axis = RasterAxis(x_min, dx, px)

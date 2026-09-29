@@ -123,8 +123,9 @@ def build_parser() -> argparse.ArgumentParser:
                       help="board grid cells in X (default: px)")
     p_eq.add_argument("--ny", type=int, default=None,
                       help="board grid cells in Y (default: py)")
-    p_eq.add_argument("--rectify-tolerance", type=float, default=0.2, metavar="MM",
-                      help="staircase step for the board outline in mm (default 0.2)")
+    p_eq.add_argument("--rectify-tolerance", type=float, default=None, metavar="MM",
+                      help="staircase step for the board outline in mm "
+                           "(default: twice the raster pixel pitch)")
     p_eq.add_argument("--max-area-error-ratio", type=float, default=0.01,
                       metavar="R",
                       help="allowed outline shape deviation as a fraction of the "

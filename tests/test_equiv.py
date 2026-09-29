@@ -360,6 +360,25 @@ class TestMaterials:
         assert all(c.kx == pytest.approx(200.0) for c in result.cells)
 
 
+class TestAutoTolerance:
+    def test_the_default_tolerance_follows_the_pixel_pitch(self):
+        document = only_layer(profile=rect(0, 0, 40, 20),
+                              polygons=[rect(0, 0, 40, 20)])
+        result = equivalence_from_document(
+            document, EquivalenceOptions(grid=GridOptions(px=40, py=40)))
+        # pitch_x = 40/40 = 1.0, pitch_y = 20/40 = 0.5 -> twice the coarser pitch.
+        assert result.rectification.tolerance_mm == pytest.approx(2.0)
+        assert not result.fatal
+
+    def test_a_coarse_raster_with_the_default_tolerance_still_samples(self):
+        document = only_layer(profile=rect(0, 0, 40, 20),
+                              polygons=[rect(0, 0, 40, 20)])
+        result = equivalence_from_document(
+            document, EquivalenceOptions(grid=GridOptions(px=25, py=25)))
+        assert result.cell_without_pixel == 0
+        assert result.cell_count > 0
+
+
 # ---------------------------------------------------------------------------
 # output
 # ---------------------------------------------------------------------------
