@@ -187,6 +187,14 @@ RECTIFY_NO_RECTANGLES = "rectify.no_rectangles"
 RECTIFY_AREA_ERROR = "rectify.area_error"
 RECTIFY_ISLAND_LOST = "rectify.island_lost"
 RECTIFY_HOLE_FILLED = "rectify.hole_filled"
+#: Accepted, but the outline moved more than the configured area limit; only
+#: the (looser) perimeter bound saved it.  Reported so a coarse tolerance can
+#: never lose board area without a trace.
+RECTIFY_AREA_WARNING = "rectify.area_warning"
+#: A slab's cross-section had an odd number of boundary crossings, so its
+#: material could not be decided; the slab is left out and the run is not
+#: trustworthy (a piece of the outline is simply not representable).
+RECTIFY_SLAB_AMBIGUOUS = "rectify.slab_ambiguous"
 
 # Board grid allocation (AGENTS 外轮廓矩形化与网格 3-5).
 GRID_FORCED_LINES_OVERFLOW = "grid.forced_lines_overflow"
@@ -212,3 +220,8 @@ EQUIV_LAYER_EMPTY = "equiv.layer_empty"
 # Materials (AGENTS 等效器输入与材料规则 4-5).
 MATERIALS_DEFAULT_USED = "materials.default_used"
 MATERIALS_INVALID = "materials.invalid"
+
+# Visualisation (data-flow step 5 pictures: material masks, kx/ky/kz heat maps).
+#: Drawing failed after the CSV and metadata were written; the deliverable is
+#: still complete, but the picture of it is missing.
+VISUALIZE_FAILED = "visualize.failed"

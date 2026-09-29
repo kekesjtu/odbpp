@@ -41,10 +41,12 @@ from typing import Optional, Sequence
 from .clipper import Region, Ring, difference, intersection, union
 from .diagnostics import (
     RECTIFY_AREA_ERROR,
+    RECTIFY_AREA_WARNING,
     RECTIFY_EMPTY_PROFILE,
     RECTIFY_HOLE_FILLED,
     RECTIFY_ISLAND_LOST,
     RECTIFY_NO_RECTANGLES,
+    RECTIFY_SLAB_AMBIGUOUS,
     Diagnostics,
 )
 
@@ -214,23 +216,37 @@ def _crossings(rings: Sequence[Ring], x_mid: float) -> list[float]:
 
 
 def _intervals(crossings: Sequence[float], tolerance: float) -> Optional[list[tuple[int, int]]]:
-    """Snapped, deduplicated ``y`` intervals from an even number of crossings."""
-    keys: list[int] = []
-    for y in crossings:
-        key = _snap_key(y, tolerance)
-        if not keys or keys[-1] != key:
-            keys.append(key)
-    if len(keys) % 2 != 0:
+    """Snapped, merged ``y`` intervals from an even number of crossings.
+
+    The crossings are paired *before* they are snapped.  Snapping first loses
+    the topology: a sub-tolerance sliver of void between two solids collapses
+    two crossings onto one snapped key, the key list becomes odd, and the whole
+    slab has to be dropped -- quietly removing a strip of real board.  Pairing
+    first keeps the material interpretation, and the snapped intervals are then
+    merged where snapping pushed them onto one another, so the pair of close
+    crossings simply becomes a seam instead of a hole.  An odd number of *raw*
+    crossings is a genuinely ambiguous cross-section and is reported as such by
+    returning ``None``.
+    """
+    if len(crossings) % 2 != 0:
         return None
-    out: list[tuple[int, int]] = []
-    for index in range(0, len(keys), 2):
-        y0, y1 = keys[index], keys[index + 1]
+    snapped: list[tuple[int, int]] = []
+    for index in range(0, len(crossings), 2):
+        y0 = _snap_key(crossings[index], tolerance)
+        y1 = _snap_key(crossings[index + 1], tolerance)
         if y1 > y0:
+            snapped.append((y0, y1))
+    out: list[tuple[int, int]] = []
+    for y0, y1 in snapped:
+        if out and y0 <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], y1))
+        else:
             out.append((y0, y1))
     return out
 
 
-def _bands(region: Region, tolerance: float) -> list[tuple[float, float, list[tuple[int, int]]]]:
+def _bands(region: Region, tolerance: float,
+           diagnostics: Diagnostics) -> tuple[list[tuple[float, float, list[tuple[int, int]]]], int]:
     """Slabs of constant cross-section, subdividing slanted ones.
 
     Vertex ``x`` values alone give an exact decomposition of a rectilinear
@@ -239,9 +255,15 @@ def _bands(region: Region, tolerance: float) -> list[tuple[float, float, list[tu
     the edge, so the *shape* is wrong even though the area is right.  A slab
     whose interval list differs at its two ends is therefore subdivided into
     steps no wider than the tolerance; rectilinear slabs are left whole.
+
+    Returns the bands and how many slabs had to be left out because their
+    cross-section was ambiguous (odd crossing count).  A dropped slab is
+    reported as an error: it is a piece of the outline the tolerance cannot
+    represent, not a rounding detail.
     """
     breaks = _axis_breaks(region.rings, tolerance)
     bands: list[tuple[float, float, list[tuple[int, int]]]] = []
+    dropped = 0
     for left, right in zip(breaks, breaks[1:]):
         if right <= left:
             continue
@@ -259,12 +281,25 @@ def _bands(region: Region, tolerance: float) -> list[tuple[float, float, list[tu
         step = width / count
         for index in range(count):
             xa = x0 + step * index
-            xb = xa + step
+            # Land the last step exactly on the snapped boundary: ``xa + step``
+            # drifts a few ulp away from ``key * tolerance`` and would leave a
+            # zero-width slab no rectangle owns.
+            xb = x1 if index == count - 1 else xa + step
             intervals = _intervals(
                 _crossings(region.rings, (xa + xb) / 2.0), tolerance)
+            if intervals is None:
+                dropped += 1
+                diagnostics.error(
+                    RECTIFY_SLAB_AMBIGUOUS,
+                    f"the board outline has an ambiguous cross-section in "
+                    f"x=[{xa:.4f}, {xb:.4f}] mm (an odd number of boundary "
+                    f"crossings at {tolerance:g} mm tolerance); that slab is "
+                    f"left out rather than guessed",
+                )
+                continue
             if intervals:
                 bands.append((xa, xb, intervals))
-    return bands
+    return bands, dropped
 
 
 def rectify_region(
@@ -290,12 +325,16 @@ def rectify_region(
                     "the board outline is empty; there is nothing to rectangularise")
         return RectifyResult([], tolerance, 0.0, 0.0, 0.0, 0.0, 0.0, False)
 
-    bands = _bands(region, tolerance)
+    bands, dropped = _bands(region, tolerance, diags)
 
     # Merge slabs that carry the same interval list into one rectangle column.
+    # Only *contiguous* slabs merge: a gap left by a dropped slab must stay a
+    # gap, or the neighbour would silently be stretched over outline nobody
+    # measured.
     merged: list[tuple[float, float, list[tuple[int, int]]]] = []
     for x0, x1, intervals in bands:
-        if merged and merged[-1][2] == intervals:
+        if (merged and merged[-1][2] == intervals
+                and abs(merged[-1][1] - x0) <= 1e-9 * max(1.0, abs(x0))):
             merged[-1] = (merged[-1][0], x1, intervals)
         else:
             merged.append((x0, x1, intervals))
@@ -333,6 +372,29 @@ def rectify_region(
                   opts.max_relative_area_error * original_area,
                   boundary * tolerance)
     ok = shape_deviation <= allowed
+    if dropped:
+        # An ambiguous cross-section is not a staircase error: a piece of the
+        # outline could not be represented at all.
+        ok = False
+
+    # The perimeter bound is the honest precision limit of the tolerance, so it
+    # can be looser than the configured relative limit on a large board.  The
+    # result is then still accepted, but never silently: a brief board with a
+    # coarse tolerance would otherwise lose whole strips with nothing said.
+    configured = max(opts.max_absolute_area_error_mm2,
+                     opts.max_relative_area_error * original_area)
+    if ok and shape_deviation > configured:
+        diags.warn(
+            RECTIFY_AREA_WARNING,
+            f"rectangularising at {tolerance:g} mm moved {shape_deviation:.4f} mm2 of "
+            f"the board outline ({relative * 100.0:.2f}% of {original_area:.3f} mm2), "
+            f"above the configured limit {configured:.4f} mm2 "
+            f"({opts.max_relative_area_error * 100.0:g}% / "
+            f"{opts.max_absolute_area_error_mm2:g} mm2); it is still within the "
+            f"perimeter bound {allowed:.4f} mm2 (boundary {boundary:.3f} mm x "
+            f"tolerance), so the result is accepted -- check lost/gained area "
+            f"before trusting it",
+        )
 
     if not ok:
         diags.error(

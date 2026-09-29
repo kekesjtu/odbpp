@@ -6,7 +6,7 @@ import pytest
 
 from odbpp.diagnostics import Diagnostics
 from odbpp.rectify import (DEFAULT_TOLERANCE_MM, RectifyOptions,
-                           rectify_region)
+                           _intervals, rectify_region)
 from odbpp.clipper import region_from_rings
 
 
@@ -56,6 +56,28 @@ class TestRectify:
         assert not result.ok
         assert "rectify.island_lost" in diagnostics.codes()
 
+    def test_a_sub_tolerance_void_sliver_does_not_drop_the_slab(self):
+        # A 0.001 mm slit, far below the 1 mm tolerance, cuts into the left half
+        # of a solid.  Snapping the crossings before pairing them collapses the
+        # two slit crossings onto one key, the key list becomes odd, and that
+        # slab used to be dropped -- and then the neighbouring slab was stretched
+        # over it, fabricating outline nobody measured.
+        cut = [(0, 0), (20, 0), (20, 20), (10, 20), (10, 10.0005),
+               (0, 10.0005), (0, 9.9995), (10, 9.9995), (10, 20), (0, 20)]
+        result = rectify_region(region((cut, False)),
+                                RectifyOptions(tolerance_mm=1.0))
+        assert result.rectified_area_mm2 == pytest.approx(400.0, abs=1.0)
+        assert result.lost_area_mm2 < 1.0
+        assert result.ok
+
+    def test_crossings_are_paired_before_they_are_snapped(self):
+        # Pairing first keeps the solid/void reading of a sub-tolerance sliver:
+        # the two inner crossings snap onto each other and merge the two solids
+        # into one interval instead of leaving an odd key list behind.
+        assert _intervals([0.0, 9.9995, 10.0005, 20.0], 1.0) == [(0, 20)]
+        assert _intervals([0.0, 9.6, 10.4, 20.0], 1.0) == [(0, 20)]
+        assert _intervals([1.0, 2.0, 3.0], 1.0) is None
+
     def test_a_slanted_edge_becomes_a_staircase_with_bounded_error(self):
         result = rectify_region(region((
             [(0, 0), (10, 0), (10, 10), (5, 10)], False)),
@@ -79,3 +101,21 @@ class TestRectify:
             RectifyOptions(tolerance_mm=2.0))
         assert result.shape_deviation_mm2 > 0.0
         assert result.ok
+
+    def test_a_loose_perimeter_bound_still_reports_the_area_moved(self):
+        # The perimeter bound is the tolerance's own precision limit, so it can
+        # be looser than the configured 1% relative limit.  A 45 degree
+        # hypotenuse in an 80 mm square moves 40 mm2 of outline: more than the
+        # 32 mm2 limit, well inside the 273 mm2 perimeter bound.  Accepted --
+        # but a coarse tolerance must not move that much board area unnoticed.
+        diagnostics = Diagnostics()
+        result = rectify_region(region(([(0, 0), (80, 0), (80, 80)], False)),
+                                RectifyOptions(tolerance_mm=1.0),
+                                diagnostics=diagnostics)
+        assert result.ok
+        assert "rectify.area_warning" in diagnostics.codes()
+
+        clean = Diagnostics()
+        rectify_region(region(([(0, 0), (80, 0), (80, 80), (0, 80)], False)),
+                       RectifyOptions(tolerance_mm=1.0), diagnostics=clean)
+        assert "rectify.area_warning" not in clean.codes()
