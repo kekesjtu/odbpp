@@ -259,18 +259,16 @@ class TestExport:
         assert all(l["type"] != "POWER_GROUND"
                    for l in document["steps"][0]["layers"])
 
-    def test_the_default_output_directory_is_under_out(self, capsys):
-        # Uses the fixture path's own name so the test does not depend on cwd.
+    def test_the_default_output_directory_is_under_out(self, capsys,
+                                                        tmp_path, monkeypatch):
+        # Resolve the default relative to an isolated cwd: the real out/ holds
+        # synchronized case artifacts and must never be deleted by a test.
         import os
-        import shutil
 
+        monkeypatch.chdir(tmp_path)
         target = os.path.join("out", "minimal-test-odb")
-        shutil.rmtree(target, ignore_errors=True)
-        try:
-            code, out, _err = run(capsys, "export",
-                                  str(sample_path("minimal-test-odb")))
-            assert code == 0
-            assert os.path.exists(os.path.join(target, "pcb.json"))
-            assert "out" in out
-        finally:
-            shutil.rmtree(target, ignore_errors=True)
+        code, out, _err = run(capsys, "export",
+                              str(sample_path("minimal-test-odb")))
+        assert code == 0
+        assert os.path.exists(os.path.join(target, "pcb.json"))
+        assert "out" in out
