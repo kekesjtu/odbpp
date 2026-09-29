@@ -2,7 +2,8 @@
 
 这里记录已确认问题的根因、修改和验证结果，文件从 `01` 连续编号。
 原始问题及复审证据见 [`../reviews/`](../reviews/README.md)，其编号独立。
-旧修复记录中的 `tools/review_*.py` 是当时的一次性审阅命令，脚本已退役；
+旧修复记录中的 `tools/review_*.py`、`tools/benchmark_export.py` 是当时的
+一次性审阅/性能测量命令，脚本已退役；
 当前验证以 `tests/` 和 `tools/sync_out.py` 为准。
 
 | 修复 | 对应审阅 | 内容 |

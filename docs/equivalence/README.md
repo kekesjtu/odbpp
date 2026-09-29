@@ -7,6 +7,7 @@
 |---|---|
 | [01-material-equivalence.md](01-material-equivalence.md) | 输入契约、矩形化、网格、光栅、材料默认值、等效公式、钻孔规则、输出格式与诊断、合成/真实 case/收敛验证、已知近似 |
 | [02-visualization.md](02-visualization.md) | 等效结果的掩膜 PNG、`kx`/`ky`/`kz` 热图与图例页：命令、语义、色标、内存、失败处理与验证 |
+| [03-case-output-sync.md](03-case-output-sync.md) | `out/` 按 case 同步 JSON/SVG/HTML、MaterialMap CSV/meta、掩膜与热图，及复用/重建规则 |
 
 相关推导（数学模型来源）：
 

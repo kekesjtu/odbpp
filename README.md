@@ -50,10 +50,13 @@ uv run --all-extras python -m odbpp layers      <path> [--step S]
 uv run --all-extras python -m odbpp symbols     <path>
 uv run --all-extras python -m odbpp diagnostics <path>
 
-# 同步 cases/ 对应的完整预览及 out/index.html
-uv run --all-extras python tools/sync_out.py --prune
-# 解析器或预览代码修改后，强制重建全部预览
-uv run --all-extras python tools/sync_out.py --force
+# 同步 cases/ 对应的预览、等效 CSV、逐层掩膜/热图及 out/index.html
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --prune
+# 需要其他分辨率/网格时显式指定
+uv run --all-extras python tools/sync_out.py --px 600 --py 600 --nx 300 --ny 300
+# 只重算物性等效与图片，或强制重建全部结果
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --force-equivalent
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --force
 
 # 临时或筛选导出放在 build/，不覆盖 out/ 的完整案例产物
 uv run --all-extras python -m odbpp export cases/designodb-rigidflex.tgz -o build/rigidflex-filtered --exclude-type DOCUMENT --per-layer-svg --minimum-stroke 0.05
@@ -126,7 +129,10 @@ wireframe 快捷按钮和实时毫米坐标读数。
 上述显示问题及 profile 输出精度问题已修复，见
 [修复与验证记录](docs/fixes/04-export-correctness-fixes.md)。
 
-修改预览生成代码后，使用 `tools/sync_out.py --force` 更新已有产物。
+修改预览生成代码后，使用 `tools/sync_out.py --px 400 --py 400 --force` 更新已有产物；
+仅修改等效或可视化代码时，用 `--force-equivalent`。同步结果按 case 放在
+`out/<case>/`：预览 JSON/SVG/HTML、MaterialMap CSV/meta、`masks/`、
+`heatmaps/` 及图例页，`out/index.html` 提供入口。
 `out/index.html` 链接到四个既有样本及 KiCad 小型案例的原生、裁剪两组导出。
 每份输入仅保留 JSON、合并 SVG、可交互 HTML；KiCad 输出分别位于
 `out/kicad-positive/native/` 与 `out/kicad-positive/clean/`，避免混淆来源。
@@ -230,7 +236,7 @@ for layer in step.layers:
     `grid.forced_lines_overflow`，绝不悄悄加格；每个单元必须完整落在一个 region 内。
 17. **单元必有采样。** 网格单元内无像素中心时报 `grid.cell_without_pixel`
     （致命），不静默取 0 或最近像素。
-18. **图不是数据。** 掩膜/热图 PNG 只是已写出 CSV 的另一种看法，从 CSV 重新读取渲染；
+18. **图不是数据。** 掩膜 PNG 取自等效计算所用光栅，热图从已写出的 CSV 重新读取渲染；
     板外不画成 FR4（灰 = 无计算域），`n/a` 不画成低热导率，也不拿显示效果判断收敛。
 
 ## 目录
@@ -243,7 +249,7 @@ for layer in step.layers:
 | `out/` | 与案例输入一一对应的导出结果及索引（不入库，由 `tools/sync_out.py` 维护） |
 | `src/odbpp/` | 解析器本体 |
 | `tests/` | 单元测试 + `tests/fixtures/` 合成样本 |
-| `tools/` | 规范 PDF 获取/抽取、案例普查、性能测量和 `out/` 同步 |
+| `tools/` | 规范 PDF 获取/抽取、案例普查和 `out/` 同步 |
 
 ## 中间 JSON 携带的层叠与属性语义
 
