@@ -54,6 +54,24 @@ from .errors import (
     UnsupportedFeatureError,
 )
 from .clipper import Region, Ring, difference, intersection, union
+from .equiv import (
+    CSV_COLUMNS,
+    EquivalenceOptions,
+    EquivalenceResult,
+    EquivalentCell,
+    equivalence_from_document,
+    write_materialmap,
+)
+from .grid import BoardGrid, Cell, GridOptions, build_grid
+from .materials import (
+    DEFAULT_BASE,
+    DEFAULT_COPPER,
+    Material,
+    MaterialBook,
+    PROJECT_DEFAULTS,
+    ResolvedMaterials,
+)
+from .rectify import Rect, RectifyOptions, RectifyResult, rectify_region
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .export import (
     PreviewOptions,
@@ -129,6 +147,27 @@ __all__ = [
     "render_svg",
     "render_html",
     "write_outputs",
+    # material equivalence (stage 4-5)
+    "EquivalenceOptions",
+    "EquivalenceResult",
+    "EquivalentCell",
+    "equivalence_from_document",
+    "write_materialmap",
+    "CSV_COLUMNS",
+    "GridOptions",
+    "BoardGrid",
+    "Cell",
+    "build_grid",
+    "RectifyOptions",
+    "RectifyResult",
+    "Rect",
+    "rectify_region",
+    "Material",
+    "MaterialBook",
+    "ResolvedMaterials",
+    "DEFAULT_COPPER",
+    "DEFAULT_BASE",
+    "PROJECT_DEFAULTS",
     # diagnostics
     "Diagnostic",
     "Diagnostics",

@@ -98,6 +98,57 @@ def build_parser() -> argparse.ArgumentParser:
                        help="omit the diagnostics array from the JSON")
     p_exp.set_defaults(json_out=None, format=None, max_records=5, no_features=False)
 
+    p_eq = sub.add_parser(
+        "equivalent",
+        help="material equivalence: preview JSON -> MaterialMap.csv + metadata",
+        description="Equivalent each copper and dielectric layer to per-cell "
+                    "kx/ky/kz, density and specific heat.",
+    )
+    p_eq.add_argument("path", nargs="?", default=None,
+                      help="ODB++ directory, .tgz/.tar.gz or .zip")
+    p_eq.add_argument("--from-json", dest="from_json", default=None,
+                      metavar="FILE",
+                      help="reuse an existing odbpp/preview-2 intermediate JSON "
+                           "instead of parsing an ODB++ input")
+    p_eq.add_argument("--step", default=None, help="step name to parse")
+    p_eq.add_argument("--no-features", action="store_true",
+                      help="with an ODB++ input, inventory only (not useful here)")
+    p_eq.add_argument("-o", "--out", default=None,
+                      help="output directory (default: out/<job name>)")
+    p_eq.add_argument("--px", type=int, required=True,
+                      help="raster pixels across the board in X (required)")
+    p_eq.add_argument("--py", type=int, required=True,
+                      help="raster pixels across the board in Y (required)")
+    p_eq.add_argument("--nx", type=int, default=None,
+                      help="board grid cells in X (default: px)")
+    p_eq.add_argument("--ny", type=int, default=None,
+                      help="board grid cells in Y (default: py)")
+    p_eq.add_argument("--rectify-tolerance", type=float, default=0.2, metavar="MM",
+                      help="staircase step for the board outline in mm (default 0.2)")
+    p_eq.add_argument("--max-area-error-ratio", type=float, default=0.01,
+                      metavar="R",
+                      help="allowed outline shape deviation as a fraction of the "
+                           "board area (default 0.01)")
+    p_eq.add_argument("--max-area-error-mm2", type=float, default=0.5,
+                      metavar="MM2",
+                      help="absolute floor for the outline deviation (default 0.5)")
+    p_eq.add_argument("--materials", default=None, metavar="FILE",
+                      help="JSON material configuration (global and per-layer "
+                           "overrides)")
+    p_eq.add_argument("--copper-k", type=float, default=None, metavar="W/MK")
+    p_eq.add_argument("--copper-density", type=float, default=None, metavar="KG/M3")
+    p_eq.add_argument("--copper-cp", type=float, default=None, metavar="J/KG/K")
+    p_eq.add_argument("--base-k", type=float, default=None, metavar="W/MK")
+    p_eq.add_argument("--base-density", type=float, default=None, metavar="KG/M3")
+    p_eq.add_argument("--base-cp", type=float, default=None, metavar="J/KG/K")
+    p_eq.add_argument("--warn-partial", action="store_true",
+                      help="warn about cells only partially covered by a "
+                           "layer's computational domain")
+    p_eq.add_argument("--digits", type=int, default=4,
+                      help="preview coordinate resolution when parsing ODB++ "
+                           "(default 4)")
+    p_eq.set_defaults(json_out=None, format=None, max_records=5)
+
     return parser
 
 
@@ -105,6 +156,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
 
     diagnostics = Diagnostics()
+
+    if args.command == "equivalent":
+        return _run_equivalent(args, diagnostics)
+
     options = LoadOptions(step=args.step, load_features=not args.no_features)
 
     try:
@@ -432,6 +487,186 @@ def _run_export(job: Job, args: argparse.Namespace,
 
     if args.no_diagnostics:
         return 1 if diagnostics.errors else 0
+
+    errors = diagnostics.errors
+    if errors:
+        print(f"\n{len(errors)} error-level diagnostic(s):", file=sys.stderr)
+        for item in errors:
+            print(f"  {item}", file=sys.stderr)
+    return 1 if errors else 0
+
+
+# ---------------------------------------------------------------------------
+# material equivalence (data-flow steps 4-5)
+# ---------------------------------------------------------------------------
+
+def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
+    """Stream MaterialMap.csv + a metadata sidecar for one step."""
+    import csv as _csv
+    import json
+    import os
+
+    from .equiv import (
+        CSV_COLUMNS,
+        EquivalenceError,
+        EquivalenceOptions,
+        equivalence_from_document,
+        write_metadata,
+    )
+    from .grid import GridOptions
+    from .materials import MaterialBook
+    from .rectify import RectifyOptions
+
+    # --- the intermediate document (the only interface the equivalence has) --
+    source_schema = None
+    if args.from_json:
+        try:
+            with open(args.from_json, encoding="utf-8") as handle:
+                document = json.load(handle)
+        except (OSError, ValueError) as exc:
+            print(f"error: cannot read {args.from_json}: {exc}", file=sys.stderr)
+            return 2
+        source_path = args.from_json
+        steps = document.get("steps") or [{}]
+        step_name = steps[0].get("name") if isinstance(steps[0], dict) else None
+        source_schema = document.get("schema")
+    else:
+        if not args.path:
+            print("error: give an ODB++ input path or --from-json FILE",
+                  file=sys.stderr)
+            return 2
+        from .export import PreviewOptions, build_step_preview, step_to_json
+
+        try:
+            job = load_job(args.path,
+                           options=LoadOptions(step=args.step,
+                                               load_features=not args.no_features),
+                           diagnostics=diagnostics)
+            step = job.step(args.step) if args.step else job.single_step
+        except (OdbError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if step is None:
+            print(f"error: no such step: {args.step!r}", file=sys.stderr)
+            return 2
+        preview = build_step_preview(
+            job, step,
+            options=PreviewOptions(round_digits=args.digits),
+            diagnostics=diagnostics,
+        )
+        document = step_to_json(job, preview, round_digits=args.digits)
+        source_path = job.source_path
+        step_name = step.name
+        source_schema = document.get("schema")
+
+    # --- materials: file config, then command-line global overrides ----------
+    config: dict = {}
+    if args.materials:
+        try:
+            with open(args.materials, encoding="utf-8") as handle:
+                loaded = json.load(handle)
+        except (OSError, ValueError) as exc:
+            print(f"error: cannot read {args.materials}: {exc}", file=sys.stderr)
+            return 2
+        if not isinstance(loaded, dict):
+            print(f"error: {args.materials} must hold a JSON object",
+                  file=sys.stderr)
+            return 2
+        config = dict(loaded)
+
+    overrides: dict = {}
+    for phase, prefix in (("copper", "copper"), ("base", "base")):
+        entry = {}
+        for field, attr in (("k_w_mk", f"{prefix}_k"),
+                            ("density_kg_m3", f"{prefix}_density"),
+                            ("specific_heat_j_kgk", f"{prefix}_cp")):
+            value = getattr(args, attr)
+            if value is not None:
+                entry[field] = value
+        if entry:
+            overrides[phase] = entry
+    if overrides:
+        existing = config.get("global")
+        merged = dict(existing) if isinstance(existing, dict) else {}
+        for phase, entry in overrides.items():
+            merged.setdefault(phase, {}).update(entry)
+        config["global"] = merged
+
+    try:
+        options = EquivalenceOptions(
+            grid=GridOptions(px=args.px, py=args.py, nx=args.nx, ny=args.ny),
+            materials=MaterialBook(config or None, diagnostics=diagnostics),
+            rectify=RectifyOptions(
+                tolerance_mm=args.rectify_tolerance,
+                max_relative_area_error=args.max_area_error_ratio,
+                max_absolute_area_error_mm2=args.max_area_error_mm2,
+            ),
+            warn_partial_domains=args.warn_partial,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    out_dir = args.out or os.path.join(
+        "out", os.path.basename(str(source_path).rstrip("/\\")) or "job")
+    os.makedirs(out_dir, exist_ok=True)
+    stem = step_name or "step"
+    csv_path = os.path.join(out_dir, f"{stem}.MaterialMap.csv")
+    metadata_path = os.path.join(out_dir, f"{stem}.MaterialMap.meta.json")
+    temp_path = csv_path + ".tmp"
+
+    # Stream rows as they are produced: a board-wide grid can hold millions of
+    # cells and holding them all just to write a CSV is pure waste.
+    count = 0
+    try:
+        with open(temp_path, "w", encoding="utf-8", newline="") as handle:
+            writer = _csv.writer(handle)
+            writer.writerow(CSV_COLUMNS)
+
+            def sink(cell) -> None:
+                nonlocal count
+                writer.writerow(cell.csv_row())
+                count += 1
+
+            result = equivalence_from_document(document, options,
+                                               diagnostics=diagnostics,
+                                               cell_sink=sink)
+    except EquivalenceError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        return 2
+
+    if result.fatal:
+        # An untrustworthy run must not look like a finished file.
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        print("error: the equivalence run is not trustworthy; no output written",
+              file=sys.stderr)
+        for item in diagnostics.errors:
+            print(f"  {item}", file=sys.stderr)
+        return 2
+
+    os.replace(temp_path, csv_path)
+    write_metadata(result, metadata_path, source_path=source_path,
+                   source_schema=source_schema, step_name=step_name)
+
+    equivalent_layers = [r for r in result.layers if r.status == "equivalent"]
+    print(f"step {step_name!r}: {count} equivalent cell(s) over "
+          f"{len(equivalent_layers)} layer(s); raster {args.px}x{args.py}, "
+          f"grid {result.grid.nx}x{result.grid.ny}, "
+          f"{len(result.grid.cells)} board cell(s)")
+    for report in result.layers:
+        if report.status == "equivalent":
+            print(f"  {report.name:<24}{report.type:<14} cells={report.cell_count}"
+                  f"  z=[{report.z_start_mm:g},{report.z_end_mm:g}] mm"
+                  f"{'' if report.thickness_known else '  (thickness unknown)'}")
+        else:
+            print(f"  {report.name:<24}{report.type:<14} {report.status}: "
+                  f"{report.reason}")
+    print(f"wrote {csv_path} ({os.path.getsize(csv_path) / 1e6:.2f} MB)")
+    print(f"wrote {metadata_path} "
+          f"({os.path.getsize(metadata_path) / 1e6:.2f} MB)")
 
     errors = diagnostics.errors
     if errors:
