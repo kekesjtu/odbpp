@@ -71,6 +71,7 @@ __all__ = [
     "write_gallery_html",
     "format_z",
     "safe_name",
+    "unique_image_stem",
 ]
 
 
@@ -135,6 +136,24 @@ def safe_name(name: str) -> str:
     if out.upper() in _RESERVED:
         out = "_" + out
     return out
+
+
+def unique_image_stem(name: str, used: set[str]) -> str:
+    """Reserve a layer image stem, including suffix and case-fold collisions.
+
+    Different authored names can have the same filesystem-safe spelling.  The
+    reserved set holds the *whole* stem so an authored ``A_B-2`` cannot replace
+    the suffix assigned to a preceding ``A:B``.  Case-folding also protects
+    case-insensitive filesystems such as the default Windows filesystem.
+    """
+    base = safe_name(name)
+    stem = base
+    suffix = 2
+    while stem.casefold() in used:
+        stem = f"{base}-{suffix}"
+        suffix += 1
+    used.add(stem.casefold())
+    return stem
 
 
 #: Longest side, in pixels, an automatically scaled mask picture aims for.
@@ -716,14 +735,10 @@ def render_heatmaps(csv_path: str, out_dir: str, *,
         bounds = [(low, high)] * len(selected)
 
     os.makedirs(out_dir, exist_ok=True)
-    used: dict[str, int] = {}
+    used: set[str] = set()
     images: list[HeatmapImage] = []
     for position, (series, series_bounds) in enumerate(zip(selected, bounds), start=1):
-        stem = safe_name(series.name)
-        seen = used.get(stem, 0) + 1
-        used[stem] = seen
-        if seen > 1:
-            stem = f"{stem}-{seen}"
+        stem = unique_image_stem(series.name, used)
         path = os.path.join(out_dir, f"{stem}.png")
         cols = array("i", (data.x_interval_of_column[i] for i in series.i))
         rows = array("i", (data.y_interval_of_row[j] for j in series.j))

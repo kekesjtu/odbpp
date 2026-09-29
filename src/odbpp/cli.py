@@ -31,7 +31,7 @@ import sys
 from typing import Any, Optional, Sequence
 
 from . import __version__
-from .diagnostics import VISUALIZE_FAILED, Diagnostics
+from .diagnostics import MATERIALS_DEFAULT_USED, VISUALIZE_FAILED, Diagnostics
 from .errors import OdbError
 from .geometry import DEFAULT_SAGITTA_MM, SUPPORTED_SYMBOL_PREFIXES, TessellationOptions
 from .job import LoadOptions, load_job
@@ -574,7 +574,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         VisualizeError,
         gallery_entries,
         render_heatmaps,
-        safe_name,
+        unique_image_stem,
         write_gallery_html,
         write_layer_mask,
         z_text,
@@ -685,12 +685,14 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     masks_dir = os.path.join(out_dir, "masks")
     mask_jobs: list[tuple[str, str, str]] = []
     mask_images: list[MaskImage] = []
+    used_mask_stems: set[str] = set()
 
     def mask_sink(name: str, mask, pixel_step_mm) -> None:
         if not args.raster_png:
             return
         os.makedirs(masks_dir, exist_ok=True)
-        final = os.path.join(masks_dir, f"{safe_name(name)}.png")
+        final = os.path.join(
+            masks_dir, f"{unique_image_stem(name, used_mask_stems)}.png")
         temp = final + ".tmp"
         mask_images.append(write_layer_mask(
             mask, temp, scale=args.raster_scale or None,
@@ -800,6 +802,10 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
               file=sys.stderr)
         diagnostics.warn(VISUALIZE_FAILED,
                          f"the run is written, but its pictures are not: {exc}")
+
+    for item in diagnostics.warnings:
+        if item.code == MATERIALS_DEFAULT_USED:
+            print(item, file=sys.stderr)
 
     errors = diagnostics.errors
     if errors:

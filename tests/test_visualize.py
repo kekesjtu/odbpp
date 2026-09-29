@@ -614,11 +614,13 @@ class TestHeatmapRendering:
         write_materialmap(run(document([
             {"name": "A/B", "polygons": [rect(0, 0, 10, 10)]},
             {"name": "A:B", "polygons": [rect(0, 0, 10, 10)]},
+            {"name": "A_B-2", "polygons": [rect(0, 0, 10, 10)]},
         ])), str(csv_path))
         report = render_heatmaps(str(csv_path), str(tmp_path / "clash"),
                                  options=HeatmapOptions(panel_width_px=120,
                                                         font_scale=1))
-        assert len({image.path for image in report.images}) == 2
+        assert {Path(image.path).name for image in report.images} == {
+            "A_B.png", "A_B-2.png", "A_B-2-2.png"}
         assert all(Path(image.path).is_file() for image in report.images)
 
     def test_safe_name_keeps_a_usable_stem(self):
@@ -654,6 +656,52 @@ class TestGallery:
 # ---------------------------------------------------------------------------
 
 class TestCommandLine:
+    def test_colliding_layer_names_keep_all_masks_and_heatmaps(self, tmp_path):
+        import json
+
+        from odbpp.cli import main
+
+        names = ["A/B", "A:B", "A_B-2", "Top", "top"]
+        preview = tmp_path / "board.json"
+        preview.write_text(json.dumps(document([
+            {"name": name, "polygons": [rect(2 * index, 0,
+                                               2 * (index + 1), 10)]}
+            for index, name in enumerate(names)
+        ])), encoding="utf-8")
+        out = tmp_path / "eq"
+
+        assert main(["equivalent", "--from-json", str(preview),
+                     "--px", "10", "--py", "10", "--raster-scale", "1",
+                     "-o", str(out)]) == 0
+
+        expected = {"A_B.png", "A_B-2.png", "A_B-2-2.png",
+                    "Top.png", "top-2.png"}
+        masks = list((out / "masks").glob("*.png"))
+        heatmaps = list((out / "heatmaps").glob("*.png"))
+        assert {path.name for path in masks} == expected
+        assert {path.name for path in heatmaps} == expected
+        assert len({path.read_bytes() for path in masks}) == len(names)
+        gallery = (out / "pcb.images.html").read_text(encoding="utf-8")
+        for filename in expected:
+            assert f"masks/{filename}" in gallery
+            assert f"heatmaps/{filename}" in gallery
+        assert (out / "pcb.MaterialMap.csv").is_file()
+        assert (out / "pcb.MaterialMap.meta.json").is_file()
+        assert not list(out.rglob("*.tmp"))
+
+    def test_default_material_warnings_are_visible_on_stderr(
+            self, tmp_path, capsys):
+        from odbpp.cli import main
+
+        assert main(["equivalent", str(case_path("minimal-test-odb")),
+                     "--px", "8", "--py", "8", "-o", str(tmp_path),
+                     "--no-raster-png", "--no-heatmap", "--no-gallery"]) == 0
+        stderr = capsys.readouterr().err
+        assert stderr.count("materials.default_used") == 2
+        assert "copper phase" in stderr
+        assert "base phase" in stderr
+        assert (tmp_path / "pcb.MaterialMap.csv").is_file()
+
     def test_equivalent_writes_masks_heatmaps_and_a_gallery(self, tmp_path, capsys):
         from odbpp.cli import main
 
