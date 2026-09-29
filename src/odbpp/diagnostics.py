@@ -176,3 +176,33 @@ EXPORT_UNKNOWN_LAYER = "export.unknown_layer"
 #: Vertices collapsed onto one another at the output grid, so a ring lost all
 #: its area; the ring is dropped from the model rather than shipped invalid.
 EXPORT_DEGENERATE_RING = "export.degenerate_ring"
+
+# --------------------------------------------------------------------------
+# material equivalence (data-flow steps 4-5)
+# --------------------------------------------------------------------------
+
+# Board outline rectangularisation (AGENTS 外轮廓矩形化与网格 1-2).
+RECTIFY_EMPTY_PROFILE = "rectify.empty_profile"
+RECTIFY_NO_RECTANGLES = "rectify.no_rectangles"
+RECTIFY_AREA_ERROR = "rectify.area_error"
+RECTIFY_ISLAND_LOST = "rectify.island_lost"
+RECTIFY_HOLE_FILLED = "rectify.hole_filled"
+
+# Board grid allocation (AGENTS 外轮廓矩形化与网格 3-5).
+GRID_FORCED_LINES_OVERFLOW = "grid.forced_lines_overflow"
+GRID_NO_BOARD_CELLS = "grid.no_board_cells"
+GRID_CELL_WITHOUT_PIXEL = "grid.cell_without_pixel"
+
+# Per-layer evaluation.
+EQUIV_LAYER_FAILED = "equiv.layer_failed"
+EQUIV_LAYER_SKIPPED = "equiv.layer_skipped"
+EQUIV_MISSING_DOMAIN = "equiv.missing_domain"
+EQUIV_DIELECTRIC_FEATURES = "equiv.dielectric_features_ignored"
+EQUIV_DRILL_SPAN_UNKNOWN = "equiv.drill_span_unknown"
+EQUIV_LAYER_Z_UNKNOWN = "equiv.layer_z_unknown"
+EQUIV_PARTIAL_DOMAIN = "equiv.partial_domain"
+EQUIV_LAYER_EMPTY = "equiv.layer_empty"
+
+# Materials (AGENTS 等效器输入与材料规则 4-5).
+MATERIALS_DEFAULT_USED = "materials.default_used"
+MATERIALS_INVALID = "materials.invalid"
