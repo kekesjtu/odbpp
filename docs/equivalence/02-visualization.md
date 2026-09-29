@@ -38,6 +38,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 | `--no-heatmap` | 不写 `<out>/heatmaps/*.png` |
 | `--heatmap-panel-width PX` | 单面板宽度（默认 720；高度按板比例） |
 | `--heatmap-shared-scale` | 所有层共用一条色标（层间可比，单层对比度下降） |
+| `--heatmap-grid` / `heatmap --grid` | 按 CSV 坐标画出存在的单元边界；没有该层的区域不画网格 |
 | `--no-gallery` | 不写图例 HTML |
 | `heatmap --layer NAME` | 只画指定层（可重复） |
 
@@ -110,6 +111,9 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
   当网格行数/列数多于面板像素数时，不足一像素的单元可能没有自己的像素
   （图中看不到该行）：图是视图，CSV 才是数据；要逐格看清就加大
   `--heatmap-panel-width`。
+- **粗网格**：先用较少的 `nx/ny` 重新运行等效器，再从新 CSV 绘制热图。
+  保留较高的 `px/py` 可以让一个等效单元包含多个光栅样本。热图不对旧 CSV
+  做二次聚合，不插值、不平滑；`--heatmap-grid` 用灰线显示单元边界。
 - 图头：`Lk/n`（第 k 层/共 n 层）、绝对 Z 区间（`?` 表示 `thickness_known=false`）、
   面板标题与单位 `W/(m.K)`。字体是内置 5×7 点阵（`png._GLYPHS`），
   只覆盖标签里实际出现的字符；层名等任意文本放在文件名与图例页里。

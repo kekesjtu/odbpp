@@ -4,7 +4,7 @@
 
 | 脚本 | 用途 |
 |---|---|
-| `sync_out.py` | 按 `cases/` 同步预览、MaterialMap CSV、逐层掩膜 PNG、逐层 kx/ky/kz 热图与总索引；必须指定 `--px/--py`，可用 `--nx/--ny` 调整网格，`--force-equivalent` 只重算等效结果，`--force` 全部重建 |
+| `sync_out.py` | 按 `cases/` 同步预览、MaterialMap CSV、逐层掩膜 PNG、逐层 kx/ky/kz 热图与总索引；必须指定 `--px/--py`，`--coarse-grid N` 按目标与 region 边界选择粗网格并画边界，或用 `--nx/--ny` 指定精确网格；`--force-equivalent` 只重算等效结果，`--force` 全部重建 |
 | `census_cases.py` | 普查 ODB++ 样本的图元、极性和符号 |
 | `fetch_spec.py` | 获取或校验未入库的官方格式规范 PDF |
 | `extract_spec_text.py` | 按页提取规范文本，供格式语义核对 |

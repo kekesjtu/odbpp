@@ -51,17 +51,21 @@ uv run --all-extras python -m odbpp symbols     <path>
 uv run --all-extras python -m odbpp diagnostics <path>
 
 # 同步 cases/ 对应的预览、等效 CSV、逐层掩膜/热图及 out/index.html
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --prune
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --prune
 # 需要其他分辨率/网格时显式指定
 uv run --all-extras python tools/sync_out.py --px 600 --py 600 --nx 300 --ny 300
 # 只重算物性等效与图片，或强制重建全部结果
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --force-equivalent
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --force
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --force-equivalent
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --force
 
 # 临时或筛选导出放在 build/，不覆盖 out/ 的完整案例产物
 uv run --all-extras python -m odbpp export cases/designodb-rigidflex.tgz -o build/rigidflex-filtered --exclude-type DOCUMENT --per-layer-svg --minimum-stroke 0.05
 uv run --all-extras python -m odbpp export <path> -o build/selected-layers --layer top --layer bottom --only-json
 ```
+
+`--coarse-grid 40` 以整板每方向 40 格为目标；region 强制边界需要更多格时，
+按该 case 的最低要求选择网格，并在命令行及总索引注明实际数量。
+该批量选项自动绘制热图单元边界，与精确的 `--nx/--ny` 互斥。
 
 `export` 的主要选项：
 
@@ -98,6 +102,7 @@ uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
 | `--no-warn-partial` | 关闭「计算域只覆盖部分网格单元」的默认告警（输出仍带覆盖率列） |
 | `--no-raster-png` / `--raster-scale N` | 逐层黑白掩膜 PNG：默认自动取到约 700 px 长边且**保持板的长宽比**；`N` 强制各向同性 N 倍放大（会拉伸非方形板） |
 | `--no-heatmap` / `--heatmap-panel-width PX` / `--heatmap-shared-scale` | 逐层 `kx`/`ky`/`kz` 三面板热图；面板宽默认 720 px；共享色标便于层间比较 |
+| `--heatmap-grid` | 在热图中标出 CSV 单元边界；独立 `heatmap` 命令对应 `--grid` |
 | `--no-gallery` | 不写 `<step>.images.html` 图例页 |
 
 可视化产物只依赖 CSV，可以事后单独重画（不需要 ODB++ 输入，也不重算等效）：
