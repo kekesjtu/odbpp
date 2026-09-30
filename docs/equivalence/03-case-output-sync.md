@@ -1,7 +1,7 @@
 # 03 · 按 case 同步预览、等效结果与图片（2026-09-30）
 
-`tools/sync_out.py` 是 `out/` 的统一入口。每个输入 case 在 `out/` 保留一个
-对应目录；KiCad 的 `native/` 与 `clean/` 仍分别归档。一个目录包含：
+`tools/sync_out.py` 是 `out/` 的统一入口。每个 case 保留一个对应目录；
+KiCad `native/` 与 `clean/` 分别归档。目录包含：
 
 ```text
 out/<case>/
@@ -10,66 +10,60 @@ out/<case>/
   <step>.images.html
   masks/<layer>.png
   heatmaps/<layer>.png
+  regions/regions.png / regions.svg / regions.csv / regions.stats.json  # 分区诊断
 ```
 
-`out/index.html` 为全部 case 的预览、CSV、meta 与图例页提供入口。图例页按层
-链接掩膜和三方向热导率热图。`out/` 是本地生成物，不纳入 Git。
+总入口为 `out/index.html`，列出实际 XY 网格数、CSV/meta、逐层图例；
+已生成 region 诊断图的 case 另有分区链接。`out/` 是本地生成物，不纳入 Git。
 
 ## 使用
 
 ```bash
 uv sync --all-extras
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --prune
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 \
+    --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid
 
-# 只改变物性等效或图片代码时，沿用现有 preview-2 JSON
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --force-equivalent
+# 改动等效器后重算；沿用有效 preview-2 JSON
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 \
+    --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --force-equivalent
 
-# 解析器、JSON 契约或预览代码变化时，全部重建
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --force
+# 改动解析器后加 --force；清理没有来源 case 的输出用 --prune
+# X/Y 可分别设置，例如最小 0.1/0.2 mm，最大 4/3 mm
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 \
+    --min-cell-mm 0.1 0.2 --max-cell-mm 4 3 --heatmap-grid
 ```
 
-`--px`、`--py` 必填；`--nx`、`--ny` 不填时分别等于 `px`、`py`，显式填写
-须在 `1..px`、`1..py` 内。上述 400×400 是本次批量同步使用的分辨率，
-不是等效器的隐式默认值。缺少用户材料配置时，等效器使用项目铜/FR4 默认值，
-命令行和 meta 都会给出警告。
+`--px/--py` 必填。`--min-cell-mm/--max-cell-mm` 默认 0.1 / 5 mm，
+各接受一个值或 X Y 两个值。旧的 `--nx/--ny/--coarse-grid` 已移除。
+region 强制边界完整保留，各区间独立按尺寸上下限细分；不兼容就报错。
+网格细分不再受整板格数预算限制，因此中部宽区间也会细分。
+光栅像素仍用于等效积分，热图直接读取重新计算的 CSV，不做二次聚合。
 
-`--coarse-grid N` 是批量规划选项，与 `--nx/--ny` 互斥。它使用与等效器
-相同的 JSON step profile 和默认矩形化精度，先计算 region 强制边界数，
-再选 `nx=max(N, 强制 X 边界数-1)`、`ny=max(N, 强制 Y 边界数-1)`。
-实际网格数不能超过光栅尺寸，矩形化失败时停止；不会放宽误差判据或填平孔洞。
-精确指定 `--nx/--ny` 时仍保持原有规则，不兼容就报错。
-粗网格模式自动绘制 CSV 单元边界，亦可单独使用 `--heatmap-grid`。
-总索引新增实际 XY 网格数列，图例页也记录是否画了边界。
+缺少用户材料配置时使用项目铜/FR4 默认表，命令行和 meta 明确警告。
 
-工具只复用 schema 为 `odbpp/preview-2` 的预览；只有 JSON 来源、像素与
-网格参数、CSV/meta、图例页及逐层 PNG 都齐全时才复用等效结果。重新计算后
-会删除已不属于本次物理层列表的旧 PNG，避免同一 case 混有过时图片。
+## 复用与重建
 
-## 原同步验证
+预览必须为一个 step 的 `odbpp/preview-2`，且输入来源一致。
+等效结果必须为 `odbpp/materialmap-3`：JSON 来源、光栅参数、各轴尺寸上下限、
+有/无热图边界的配置，以及 CSV/meta、图例和逐层 PNG 均匹配才复用。
+只更改最大或最小尺寸也会重算。成功替换后清理已不属于当前层列表的旧 PNG。
 
-18 个 case 均已完成 400×400 同步：`out/` 共 81 张逐层掩膜、81 张热图，
-CSV 列含 `kx`、`ky`、`kz`、密度和比热，合计约 1.603 GB。再次运行全部复用；
-端到端测试还验证了缺失输出重建、参数变化重算、旧图片清理和索引链接。
-原先会删除仓库真实 `out/minimal-test-odb` 的 CLI 测试已改用 pytest 临时目录。
-全量 702 项测试通过；`out/index.html` 的 108 个链接和各层图例页图片链接均能解析到文件。
+## region 分区图
 
-## 粗网格重新导出（2026-09-30）
+```bash
+uv run --all-extras python tools/plot_regions.py \
+    out/designodb-rigidflex.tgz/CELLULAR_FLIP-PHONE.json --px 400 --py 400
+uv run --all-extras python tools/plot_regions.py \
+    out/kicad-kitchen-sink/PCB.json --px 400 --py 400
+```
 
-光栅保留 400×400，全部重新计算 MaterialMap，再从新 CSV 生成 81 张逐层
-`kx/ky/kz` 热图，并用灰线显示单元边界。原 CSV、掩膜、热图与图例被当前结果替换。
+使用与等效器相同的矩形化函数；默认写入该 case 的 `regions/`。
+颜色表示 region 面积（对数色标），黑线是矩形边界，红色虚线是原 profile。
+包括整板图、两端放大图和短边直方图；SVG 悬停显示编号、尺寸、面积，CSV 列出全部矩形。
+修改光栅或矩形化精度后应重新运行分区图工具。
 
-| case | 实际整板 XY 网格 | 原因 |
-|---|---|---|
-| `designodb-rigidflex.tgz` | 50×40 | X 方向至少需要 50 格才能保留 region 边界 |
-| `kicad-kitchen-sink` | 187×127 | 复杂外形与孔洞的强制边界已达到该数量 |
-| 其他 16 个 case | 40×40 | 目标可满足全部 region 边界 |
+## 历史结果
 
-网格可以不均匀，板外不输出单元；逐层 CSV 行数也由各层计算域决定。
-例如 100×80 mm 的 `minimal-test-odb` 单元为 2.5×2 mm，
-每格含 10×10 个光栅样本，两个等效层合计 3200 行。
-
-测试覆盖孔洞强制边界、目标与精确网格互斥、粗网格多像素积分、
-有/无边界图片的缓存区分，以及无计算域区域不画网格。
-全量 705 项测试通过。实际输出共 136954 行物性数据、81 张掩膜和 81 张热图；
-逐行验证热导率、密度和比热为有限正数并位于默认两材料范围内，
-270 个文件链接全部有效。`out/` 总大小约 227.17 MB，重复同步全部复用。
+此前按整板 400×400，以及目标 40×40 导出的结果已被尺寸约束版本替换。
+目标格数取强制边界最低数量时，曾产生中央 64.52 mm 宽的单列，说明最低格数
+不能代表合理的空间分辨率。当前实现及验证见 [04](04-grid-sizes-and-regions.md)。

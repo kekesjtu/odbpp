@@ -85,18 +85,19 @@ perimeter × tolerance)`。前两项是用户可配的绝对/相对下限，第�
 ## 3. 网格（`grid.py`）
 
 - **强制网格线**：所有 region 的 x/y 边界必然是网格线。
-- **分配余量**：`nx`、`ny` 是**整板**各方向总格数（不是每 region 格数），
-  未给定时等于 `px`、`py`，且必须满足 `1 ≤ nx ≤ px`、`1 ≤ ny ≤ py`。
-- **最大余数法**：剩余格数按各区间「还能容纳的像素数」加权分配——优先把格线放在
-  像素储备充足的区间，避免产生无像素单元。
-- **不越权**：强制边界数超过 `nx`/`ny` 能容纳的数量时报
-  `grid.forced_lines_overflow`，**绝不**擅自增加用户指定的格数。
+- **尺寸约束**：`--min-cell-mm` / `--max-cell-mm` 限制单元边长，默认 0.1–5 mm。
+  各参数可给一个值（X/Y 共用）或两个值（分别为 X Y），必须为有限正数且 min ≤ max。
+- **逐区间细分**：强制边界间长度为 L 时，分格数满足 `ceil(L/max) ≤ n ≤ floor(L/min)`。
+  选择最少的可行格数，等宽细分该区间。宽区域必然受最大尺寸约束，无论边缘有多少条边界。
+- **不可放宽**：最小尺寸冲突或不存在整数解时报 `grid.size_incompatible`，含轴向和坐标；
+  光栅不能提供足够像素中心时报 `grid.cell_without_pixel`。不删除边界或扩大尺寸范围。
+- `nx/ny` 仅是派生的实际格数，不再是输入；旧 `--nx/--ny/--coarse-grid` 参数已移除。
 - 每个单元完整落在单个 region 内，不跨越 region 边界。板外不产生网格。
 
 ## 4. 光栅化（`raster.py`）
 
 - **像素中心法**：单元是否含某像素，以其**中心**是否落在单元内判定；
-  `nx/ny` 不必与 `px/py` 对齐。
+  网格边界不必与光栅边界对齐。
 - **even-odd 扫描线**：逐像素行求交点、奇偶配对，正确处理岛、孔与嵌套，
   与环的绘制顺序无关。
 - 某层在某个有效网格单元内**没有任何像素**时报 `equiv.cell_without_pixel`
@@ -181,7 +182,7 @@ cell_area_mm2, domain_area_mm2, domain_coverage, partial_domain
 该布局是本项目自己的设计：参考 `docs/Flotherm_reference_MaterialMap.csv`
 看了「需要表达什么」，没有照抄，也不以 Flotherm 可导入为目标。
 
-### 7.2 `*.MaterialMap.meta.json`（`odbpp/materialmap-2`）
+### 7.2 `*.MaterialMap.meta.json`（`odbpp/materialmap-3`）
 
 CSV 无法表达或不宜逐行重复的信息：
 
@@ -191,7 +192,7 @@ CSV 无法表达或不宜逐行重复的信息：
 - `coverage`：`cell_area_mm2`/`domain_area_mm2`/`domain_coverage` 三列的下游语义
   （覆盖部分才是该层材料，剩余为板外/空洞，按覆盖率折算质量与热容）；
 - `raster`：`px`/`py`/`pixel_step_mm`/`board_bounds_mm`/`sampling`；
-- `grid`：`nx`/`ny`/强制线与总数/`region_count`/`cell_count`/网格线坐标；
+- `grid`：`size_constraints_mm`（各轴 min/max）、`actual_edge_range_mm`（实际边长范围）、派生的 `nx`/`ny`、强制线数、`region_count`、`cell_count`、网格线坐标；
 - `rectification`：`tolerance_mm`/原始与矩形化面积/`lost`/`gained`/`net`/
   `shape_deviation`/`relative_area_error`/`ok`/矩形清单；
 - `materials`：`defaults`（数值+来源）与 `by_layer`（每层实际取值及来源）；
@@ -222,7 +223,7 @@ CSV 无法表达或不宜逐行重复的信息：
 | `rectify.hole_filled` | 某孔窄于 tolerance，被填平 |
 | `rectify.area_warning` | 轮廓移动超过配置上限、但仍在周长上界内（仍接受） |
 | `rectify.slab_ambiguous` | 某条带交点为奇数，无法判读，已跳过（置 `ok=false`） |
-| `grid.forced_lines_overflow` | 强制边界数超过用户指定格数 |
+| `grid.size_incompatible` | 强制区间与单元尺寸上下限不兼容 |
 | `grid.no_board_cells` | 网格内没有板内单元 |
 | `grid.cell_without_pixel` | 网格单元内无像素中心（致命） |
 | `equiv.unsupported_schema` | 非 preview-2（抛 `EquivalenceError`，非诊断） |
@@ -362,7 +363,7 @@ uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
 ```
 
 `equivalent` 关键选项：`--px`/`--py`（必填，整板各方向像素数）、
-`--nx`/`--ny`（默认等于 `px`/`py`，须满足 `1 ≤ nx ≤ px`）、
+`--min-cell-mm`/`--max-cell-mm`（默认 0.1 / 5 mm，各支持一个或 X Y 两个值）、
 `--rectify-tolerance`（默认自动 = 2×像素间距）、`--materials FILE`
 （JSON：`global` 与 `layers.<name>` 覆盖）、逐相覆盖
 `--copper-k/--copper-density/--copper-cp` 与 `--base-*`、`--warn-partial`、

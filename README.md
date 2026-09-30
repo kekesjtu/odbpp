@@ -51,21 +51,22 @@ uv run --all-extras python -m odbpp symbols     <path>
 uv run --all-extras python -m odbpp diagnostics <path>
 
 # 同步 cases/ 对应的预览、等效 CSV、逐层掩膜/热图及 out/index.html
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --prune
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --prune
 # 需要其他分辨率/网格时显式指定
-uv run --all-extras python tools/sync_out.py --px 600 --py 600 --nx 300 --ny 300
+uv run --all-extras python tools/sync_out.py --px 600 --py 600 --min-cell-mm 0.1 --max-cell-mm 2
 # 只重算物性等效与图片，或强制重建全部结果
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --force-equivalent
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --force
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --force-equivalent
+uv run --all-extras python tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --force
 
 # 临时或筛选导出放在 build/，不覆盖 out/ 的完整案例产物
 uv run --all-extras python -m odbpp export cases/designodb-rigidflex.tgz -o build/rigidflex-filtered --exclude-type DOCUMENT --per-layer-svg --minimum-stroke 0.05
 uv run --all-extras python -m odbpp export <path> -o build/selected-layers --layer top --layer bottom --only-json
 ```
 
-`--coarse-grid 40` 以整板每方向 40 格为目标；region 强制边界需要更多格时，
-按该 case 的最低要求选择网格，并在命令行及总索引注明实际数量。
-该批量选项自动绘制热图单元边界，与精确的 `--nx/--ny` 互斥。
+网格由单元边长的最小/最大尺寸约束控制，单位 mm。各参数可传一个值（X/Y 共用）
+或两个值（X Y 分别设置）。默认 0.1–5 mm；宽区间按最大尺寸细分，
+region 强制边界始终保留。不兼容的最小尺寸、整数分格或光栅采样约束会明确报错。
+`nx/ny` 仅为输出的实际格数；旧 `--nx/--ny/--coarse-grid` 已移除。
 
 `export` 的主要选项：
 
@@ -86,7 +87,7 @@ uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
 
 # 或从已有 preview-2 JSON 起（推荐先 export --only-json，再多次试算）
 uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
-    --px 800 --py 800 --nx 400 --ny 400 -o build/ks-eq
+    --px 800 --py 800 --min-cell-mm 0.1 --max-cell-mm 5 -o build/ks-eq
 ```
 
 `equivalent` 关键选项：
@@ -94,7 +95,7 @@ uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
 | 选项 | 作用 |
 |---|---|
 | `--px` / `--py` | **必填**，整板 X/Y 方向光栅像素数（物理尺寸可不同） |
-| `--nx` / `--ny` | 整板网格格数，默认等于 `px`/`py`，须满足 `1 ≤ nx ≤ px`、`1 ≤ ny ≤ py` |
+| `--min-cell-mm` / `--max-cell-mm` | 单元边长上下限，单位 mm，各传一个值或 X Y 两个值，默认 0.1 / 5 mm |
 | `--rectify-tolerance MM` | 外轮廓阶梯精度；默认自动取 2×像素间距 |
 | `--max-area-error-ratio` / `--max-area-error-mm2` | 矩形化误差判据的额外下限 |
 | `--materials FILE` | JSON 材料配置：`global` 与 `layers.<name>` 覆盖（`copper`/`base` 各含 `k_w_mk`/`density_kg_m3`/`specific_heat_j_kgk`） |
@@ -193,7 +194,7 @@ for layer in step.layers:
 | **`export.py`** | **中间格式（数据流 2）**：逐层流式合成 `StepPreview`，输出公制 JSON（`odbpp/preview-2`，含逐层计算域） |
 | **`svg.py`** | **渲染（数据流 3）**：SVG 与自包含 HTML 查看器 |
 | **`rectify.py`** | **矩形化**：step profile → 轴对齐阶梯 region，记录面积/形状误差并逐岛逐孔校验 |
-| **`grid.py`** | **整板网格**：region 边界强制格线，最大余数法按像素储备分配 `nx`/`ny` |
+| **`grid.py`** | **整板网格**：region 边界强制格线，按单元尺寸上下限独立细分各强制区间 |
 | **`raster.py`** | **光栅化**：region 边界扫描线 + even-odd 像素中心判定；`LayerMask` 同时供等效与掩膜 PNG 使用 |
 | **`materials.py`** | **两相材料**：铜/基底默认值（带来源）、逐层 > 全局 > 默认的优先级与警告 |
 | **`png.py`** | **图像编码**：零依赖的 8 位灰度/RGB PNG 写入器 + RGB 画布 + 5×7 点阵字体 |
@@ -237,8 +238,9 @@ for layer in step.layers:
     存亡都写进 meta；超过精度允许的上界报 `rectify.area_error`，不静默近似。
 15. **钻孔一律实心铜。** 与某层 Z 区间相交的钻孔投影在该层内按全铜处理
     （`drill_model=solid_copper`），铜层与介质层同理；跨度未知时报错，不猜通孔。
-16. **网格不越权。** `nx`/`ny` 是用户指定的整板格数，region 强制边界放不下时报
-    `grid.forced_lines_overflow`，绝不悄悄加格；每个单元必须完整落在一个 region 内。
+16. **网格保留边界并遵守尺寸约束。** 各方向单元边长必须在用户给定范围内，
+    不兼容时报 `grid.size_incompatible`；不能删除 region 边界或悄悄放宽尺寸。
+    每个单元必须完整落在一个 region 内，且至少有光栅像素中心。
 17. **单元必有采样。** 网格单元内无像素中心时报 `grid.cell_without_pixel`
     （致命），不静默取 0 或最近像素。
 18. **图不是数据。** 掩膜 PNG 取自等效计算所用光栅，热图从已写出的 CSV 重新读取渲染；

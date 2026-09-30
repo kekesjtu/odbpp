@@ -82,6 +82,6 @@ KiCad 自家 ODB++ v8.1 导出器的「全特性」输出，含 26 个 `DOCUMENT
    `out/kicad-positive/native/<ZIP 文件名去扩展名>/` 和
    `out/kicad-positive/clean/<ZIP 文件名去扩展名>/`。
    `native/` 为未经修改的原生 ZIP，`clean/` 为事后裁剪 ZIP，两组结果不混用。
-   运行 `uv run --all-extras python tools/sync_out.py --px 400 --py 400 --coarse-grid 40 --prune`
+   运行 `uv run --all-extras python tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --prune`
    补齐缺失预览、MaterialMap CSV、逐层掩膜/热图与索引，并清理不再对应案例的目录；
    代码变更后加 `--force` 更新全部产物。
