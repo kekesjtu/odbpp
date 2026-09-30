@@ -20,11 +20,11 @@ AGENTS 验证要求第 3 条明确「不得仅凭显示效果判断等效值正�
 ```bash
 # 一步到位：解析 + 等效 + 掩膜 + 热图 + 图例页
 uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
-    --px 400 --py 400 -o build/ks-eq
+    --grid-level standard -o build/ks-eq
 
 # 只要 CSV：关掉全部图像
 uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
-    --px 400 --py 400 -o build/ks-eq --no-raster-png --no-heatmap --no-gallery
+    --grid-level standard -o build/ks-eq --no-raster-png --no-heatmap --no-gallery
 
 # 只从已写出的 CSV 重画热图（不需要 ODB++ 输入，也不需要重算等效）
 uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
@@ -36,7 +36,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 | `--no-raster-png` | 不写 `<out>/masks/*.png` |
 | `--raster-scale N` | 强制**各向同性**最近邻放大 N 倍（`1` 即恰好 `px × py`）；日常不要用，默认的自动模式会保持长宽比 |
 | `--no-heatmap` | 不写 `<out>/heatmaps/*.png` |
-| `--heatmap-panel-width PX` | 单面板宽度（默认 720；高度按板比例） |
+| `--heatmap-panel-width PX` | 单面板宽度（默认 1440；高度按板比例） |
 | `--heatmap-shared-scale` | 所有层共用一条色标（层间可比，单层对比度下降） |
 | `--heatmap-grid` / `heatmap --grid` | 按 CSV 坐标画出存在的单元边界；没有该层的区域不画网格 |
 | `--no-gallery` | 不写图例 HTML |
@@ -79,7 +79,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 - **长宽比就是板的长宽比**。光栅沿 X、Y 各自按 `px`、`py` 计数，两轴物理间距
   往往不同（例：163 × 43 mm 的刚挠板在 400 × 400 光栅下，X 每像素 0.41 mm、
   Y 每像素 0.11 mm）。两轴按同一整数放大就会把这块板画成正方形，因此自动模式
-  分别计算两个轴的缩放：先取「长边约 700 px」（`MASK_TARGET_PX`），再保证
+  分别计算两个轴的缩放：先取「长边约 1400 px」（`MASK_TARGET_PX`），再保证
   **不会把两个光栅像素抽到一个输出像素上**（即两轴各至少 1:1），二者取大的。
   上例得到 1509 × 400 px，既比例正确又不丢细走线/小孔。
   输出超过 `MASK_MAX_PIXELS`（4 M 像素）时才会按比例压缩，此时细特征可能被抽样掉。
@@ -129,11 +129,11 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
   （C 速度）；`top_down_rows(scale)` 做各向同性整数放大，
   `resampled_rows(width, height)` 做两轴独立的最近邻缩放（掩膜的默认路径）。
 - `src/odbpp/visualize.py`：掩膜写盘（`MaskImage`/`mask_image_size`/
-  `auto_mask_scale`）、CSV 读取（严格的栅格一致性校验）、
+  `auto_mask_scale`）、CSV 读取（实际局部矩形边界）、
   色阶与热图渲染、图例 HTML。
 - 内存：掩膜一层一驻留；热图按层汇总 CSV 行（约 48 B/单元），
   必须完整读一遍 CSV。1.45M 单元 / 19 层的刚挠板实测渲染耗时约 20 s、
-  峰值内存可控；更大的板建议降低 `px/py` 后再看形态。
+  峰值内存可控；这些是 v3 历史测量。v4 光栅不会改变网格；当前性能见 architecture-validation.json。
 
 ## 5. 失败与诊断
 
@@ -142,8 +142,8 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
   整轮成功后统一 `rename`，因此不会留下半张图。
 - 图像渲染失败（磁盘、权限、CSV 结构不符）**不影响交付**：CSV 与 meta 已经写出，
   CLI 记 `visualize.failed` 警告并继续返回。
-- `odbpp heatmap` 对不是本项目的 CSV、缺列、栅格不自洽（同一 `cell_i` 出现
-  两个 `cell_x0_mm`）一律拒绝并给出可定位信息，不猜、不半画。
+- odbpp heatmap 校验列和数值，逐行读取实际毫米矩形边界。
+  v4 的 region 内网格允许局部区间相互交错，不要求全板同一索引矩阵。
 - 无法解析的数值（空、`NaN`、非正数）在热图里**留空并计数**，
   CLI 以一行 warning 报出，不会画成一个假的值。
 
@@ -159,7 +159,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 | 掩膜不欠采样 | 163 × 43 mm、400 × 400 光栅的两个轴各至少 1:1（1509 × 400），比例仍等于板 |
 | 两轴缩放 | `resampled_rows` 顶行在前、两轴独立放大；尺寸为 0 报错 |
 | 间距缺失时 | 只有 `auto_mask_scale`（各向同性整数倍）可用，不假装知道比例 |
-| CSV 读取 | 网格线/层序/行数还原；缺列、非数字、栅格不自洽均拒绝；坏值计数留空 |
+| CSV 读取 | 局部矩形/层序/行数还原；缺列、非数字均拒绝；坏值计数留空 |
 | 热图 | 一层一张、三面板由**帧线定位**（不重复实现布局算式）；色标端点等于色阶两端 |
 | 热图方向 | 铜在上半 → 图像上半为色标高端（与掩膜同向） |
 | 共享色标 | 单层尺度下全铜层居中；共享尺度下全铜层等于高端 |
@@ -178,7 +178,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 4. 没有坐标刻度、图例只有端点值；精确定位请配合 CSV 与 SVG 预览。
 5. 图例页与热图 `n/a` 的语义依赖灰度/配色区分，打印成黑白会退化——
    因此 `n/a` 同时写在图例页与文档里，而不是只靠颜色。
-6. 掩膜/热图的分辨率与网格数、光栅数无关（掩膜默认长边约 700 px，
+6. 掩膜/热图的分辨率与网格数、光栅数无关（掩膜默认长边约 1400 px，
    热图面板默认宽 720 px）；要逐格核对时用 `--raster-scale` /
    `--heatmap-panel-width` 把它们放到与网格同尺度。
 

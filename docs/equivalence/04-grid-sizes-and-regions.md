@@ -1,4 +1,8 @@
-# 04 · 单元尺寸约束与 region 密集程度检查（2026-09-30）
+# 04 · v3 单元尺寸约束修复的历史记录（2026-09-30）
+
+以下是 materialmap-3 的历史测量，不是当前架构。其像素驱动矩形化、
+全局网格线传播和部分覆盖语义已由 [v4 内接架构](05-inscribed-architecture.md)
+替换。当前 region 数、内接面积和性能见修复 09 与 architecture-validation.json。
 
 ## 修改结果
 

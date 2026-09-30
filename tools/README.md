@@ -4,7 +4,8 @@
 
 | 脚本 | 用途 |
 |---|---|
-| `sync_out.py` | 按 `cases/` 同步预览、MaterialMap CSV、逐层掩膜 PNG、逐层 kx/ky/kz 热图与总索引；必须指定 `--px/--py`，`--min-cell-mm/--max-cell-mm` 指定 X/Y 单元边长约束，`--heatmap-grid` 画网格边界；`--force-equivalent` 只重算等效结果，`--force` 全部重建 |
+| `validate_architecture.py` | 重放基线与新版真实案例，验证完整单元、坐标独立性、采样收敛、耗时和进程峰值内存；输出 architecture-validation.json；`--presets-only` 补充三档测量，`--audit-out` 核查全部最终 CSV 并输出 output-validation.json |
+| `sync_out.py` | 按 `cases/` 同步预览、MaterialMap CSV、逐层掩膜 PNG、逐层 kx/ky/kz 热图与总索引；默认标准自适应档位与密集光栅；`--px/--py` 成对覆盖分辨率，`--grid-level` 选择粗/标准/细，`--min-cell-mm/--max-cell-mm` 进入专家尺寸模式，`--heatmap-grid` 画网格边界；`--force-equivalent` 只重算等效结果，`--force` 全部重建 |
 | `plot_regions.py` | 从 preview-2 JSON 画真实 region 分区的 PNG/SVG、边缘放大图、面积/短边统计和逐矩形 CSV；默认输出到 case 的 `regions/`，需 tools extra 中的 Matplotlib |
 | `census_cases.py` | 普查 ODB++ 样本的图元、极性和符号 |
 | `fetch_spec.py` | 获取或校验未入库的官方格式规范 PDF |

@@ -16,3 +16,5 @@
 | [06 矩形化 slab 丢失修复](06-rectify-slab-loss.md) | 可视化对照复现 | 亚容差狭缝丢 slab、跨缺口合并、`rectify.area_warning`/`slab_ambiguous` |
 | [07 图片长宽比修复](07-picture-aspect.md) | 全案例导出对照 | 掩膜被拉成正方形、热图被竖向拉伸、掩膜回调补上像素间距 |
 | [08 可视化导出审阅修复](08-visualization-output-review.md) | 等效器可视化审阅 | 层名碰撞时保留全部掩膜与热图、默认材料警告在命令行显示 |
+
+| [09 全局网格与内接架构](09-inscribed-architecture.md) | 新决策与全案例核查 | 竖条阶梯、全局笛卡尔栅、档位/专家模式、密集采样、完整体积及性能/收敛证据 |

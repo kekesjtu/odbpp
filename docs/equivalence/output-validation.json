@@ -1,0 +1,293 @@
+{
+  "schema": "odbpp/output-validation-5",
+  "cases": [
+    {
+      "case": "designodb-rigidflex.tgz",
+      "region_count": 287,
+      "nx": 241,
+      "ny": 129,
+      "grid_cells": 15354,
+      "material_rows": 204766,
+      "raster": [
+        5887,
+        1563
+      ],
+      "minimum_samples_per_axis": 9,
+      "area_loss_mm2": 56.33472847077829,
+      "layer_count": 19,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-kitchen-sink",
+      "region_count": 450,
+      "nx": 365,
+      "ny": 281,
+      "grid_cells": 61092,
+      "material_rows": 183276,
+      "raster": [
+        4096,
+        2595
+      ],
+      "minimum_samples_per_axis": 9,
+      "area_loss_mm2": 237.3629931767396,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/four-layer-drills-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 29302,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 7,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/outline-only-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/pad-shapes-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-in",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/tracks-arcs-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/zone-hole-rotation-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/four-layer-drills-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 29302,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 7,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/outline-only-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/pad-shapes-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/through-hole-in",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/through-hole-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/tracks-arcs-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/zone-hole-rotation-mm",
+      "region_count": 1,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-video-odb.tgz",
+      "region_count": 26,
+      "nx": 128,
+      "ny": 54,
+      "grid_cells": 5069,
+      "material_rows": 35483,
+      "raster": [
+        5626,
+        1921
+      ],
+      "minimum_samples_per_axis": 9,
+      "area_loss_mm2": 116.27076060000333,
+      "layer_count": 7,
+      "all_checks_passed": true
+    },
+    {
+      "case": "minimal-test-odb",
+      "region_count": 1,
+      "nx": 72,
+      "ny": 58,
+      "grid_cells": 4176,
+      "material_rows": 8352,
+      "raster": [
+        4096,
+        3277
+      ],
+      "minimum_samples_per_axis": 56,
+      "area_loss_mm2": 0.0,
+      "layer_count": 2,
+      "all_checks_passed": true
+    }
+  ]
+}

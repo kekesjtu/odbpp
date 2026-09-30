@@ -51,22 +51,24 @@ uv run --all-extras python -m odbpp symbols     <path>
 uv run --all-extras python -m odbpp diagnostics <path>
 
 # 同步 cases/ 对应的预览、等效 CSV、逐层掩膜/热图及 out/index.html
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --prune
+uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid --prune
 # 需要其他分辨率/网格时显式指定
-uv run --all-extras python tools/sync_out.py --px 600 --py 600 --min-cell-mm 0.1 --max-cell-mm 2
+uv run --all-extras python tools/sync_out.py --grid-level fine
 # 只重算物性等效与图片，或强制重建全部结果
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --force-equivalent
-uv run --all-extras python tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid --force
+uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid --force-equivalent
+uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid --force
 
 # 临时或筛选导出放在 build/，不覆盖 out/ 的完整案例产物
 uv run --all-extras python -m odbpp export cases/designodb-rigidflex.tgz -o build/rigidflex-filtered --exclude-type DOCUMENT --per-layer-svg --minimum-stroke 0.05
 uv run --all-extras python -m odbpp export <path> -o build/selected-layers --layer top --layer bottom --only-json
 ```
 
-网格由单元边长的最小/最大尺寸约束控制，单位 mm。各参数可传一个值（X/Y 共用）
-或两个值（X Y 分别设置）。默认 0.1–5 mm；宽区间按最大尺寸细分，
-region 强制边界始终保留。不兼容的最小尺寸、整数分格或光栅采样约束会明确报错。
-`nx/ny` 仅为输出的实际格数；旧 `--nx/--ny/--coarse-grid` 已移除。
+网格必须为全局笛卡尔栅，所有竖条阶梯 region 边界进入共同的 X/Y 轴线。
+常规采用粗/标准/细档位，依据板型与铜图案特征尺度自适应，默认标准；
+专家通过最小/最大边长控制，单位 mm，各接受一个值或 X Y 两个值。
+默认密集光栅在几何确定后按采样容量加密，显式低分辨率会报错。
+region 和网格坐标不随光栅变化。算法与预算见
+[当前架构](docs/equivalence/05-inscribed-architecture.md)。
 
 `export` 的主要选项：
 
@@ -83,26 +85,24 @@ region 强制边界始终保留。不兼容的最小尺寸、整数分格或光�
 ```bash
 # 一步到位：解析 + 等效。输入可以是 ODB++ 目录/压缩包
 uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
-    --px 800 --py 800 -o build/ks-eq
+    --grid-level standard -o build/ks-eq
 
 # 或从已有 preview-2 JSON 起（推荐先 export --only-json，再多次试算）
 uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
-    --px 800 --py 800 --min-cell-mm 0.1 --max-cell-mm 5 -o build/ks-eq
+    --px 9600 --py 7200 --min-cell-mm 0.1 --max-cell-mm 5 -o build/ks-eq
 ```
 
 `equivalent` 关键选项：
 
 | 选项 | 作用 |
 |---|---|
-| `--px` / `--py` | **必填**，整板 X/Y 方向光栅像素数（物理尺寸可不同） |
-| `--min-cell-mm` / `--max-cell-mm` | 单元边长上下限，单位 mm，各传一个值或 X Y 两个值，默认 0.1 / 5 mm |
-| `--rectify-tolerance MM` | 外轮廓阶梯精度；默认自动取 2×像素间距 |
-| `--max-area-error-ratio` / `--max-area-error-mm2` | 矩形化误差判据的额外下限 |
-| `--materials FILE` | JSON 材料配置：`global` 与 `layers.<name>` 覆盖（`copper`/`base` 各含 `k_w_mk`/`density_kg_m3`/`specific_heat_j_kgk`） |
+| `--px` / `--py` | 成对覆盖默认密集光栅；不足时明确报错 |
+| `--grid-level` | coarse / standard / fine，默认 standard；尺寸随 PCB 几何自适应 |
+| `--min-cell-mm` / `--max-cell-mm` | 单元边长上下限，单位 mm，各传一个值或 X Y 两个值，专家模式未指定的一项默认 0.1 / 5 mm；不能与显式档位混用 |
+| `--materials FILE` | JSON 材料配置：`global`、`layer_types.copper/dielectric` 与 `layers.<name>` 覆盖（`copper`/`base` 各含 `k_w_mk`/`density_kg_m3`/`specific_heat_j_kgk`） |
 | `--copper-k` / `--copper-density` / `--copper-cp` 与 `--base-*` | 逐相命令行覆盖 |
-| `--no-warn-partial` | 关闭「计算域只覆盖部分网格单元」的默认告警（输出仍带覆盖率列） |
-| `--no-raster-png` / `--raster-scale N` | 逐层黑白掩膜 PNG：默认自动取到约 700 px 长边且**保持板的长宽比**；`N` 强制各向同性 N 倍放大（会拉伸非方形板） |
-| `--no-heatmap` / `--heatmap-panel-width PX` / `--heatmap-shared-scale` | 逐层 `kx`/`ky`/`kz` 三面板热图；面板宽默认 720 px；共享色标便于层间比较 |
+| `--no-raster-png` / `--raster-scale N` | 逐层黑白掩膜 PNG：默认自动取到约 1400 px 长边且**保持板的长宽比**；`N` 强制各向同性 N 倍放大（会拉伸非方形板） |
+| `--no-heatmap` / `--heatmap-panel-width PX` / `--heatmap-shared-scale` | 逐层 `kx`/`ky`/`kz` 三面板热图；面板宽默认 1440 px；共享色标便于层间比较 |
 | `--heatmap-grid` | 在热图中标出 CSV 单元边界；独立 `heatmap` 命令对应 `--grid` |
 | `--no-gallery` | 不写 `<step>.images.html` 图例页 |
 
