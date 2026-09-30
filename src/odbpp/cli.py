@@ -126,16 +126,12 @@ def build_parser() -> argparse.ArgumentParser:
                       help="minimum cell edge, one value or X Y (default 0.1 mm)")
     p_eq.add_argument("--max-cell-mm", type=float, nargs="+", default=[5.0], metavar="MM",
                       help="maximum cell edge, one value or X Y (default 5 mm)")
-    p_eq.add_argument("--rectify-tolerance", type=float, default=None, metavar="MM",
-                      help="staircase step for the board outline in mm "
-                           "(default: twice the raster pixel pitch)")
-    p_eq.add_argument("--max-area-error-ratio", type=float, default=0.01,
-                      metavar="R",
-                      help="allowed outline shape deviation as a fraction of the "
-                           "board area (default 0.01)")
-    p_eq.add_argument("--max-area-error-mm2", type=float, default=0.5,
-                      metavar="MM2",
-                      help="absolute floor for the outline deviation (default 0.5)")
+    p_eq.add_argument("--diagnostic-geometry-step-mm", dest="rectify_tolerance",
+                      type=float, default=None, help=argparse.SUPPRESS)
+    p_eq.add_argument("--diagnostic-area-error-ratio", dest="max_area_error_ratio",
+                      type=float, default=0.02, help=argparse.SUPPRESS)
+    p_eq.add_argument("--diagnostic-area-error-mm2", dest="max_area_error_mm2",
+                      type=float, default=0.01, help=argparse.SUPPRESS)
     p_eq.add_argument("--materials", default=None, metavar="FILE",
                       help="JSON material configuration (global and per-layer "
                            "overrides)")
@@ -145,10 +141,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_eq.add_argument("--base-k", type=float, default=None, metavar="W/MK")
     p_eq.add_argument("--base-density", type=float, default=None, metavar="KG/M3")
     p_eq.add_argument("--base-cp", type=float, default=None, metavar="J/KG/K")
-    p_eq.add_argument("--no-warn-partial", dest="warn_partial",
-                      action="store_false", default=True,
-                      help="silence the warning about cells only partially "
-                           "covered by a layer's computational domain")
     p_eq.add_argument("--digits", type=int, default=4,
                       help="preview coordinate resolution when parsing ODB++ "
                            "(default 4)")
@@ -669,7 +661,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
                 max_relative_area_error=args.max_area_error_ratio,
                 max_absolute_area_error_mm2=args.max_area_error_mm2,
             ),
-            warn_partial_domains=args.warn_partial,
+
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

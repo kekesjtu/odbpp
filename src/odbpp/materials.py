@@ -220,6 +220,7 @@ class MaterialBook:
             "copper": "project_default", "base": "project_default"}
         self.global_overrides: dict[str, _Override] = {}
         self.layer_overrides: dict[str, dict[str, _Override]] = {}
+        self.type_overrides: dict[str, dict[str, _Override]] = {}
         self._warned_defaults: set[str] = set()
         if config:
             self._load(config)
@@ -229,6 +230,20 @@ class MaterialBook:
     # ------------------------------------------------------------- loading
 
     def _load(self, config: Mapping[str, Any]) -> None:
+        types = config.get("layer_types", {})
+        if isinstance(types, Mapping):
+            for kind, entry in types.items():
+                if kind not in ("copper", "dielectric") or not isinstance(entry, Mapping):
+                    self.diagnostics.error(MATERIALS_INVALID,
+                                           f"layer_types.{kind}: expected copper/dielectric phase object")
+                    continue
+                self.type_overrides[kind] = {}
+                for phase in ("copper", "base"):
+                    if phase in entry:
+                        override = _parse_override(entry[phase], f"layer_types.{kind}.{phase}",
+                                                   self.diagnostics)
+                        if override:
+                            self.type_overrides[kind][phase] = override
         defaults = config.get("defaults")
         if isinstance(defaults, Mapping):
             for phase in ("copper", "base"):
@@ -292,8 +307,9 @@ class MaterialBook:
 
     _FIELDS = ("k_w_mk", "density_kg_m3", "specific_heat_j_kgk")
 
-    def resolve(self, layer_name: str) -> ResolvedMaterials:
+    def resolve(self, layer_name: str, layer_type: Optional[str] = None) -> ResolvedMaterials:
         per_layer = self.layer_overrides.get(layer_name, {})
+        per_type = self.type_overrides.get(layer_type or "", {})
         provenance: dict[str, dict] = {}
         resolved: dict[str, Material] = {}
         for phase in ("copper", "base"):
@@ -302,6 +318,7 @@ class MaterialBook:
             # Per *field* precedence, so a user who overrides only copper's k is
             # not reported as if the untouched density and cp were also theirs.
             sources = (("user_global", self.global_overrides.get(phase)),
+                       ("user_layer_type", per_type.get(phase)),
                        ("layer_override", per_layer.get(phase)))
             fields: dict[str, dict] = {}
             for field_name in self._FIELDS:
@@ -325,6 +342,8 @@ class MaterialBook:
             origins = {fields[name]["origin"] for name in self._FIELDS}
             if "layer_override" in origins:
                 overall = "layer_override"
+            elif "user_layer_type" in origins:
+                overall = "user_layer_type"
             elif "user_global" in origins:
                 overall = "user_global"
             elif "user_default" in origins:

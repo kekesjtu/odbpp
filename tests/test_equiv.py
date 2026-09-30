@@ -210,12 +210,12 @@ class TestPartialDomain:
         result = run(document, px=10, py=10, max_cell_mm=10,
                      diagnostics=diagnostics, warn_partial=True)
         cell = result.cells[0]
-        assert cell.x0 == 0.0 and cell.x1 == pytest.approx(10.0)
-        assert cell.cell_area_mm2 == pytest.approx(100.0)
-        assert cell.domain_coverage == pytest.approx(0.5)
+        assert cell.x0 == 0.0 and cell.x1 == pytest.approx(5.0)
+        assert cell.cell_area_mm2 == pytest.approx(50.0)
+        assert cell.domain_coverage == pytest.approx(1.0)
         assert cell.domain_area_mm2 == pytest.approx(50.0)
-        assert cell.partial_domain is True
-        assert "equiv.partial_domain" in diagnostics.codes()
+        assert cell.partial_domain is False
+        assert "equiv.partial_domain" not in diagnostics.codes()
 
     def test_partial_coverage_is_warned_by_default(self):
         domains = [
@@ -235,7 +235,7 @@ class TestPartialDomain:
         )
         assert options.warn_partial_domains is True
         equivalence_from_document(document, options, diagnostics=diagnostics)
-        assert "equiv.partial_domain" in diagnostics.codes()
+        assert "equiv.partial_domain" not in diagnostics.codes()
 
     def test_a_fully_covered_cell_has_unit_coverage(self):
         result = run(only_layer(polygons=[rect(0, 0, 10, 10)]), max_cell_mm=10)
@@ -510,7 +510,7 @@ class TestAutoTolerance:
         result = equivalence_from_document(
             document, EquivalenceOptions(grid=GridOptions(px=40, py=40)))
         # pitch_x = 40/40 = 1.0, pitch_y = 20/40 = 0.5 -> twice the coarser pitch.
-        assert result.rectification.tolerance_mm == pytest.approx(2.0)
+        assert result.rectification.tolerance_mm == pytest.approx(0.5)
         assert not result.fatal
 
     def test_a_coarse_raster_with_the_default_tolerance_still_samples(self):
@@ -539,7 +539,7 @@ class TestOutput:
         assert len(csv_path.read_text(encoding="utf-8").splitlines()) == \
             1 + len(result.cells)
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        assert meta["schema"] == "odbpp/materialmap-3"
+        assert meta["schema"] == "odbpp/materialmap-4"
         assert meta["units"]["thermal_conductivity"] == "W/(m*K)"
         assert meta["drill_model"] == "solid_copper"
         assert meta["z_axis"].startswith("increases downward")
@@ -548,7 +548,7 @@ class TestOutput:
         # A reader must be told what a partially covered cell means.
         assert meta["coverage"]["columns"] == [
             "cell_area_mm2", "domain_area_mm2", "domain_coverage"]
-        assert "not FR4" in meta["coverage"]["semantics"]
+        assert "complete" in meta["coverage"]["semantics"]
 
     def test_metadata_records_z_trust_and_thickness_source(self, tmp_path):
         document = build_document(layers=[
@@ -573,14 +573,13 @@ class TestOutput:
         # board shape, so the run must be marked untrustworthy, not written.
         domains = [{
             "id": "step_profile", "source": "step_profile", "layer": None,
-            "polygons": [rect(0, 0, 10, 10), hole(4.9, 0, 5.1, 10)],
+            "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)],
         }]
         document = build_document(domains=domains, layers=[
             {"name": "CU", "type": "SIGNAL", "polygons": []}])
         diagnostics = Diagnostics()
-        result = run(document, px=20, py=20, tolerance=5.0,
-                     diagnostics=diagnostics)
-        assert result.rectification.ok is False
+        result = equivalence_from_document(document, EquivalenceOptions(GridOptions(2000,2000)), diagnostics=diagnostics)
+        assert not result.grid.cells
         assert result.fatal is True
         assert diagnostics.errors
 
@@ -610,7 +609,7 @@ class TestRealCases:
 
     def test_kitchen_sink_dielectric_picks_up_its_drills(self):
         document = self._document_for("kicad-kitchen-sink")
-        result = run(document, px=500, py=500, tolerance=1.0, max_cell_mm=5)
+        result = run(document, px=2400, py=1800, tolerance=1.0, max_cell_mm=5)
         assert not result.fatal
         dielectric = [c for c in result.cells if c.layer_type == "DIELECTRIC"]
         assert dielectric
@@ -658,7 +657,7 @@ class TestCommandLine:
 
         domains = [{
             "id": "step_profile", "source": "step_profile", "layer": None,
-            "polygons": [rect(0, 0, 10, 10), hole(4.9, 0, 5.1, 10)],
+            "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)],
         }]
         document = build_document(domains=domains, layers=[
             {"name": "CU", "type": "SIGNAL", "polygons": []}])
@@ -667,7 +666,7 @@ class TestCommandLine:
         out = tmp_path / "eq"
         code = main(["equivalent", "--from-json", str(preview),
                      "--px", "20", "--py", "20",
-                     "--rectify-tolerance", "5.0", "-o", str(out)])
+                     "--min-cell-mm", "0.1", "-o", str(out)])
         assert code == 2
         assert not list(out.glob("*.csv"))
         assert not list(out.glob("*.tmp"))

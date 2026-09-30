@@ -18,6 +18,7 @@ import sys
 
 from odbpp.visualize import unique_image_stem
 from odbpp.grid import GridOptions
+from odbpp.equiv import pipeline_fingerprint
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,7 +87,8 @@ def existing_equivalence(directory: Path, preview: Path, *,
         data = json.loads(meta.read_text(encoding="utf-8"))
         expected_source = preview.relative_to(ROOT).as_posix()
         actual_source = data["source"]["path"].replace("\\", "/")
-        if (data["schema"] != "odbpp/materialmap-3"
+        if (data["schema"] != "odbpp/materialmap-4"
+                or data.get("pipeline_fingerprint") != pipeline_fingerprint()
                 or data["source"]["preview_schema"] != "odbpp/preview-2"
                 or actual_source != expected_source
                 or data["raster"]["px"] != px or data["raster"]["py"] != py
@@ -277,6 +279,11 @@ def main() -> None:
                 raise RuntimeError(f"equivalence was not complete: {output}")
         else:
             print(f"reuse  {name} equivalence", flush=True)
+        try:
+            from tools.plot_regions import plot_regions
+        except ModuleNotFoundError:
+            from plot_regions import plot_regions
+        plot_regions(valid[1], output / "regions", px=args.px,py=args.py,metadata=equivalent)
         rows.append((name, source, output, valid[1], equivalent))
     (OUT / "index.html").write_text(render_index(rows), encoding="utf-8")
     if args.prune:

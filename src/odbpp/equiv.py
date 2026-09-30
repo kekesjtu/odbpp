@@ -1,34 +1,5 @@
-"""PCB material equivalence: preview JSON in, per-cell thermal properties out.
-
-This is data-flow step 4 of the AGENTS plan.  It consumes the ``odbpp/preview-2``
-intermediate document -- the only interface it is allowed to rely on -- and
-produces one equivalent cell per (physical layer, board grid cell) with the
-anisotropic conductivity, density and specific heat from the derivation docs.
-
-Model, in one paragraph
------------------------
-Each physical layer is two phases: material 1 is copper (``black``), material 2
-is the base laminate (``white``), and both are assumed to run through the whole
-layer thickness (AGENTS 公式推导, assumption 3).  Every layer's pattern is
-rasterised at the shared :class:`~odbpp.grid.BoardGrid`; within a cell the
-per-pixel black mask gives
-
-* ``kx`` -- series along each pixel row, parallel across rows;
-* ``ky`` -- series along each pixel column, parallel across columns;
-* ``kz`` -- parallel across pixel columns: ``phi*k1 + (1-phi)*k2``;
-* ``density`` -- volume-fraction weighted: ``phi*d1 + (1-phi)*d2``;
-* ``cp`` -- mass weighted: ``(phi*d1*c1 + (1-phi)*d2*c2) / density``.
-
-Drills (AGENTS 等效器输入与材料规则 6) are a cross-layer pattern, not a layer:
-every drill whose Z interval overlaps the layer is projected into it and made
-**solid copper (black)** for both copper and dielectric layers.  A drill whose Z
-span cannot be resolved is an error, never a through-hole guess.
-
-The computational domain decides whether a layer *exists* at a cell (AGENTS
-constraint 8).  Pixels outside the domain are never counted as base laminate --
-board-outside is not FR4.  A cell that only partially overlaps the domain is
-evaluated from the pixels that are inside it, and the fact is recorded so a
-reader can see it rather than infer it.
+"""PCB equivalence: independent inscribed geometry and per-layer raster sampling.
+Properties apply to complete cells and complete physical layer Z intervals.
 """
 
 from __future__ import annotations
@@ -58,7 +29,8 @@ from .export import KNOWN_SCHEMAS
 from .grid import BoardGrid, GridOptions, build_grid
 from .materials import MaterialBook, ResolvedMaterials
 from .raster import LayerMask, RasterAxis, region_edges
-from .rectify import RectifyOptions, RectifyResult, rectify_region
+from .rectify import (Rect, RectifyOptions, RectifyResult, rectify_region,
+                      profile_shape, _topology)
 
 __all__ = [
     "METADATA_SCHEMA",
@@ -73,11 +45,8 @@ __all__ = [
     "write_metadata",
 ]
 
-#: Schema of the sidecar metadata document.  Bumped when its layout changes.
-#: ``materialmap-2`` adds the per-cell domain coverage columns and states their
-#: downstream meaning; a reader must not assume a ``materialmap-1`` layout.
-#: ``materialmap-3`` records strict per-axis size constraints; nx/ny are derived.
-METADATA_SCHEMA = "odbpp/materialmap-3"
+#: v4: complete inscribed cells and local per-region grids; v2/v3 coverage semantics retired.
+METADATA_SCHEMA = "odbpp/materialmap-4"
 
 #: The written CSV columns.  Deliberately self-describing: every quantity carries
 #: its unit in the header, because the file is meant to be readable without the
@@ -133,6 +102,17 @@ SKIP_REASONS = {
 _EPS = 1e-9
 
 
+def pipeline_fingerprint() -> str:
+    """Invalidate batch output reuse when a participating implementation changes."""
+    import hashlib
+    from pathlib import Path
+    digest = hashlib.sha256()
+    for name in ("equiv.py", "rectify.py", "grid.py", "raster.py",
+                 "materials.py", "visualize.py"):
+        digest.update(Path(__file__).with_name(name).read_bytes())
+    return digest.hexdigest()
+
+
 class EquivalenceError(OdbError):
     """The input document cannot be equivalented at all."""
 
@@ -178,7 +158,7 @@ class EquivalentCell:
     def csv_row(self) -> list:
         return [
             self.layer_name, self.layer_type, self.region_id, self.i, self.j,
-            _r(self.x0), _r(self.y0), _r(self.x1), _r(self.y1),
+            _r(self.x0, 9), _r(self.y0, 9), _r(self.x1, 9), _r(self.y1, 9),
             _r(self.z_start_mm, 6), _r(self.z_end_mm, 6),
             int(self.thickness_known),
             _r(self.copper_fraction, 6), _r(self.kx, 6), _r(self.ky, 6),
@@ -208,6 +188,7 @@ class LayerReport:
     drill_overlays: list[str] = field(default_factory=list)
     cell_count: int = 0
     partial_cells: int = 0
+    z_provenance: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {
@@ -223,6 +204,7 @@ class LayerReport:
                 "thickness_mm": (self.z_end_mm - self.z_start_mm)
                 if self.z_end_mm is not None else None,
                 "thickness_known": self.thickness_known,
+                **self.z_provenance,
             },
             "drill_overlays": list(self.drill_overlays),
             "cell_count": self.cell_count,
@@ -259,6 +241,7 @@ class EquivalenceResult:
         return {
             "schema": METADATA_SCHEMA,
             "generator": {"name": "odbpp", "version": __version__},
+            "pipeline_fingerprint": pipeline_fingerprint(),
             "source": {
                 "path": source_path,
                 "preview_schema": source_schema,
@@ -276,13 +259,10 @@ class EquivalenceResult:
             "coverage": {
                 "columns": ["cell_area_mm2", "domain_area_mm2",
                             "domain_coverage"],
-                "semantics": "cell_x0/y0/x1/y1 is the shared board-grid cell; "
-                             "the reported kx/ky/kz/density/specific_heat apply to "
-                             "the fraction domain_coverage of that cell which the "
-                             "layer's computational domain covers. The uncovered "
-                             "remainder is board-outside/void, not FR4: scale "
-                             "cell mass and heat capacity by domain_coverage and "
-                             "do not add a material there",
+                "semantics": "All properties apply to the complete region-contained "
+                             "cell volume. domain_area_mm2 equals cell_area_mm2; "
+                             "domain_coverage=1 is a geometric invariant, never a mass multiplier. "
+                             "Profile approximation loss is recorded separately.",
             },
             "raster": {
                 "px": self.raster_px,
@@ -343,11 +323,6 @@ def rectify_step_outline(step: Mapping[str, Any], px: int, py: int,
             f"step {step.get('name')!r} has no step_profile domain; the board outline "
             "is required to size the raster and rectangularise the board")
     profile = _region_from_polygons(step_domain.get("polygons"))
-    bounds = profile.bounds
-    if options.tolerance_mm is None and bounds is not None:
-        pitch_x = (bounds[2] - bounds[0]) / px
-        pitch_y = (bounds[3] - bounds[1]) / py
-        options = replace(options, tolerance_mm=2.0 * max(pitch_x, pitch_y))
     return rectify_region(profile, options, diagnostics=diagnostics)
 
 
@@ -529,177 +504,153 @@ class _Scanline:
         return spans
 
 
-def _evaluate_layer(
-    name: str,
-    type_name: str,
-    domain: Region,
-    black: Region,
-    drill_names: list[str],
-    z_start: float,
-    z_end: float,
-    thickness_known: bool,
-    materials: ResolvedMaterials,
-    grid: BoardGrid,
-    x_axis: RasterAxis,
-    y_axis: RasterAxis,
-    diagnostics: Diagnostics,
-    emit: Callable[[EquivalentCell], None],
-    *,
-    warn_partial: bool,
-    mask: Optional[LayerMask] = None,
-) -> tuple[int, int, int]:
-    """Emit one layer's cells; return ``(count, partial_count, cell_without_pixel)``."""
-    k1, k2 = materials.k1, materials.k2
-    d1, c1 = materials.black.density_kg_m3, materials.black.specific_heat_j_kgk
-    d2, c2 = materials.white.density_kg_m3, materials.white.specific_heat_j_kgk
 
+def _merge_spans(spans):
+    out = []
+    for a,b in sorted(spans):
+        if out and a <= out[-1][1]:
+            out[-1]=(out[-1][0],max(b,out[-1][1]))
+        else: out.append((a,b))
+    return out
+
+
+def _evaluate_layer(name, type_name, domain, black, drill_names, z_start, z_end,
+                    thickness_known, materials, grid, x_axis, y_axis, diagnostics,
+                    emit, *, warn_partial, mask=None, step_domain=None):
+    """Independent full-board scanlines; integrate each complete local cell."""
+    import numpy as np
+    from .rectify import _intersect_spans
+    # Exactly one layer resident. Complex material patterns are never booleaned.
+    raster = mask if mask is not None else LayerMask(x_axis.count,y_axis.count)
     domain_scan = _Scanline(region_edges(domain))
-    black_scan = _Scanline(region_edges(black))
-    width = x_axis.count
+    step_scan = _Scanline(region_edges(step_domain)) if step_domain is not None else None
+    scans = [_Scanline(region_edges(r)) for r in black if r]
+    for b in range(y_axis.count):
+        y = y_axis.centre(b)
+        dom = domain_scan.spans_at(y)
+        if step_scan is not None:
+            dom = _intersect_spans(dom, step_scan.spans_at(y))
+        ink = _merge_spans([span for scan in scans for span in scan.spans_at(y)])
+        raster.set_spans(b,dom,_intersect_spans(dom,ink),x_axis)
+    pixels=np.frombuffer(raster.pixels,dtype=np.uint8).reshape(y_axis.count,x_axis.count)
+    k1,k2=materials.k1,materials.k2
+    d1,c1=materials.black.density_kg_m3,materials.black.specific_heat_j_kgk
+    d2,c2=materials.white.density_kg_m3,materials.white.specific_heat_j_kgk
+    emitted=no_pixel=0
+    for cell in grid.cells:
+        a0,a1=x_axis.range_for(cell.rect.x0,cell.rect.x1)
+        b0,b1=y_axis.range_for(cell.rect.y0,cell.rect.y1)
+        block=pixels[b0:b1,a0:a1]
+        if block.size == 0 or np.any(block == LayerMask.OUTSIDE):
+            no_pixel+=1
+            diagnostics.error(GRID_CELL_WITHOUT_PIXEL,
+                f"layer {name!r} region {cell.region_id} cell ({cell.i},{cell.j}) "
+                f"bounds={cell.bounds}: insufficient raster samples or domain/geometry contradiction; "
+                "increase px/py; geometry is unchanged")
+            continue
+        ink=block == LayerMask.BLACK
+        row_phi=ink.mean(axis=1)
+        col_phi=ink.mean(axis=0)
+        phi=float(ink.mean())
+        kx=float(np.mean(1/(row_phi/k1+(1-row_phi)/k2)))
+        ky=float(np.mean(1/(col_phi/k1+(1-col_phi)/k2)))
+        density=phi*d1+(1-phi)*d2
+        cp=(phi*d1*c1+(1-phi)*d2*c2)/density
+        emit(EquivalentCell(name,type_name,cell.region_id,cell.i,cell.j,
+             cell.rect.x0,cell.rect.y0,cell.rect.x1,cell.rect.y1,z_start,z_end,
+             thickness_known,phi,kx,ky,phi*k1+(1-phi)*k2,density,cp,
+             b1-b0,a1-a0,int(block.size),cell.rect.area,cell.rect.area,1.0,False))
+        emitted+=1
+    return emitted,0,no_pixel
 
-    emitted = 0
-    partial_cells = 0
-    no_pixel = 0
-    min_coverage = 1.0
 
-    for band in sorted(grid.cells_by_band):
-        band_cells = grid.cells_by_band[band]
-        b0, b1 = y_axis.pixel_index(grid.y_lines[band]), \
-            y_axis.pixel_index(grid.y_lines[band + 1])
+def plan_geometry(step, options, diagnostics):
+    """Common local XY partition and explicit layer-domain membership, no pixels."""
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+    rectification=rectify_step_outline(step,0,0,options.rectify,diagnostics=diagnostics)
+    domains=_domain_index(step)
+    layers=_layer_index(step)
+    ids={layers.get(row.get("name"),{}).get("domain_id") for row in step.get("stackup",[])
+         if row.get("type") in COPPER_TYPES or row.get("type")==DIELECTRIC_TYPE}
 
-        ranges: dict[int, tuple[int, int]] = {}
-        for cell in band_cells:
-            a0, a1 = x_axis.pixel_index(cell.rect.x0), \
-                x_axis.pixel_index(cell.rect.x1)
-            ranges[cell.i] = (a0, a1)
-            if a1 <= a0 or b1 <= b0:
-                no_pixel += 1
-                diagnostics.error(
-                    GRID_CELL_WITHOUT_PIXEL,
-                    f"layer {name!r}: grid cell (i={cell.i}, j={cell.j}) at "
-                    f"x=[{cell.rect.x0:g},{cell.rect.x1:g}], "
-                    f"y=[{cell.rect.y0:g},{cell.rect.y1:g}] mm contains no "
-                    f"raster pixel centre; increase px/py or increase max-cell-mm",
-                )
-                continue
-
-
-        # Per-band accumulators.  ``diff`` arrays let column counts be built
-        # with a prefix sum instead of a Python loop over the full width.
-        dom_diff = [0] * (width + 1)
-        black_diff = [0] * (width + 1)
-        stats: dict[int, list[float]] = {
-            cell.i: [0.0, 0.0, 0, 0.0] for cell in band_cells
-        }
-
-        for b in range(b0, b1):
-            y = y_axis.centre(b)
-            dom_row = bytearray(width)
-            black_row = bytearray(width)
-            dom_spans = domain_scan.spans_at(y)
-            black_spans = black_scan.spans_at(y)
-            for span in dom_spans:
-                a0, a1 = x_axis.pixel_index(span[0]), x_axis.pixel_index(span[1])
-                if a1 > a0:
-                    dom_row[a0:a1] = b"\x01" * (a1 - a0)
-                    dom_diff[a0] += 1
-                    dom_diff[a1] -= 1
-            for span in black_spans:
-                a0, a1 = x_axis.pixel_index(span[0]), x_axis.pixel_index(span[1])
-                if a1 > a0:
-                    black_row[a0:a1] = b"\x01" * (a1 - a0)
-                    black_diff[a0] += 1
-                    black_diff[a1] -= 1
-            if mask is not None:
-                mask.set_spans(b, dom_spans, black_spans, x_axis)
-
-            for cell in band_cells:
-                index = ranges.get(cell.i)
-                if index is None:
-                    continue
-                a0, a1 = index
-                if a0 >= a1:
-                    continue
-                domain_pixels = sum(dom_row[a0:a1])
-                if domain_pixels == 0:
-                    continue
-                black_pixels = sum(black_row[a0:a1])
-                stat = stats[cell.i]
-                stat[0] += black_pixels
-                stat[1] += domain_pixels
-                stat[2] += 1
-                stat[3] += _series(black_pixels / domain_pixels, k1, k2)
-
-        run = 0
-        col_domain = [0] * width
-        for a in range(width):
-            run += dom_diff[a]
-            col_domain[a] = run
-        run = 0
-        col_black = [0] * width
-        for a in range(width):
-            run += black_diff[a]
-            col_black[a] = run
-
-        for cell in band_cells:
-            index = ranges.get(cell.i)
-            if index is None:
-                continue
-            a0, a1 = index
-            stat = stats[cell.i]
-            if stat[1] <= 0.0:
-                continue
-            column_sum = 0.0
-            columns = 0
-            for a in range(a0, a1):
-                count = col_domain[a]
-                if count <= 0:
-                    continue
-                column_sum += _series(col_black[a] / count, k1, k2)
-                columns += 1
-            rows = int(stat[2])
-            phi = stat[0] / stat[1]
-            kx = stat[3] / rows if rows else k1
-            ky = column_sum / columns if columns else k2
-            kz = phi * k1 + (1.0 - phi) * k2
-            density = phi * d1 + (1.0 - phi) * d2
-            specific_heat = (phi * d1 * c1 + (1.0 - phi) * d2 * c2) / density
-            full = float((a1 - a0) * (b1 - b0))
-            cell_area = (cell.rect.x1 - cell.rect.x0) * (cell.rect.y1 - cell.rect.y0)
-            coverage = (stat[1] / full) if full else 0.0
-            coverage = min(1.0, max(0.0, coverage))
-            partial = coverage < 1.0 - 1e-9
-            if partial:
-                partial_cells += 1
-                min_coverage = min(min_coverage, coverage)
-            emit(EquivalentCell(
-                layer_name=name, layer_type=type_name, region_id=cell.region_id,
-                i=cell.i, j=cell.j,
-                x0=cell.rect.x0, y0=cell.rect.y0,
-                x1=cell.rect.x1, y1=cell.rect.y1,
-                z_start_mm=z_start, z_end_mm=z_end,
-                thickness_known=thickness_known,
-                copper_fraction=phi, kx=kx, ky=ky, kz=kz,
-                density=density, specific_heat=specific_heat,
-                pixel_rows=rows, pixel_cols=columns,
-                pixel_count=int(stat[1]), cell_area_mm2=cell_area,
-                domain_area_mm2=coverage * cell_area,
-                domain_coverage=coverage, partial_domain=partial,
-            ))
-            emitted += 1
-
-    if partial_cells and warn_partial:
-        diagnostics.warn(
-            EQUIV_PARTIAL_DOMAIN,
-            f"layer {name!r}: {partial_cells} of {emitted} cell(s) are only "
-            f"partially covered by the layer's computational domain (minimum "
-            f"coverage {min_coverage:.4f}); only in-domain pixel centres were "
-            f"used, the cell rectangle is the shared grid cell, and the reported "
-            f"properties apply to the covered fraction only (see "
-            f"domain_coverage)",
-        )
-
-    return emitted, partial_cells, no_pixel
+    step_original=profile_shape(_region_from_polygons(domains["step_profile"].get("polygons")))
+    basis_options=replace(options.rectify,basis_mm=step_original.bounds)
+    originals={"step_profile":step_original}
+    plans={"step_profile":rectification}
+    effective_regions={"step_profile":_region_from_polygons(domains["step_profile"].get("polygons"))}
+    from .clipper import region_from_rings
+    from copy import deepcopy
+    dedup={step_original.wkb:rectification}
+    for domain_id in sorted(ids-{"step_profile",None}):
+        if domain_id not in domains: continue
+        authored=profile_shape(_region_from_polygons(domains[domain_id].get("polygons")))
+        original=authored.intersection(step_original)
+        if original.is_empty or original.area <= 0:
+            raise EquivalenceError(f"domain {domain_id!r} has no physical area within the step profile")
+        originals[domain_id]=original
+        components=[original] if original.geom_type=="Polygon" else list(original.geoms)
+        region=region_from_rings([(tuple(p.exterior.coords)[:-1],False) for p in components]+
+                                [(tuple(h.coords)[:-1],True) for p in components for h in p.interiors])
+        effective_regions[domain_id]=region
+        if original.wkb not in dedup:
+            dedup[original.wkb]=rectify_region(region,basis_options,diagnostics=diagnostics)
+        plans[domain_id]=dedup[original.wkb]
+    rectangles=list(rectification.rectangles)
+    step_model=unary_union([box(*r.bounds) for r in rectangles])
+    audit={}
+    models={}
+    processed=set()
+    for domain_id,plan in plans.items():
+        original=originals[domain_id]
+        model=unary_union([box(*r.bounds) for r in plan.rectangles]).intersection(step_model)
+        topology=_topology(original,model)
+        loss=original.area-model.area
+        allowed=plan.audit.get("area_budget_mm2",0)
+        good=plan.ok and topology["preserved"] and loss <= allowed+1e-8
+        if not good:
+            diagnostics.error("equiv.domain_geometry",f"domain {domain_id!r}: shared step/layer "
+                f"model failed; loss={loss:g} budget={allowed:g}; topology={topology}")
+            rectification.ok=False
+        authored=profile_shape(_region_from_polygons(domains[domain_id].get("polygons")))
+        audit[domain_id]={**deepcopy(plan.as_dict()),"authored_area_mm2":authored.area,
+                          "outside_step_area_mm2":authored.difference(step_original).area,
+                          "effective_domain":"layer profile AND original step profile",
+                          "shared_model_area_mm2":model.area,
+                          "shared_loss_area_mm2":loss,"shared_topology":topology,"ok":good}
+        models[domain_id]=model
+        if model.wkb==step_model.wkb or model.wkb in processed: continue
+        processed.add(model.wkb)
+        for cut in plan.rectangles:
+            pieces=[]
+            for r in rectangles:
+                xa,ya,xb,yb=max(r.x0,cut.x0),max(r.y0,cut.y0),min(r.x1,cut.x1),min(r.y1,cut.y1)
+                if xb-xa <= 1e-9 or yb-ya <= 1e-9:
+                    pieces.append(r);continue
+                pieces.append(Rect(xa,ya,xb,yb))
+                if xa>r.x0+1e-9: pieces.append(Rect(r.x0,r.y0,xa,r.y1))
+                if xb<r.x1-1e-9: pieces.append(Rect(xb,r.y0,r.x1,r.y1))
+                if ya>r.y0+1e-9: pieces.append(Rect(xa,r.y0,xb,ya))
+                if yb<r.y1-1e-9: pieces.append(Rect(xa,yb,xb,r.y1))
+            rectangles=pieces
+    rectangles=sorted(rectangles,key=lambda r:r.bounds)
+    membership={key:[] for key in models}
+    for rid,r in enumerate(rectangles):
+        for key,model in models.items():
+            shape=box(*r.bounds)
+            if model.covers(shape): membership[key].append(rid)
+            elif model.intersection(shape).area > 1e-8:
+                diagnostics.error("equiv.domain_partition",f"domain {key!r} partially covers region {rid} {r.bounds}")
+                rectification.ok=False
+    rectification.rectangles=rectangles
+    partition=unary_union([box(*r.bounds) for r in rectangles])
+    if abs(sum(r.area for r in rectangles)-partition.area) > 1e-7:
+        diagnostics.error("equiv.region_overlap", "shared region partition overlaps")
+        rectification.ok=False
+    rectification.audit["partition_non_overlapping"] = abs(sum(r.area for r in rectangles)-partition.area) <= 1e-7
+    rectification.audit["domains"]=audit
+    rectification.audit["domain_region_ids"]=membership
+    return rectification,membership
 
 
 # ---------------------------------------------------------------------------
@@ -748,8 +699,7 @@ def equivalence_from_document(
 
     # --- board outline ------------------------------------------------------
     px, py = options.grid.px, options.grid.py
-    rectification = rectify_step_outline(step, px, py, options.rectify,
-                                        diagnostics=diags)
+    rectification, membership = plan_geometry(step, options, diags)
     if not rectification.rectangles:
         return EquivalenceResult(
             cells=[], layers=[], grid=build_grid([], options.grid,
@@ -758,7 +708,7 @@ def equivalence_from_document(
             raster_py=options.grid.py, pixel_step_mm=(0.0, 0.0),
             board_bounds_mm=None, diagnostics=diags, fatal=True)
 
-    bounds = rectification.bounds
+    bounds = _region_from_polygons(domains["step_profile"].get("polygons")).bounds
     assert bounds is not None
     x_min, y_min, x_max, y_max = bounds
     dx = (x_max - x_min) / px
@@ -768,8 +718,6 @@ def equivalence_from_document(
 
     grid = build_grid(
         rectification.rectangles, options.grid, diagnostics=diags,
-        capacity_x=lambda a, b: x_axis.pixel_index(b) - x_axis.pixel_index(a),
-        capacity_y=lambda a, b: y_axis.pixel_index(b) - y_axis.pixel_index(a),
     )
     if not grid.cells:
         return EquivalenceResult(
@@ -861,15 +809,16 @@ def equivalence_from_document(
         report.z_start_mm = z_start
         report.z_end_mm = z_end
         report.thickness_known = thickness_known
+        report.z_provenance = {k:v for k,v in extent.items() if k not in ("start_mm","end_mm","thickness_mm","thickness_known")}
 
         materials = layer_materials.get(name)
         if materials is None:
-            materials = options.materials.resolve(name)
+            materials = options.materials.resolve(name, "dielectric" if type_name == DIELECTRIC_TYPE else "copper")
             layer_materials[name] = materials
             materials_by_layer[name] = materials.as_dict()
 
         # Material 1 (black) is the copper pattern for a copper layer; for a
-        # dielectric it starts empty.  Drills are then unioned in for both.
+        # dielectric it starts empty. Drill scanline spans are ORed for both.
         pattern = (_region_from_polygons(layer.get("polygons"))
                    if type_name in COPPER_TYPES else Region())
         # Match drills by copper-plane topology first.  When a layer has no
@@ -907,36 +856,16 @@ def equivalence_from_document(
                 f"is unknown; the topological span was used",
             )
         report.drill_overlays = [d.name for d in covering]
-        black = pattern
-        if covering:
-            overlay = union(*(d.region for d in covering))
-            black = union(black, overlay)
-        black = intersection(black, domain) if black else Region()
-
-        # A dielectric's own geometry is its material (white).  In v1 the black
-        # phase is the drill projection, so if the authored material area does
-        # not match ``domain - drills`` the layer carries features this version
-        # does not model.  Say so rather than silently treating a void as FR4.
-        if type_name == DIELECTRIC_TYPE:
-            material = _region_from_polygons(layer.get("polygons"))
-            expected = difference(domain, black)
-            scale = max(material.area, expected.area, 1e-9)
-            if abs(material.area - expected.area) > 0.01 * scale:
-                diags.warn(
-                    EQUIV_DIELECTRIC_FEATURES,
-                    f"dielectric layer {name!r}: authored material area "
-                    f"{material.area:.4f} mm2 differs from domain-minus-drills "
-                    f"{expected.area:.4f} mm2; features other than drills are "
-                    f"ignored in v1",
-                )
-
+        black = [pattern] + [d.region for d in covering]
         mask = LayerMask(px, py) if mask_sink is not None else None
         cell_count, partial, no_pixel = _evaluate_layer(
             name, type_name, domain, black, report.drill_overlays,
             z_start, z_end, thickness_known, materials,
-            grid, x_axis, y_axis, diags, emit,
+            replace(grid, cells=[c for c in grid.cells if c.region_id in membership.get(domain_id,[])]),
+            x_axis, y_axis, diags, emit,
             warn_partial=options.warn_partial_domains,
             mask=mask,
+            step_domain=_region_from_polygons(domains["step_profile"].get("polygons")),
         )
         report.status = "equivalent"
         report.cell_count = cell_count
@@ -948,7 +877,7 @@ def equivalence_from_document(
             # it out and drops it, so only one layer mask is ever resident.
             mask_sink(name, mask, (dx, dy))
 
-    if cell_without_pixel:
+    if cell_without_pixel or any(r.status == "failed" for r in reports):
         fatal = True
 
     return EquivalenceResult(

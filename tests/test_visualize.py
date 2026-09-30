@@ -398,8 +398,8 @@ class TestReadMaterialMap:
         assert data.x_edges == (0.0, 2.5, 5.0, 7.5, 10.0)
         assert data.bounds_mm() == (0.0, 0.0, 10.0, 10.0)
         assert len(data.series[0]) == 16
-        assert data.x_interval_of_column[3] == 3
-        assert data.y_interval_of_row[3] == 3
+        assert data.series[0].rectangles[3] == (0.0,7.5,2.5,10.0)
+        assert data.y_edges == (0,2.5,5,7.5,10)
 
     def test_a_foreign_csv_is_refused_with_the_missing_columns(self, tmp_path):
         path = tmp_path / "other.csv"
@@ -434,9 +434,8 @@ class TestReadMaterialMap:
             "CU,SIGNAL,0,1,0.5,1.0,1.0,2.0,0.0,0.035,1,1.0,1.0,1.0\n"
         )
         path.write_text(header + rows, encoding="utf-8")
-        with pytest.raises(VisualizeError) as excinfo:
-            read_materialmap(str(path))
-        assert "rectilinear" in str(excinfo.value)
+        data=read_materialmap(str(path))
+        assert data.series[0].rectangles == [(0,0,1,1),(.5,1,1,2)]
 
 
 # ---------------------------------------------------------------------------
@@ -738,10 +737,10 @@ class TestCommandLine:
             assert colour == 0
             # 100 x 75 mm of rectified board at 7 px/mm, so the picture keeps the
             # board's proportions instead of forcing a square.
-            assert (width, height) == (700, 525)
+            assert (width, height) == (700, 560)
         for path in maps:
             assert decode_png(path)[2] == 2
-        assert "up to 700x525 px" in capsys.readouterr().out
+        assert "up to 700x560 px" in capsys.readouterr().out
         assert not list(tmp_path.rglob("*.tmp"))
 
     def test_the_visualisations_can_be_turned_off(self, tmp_path):
@@ -765,14 +764,14 @@ class TestCommandLine:
         # masks, which are produced while the layers are being walked.
         domains = [{"id": "step_profile", "source": "step_profile",
                     "layer": None,
-                    "polygons": [rect(0, 0, 10, 10), hole(4.9, 0, 5.1, 10)]}]
+                    "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)]}]
         preview = tmp_path / "board.json"
         preview.write_text(json.dumps(document(
             [{"name": "CU", "polygons": []}], domains=domains)),
             encoding="utf-8")
         out = tmp_path / "eq"
         code = main(["equivalent", "--from-json", str(preview),
-                     "--px", "20", "--py", "20", "--rectify-tolerance", "5.0",
+                     "--px", "20", "--py", "20", "--min-cell-mm", "0.1",
                      "-o", str(out)])
         assert code == 2
         assert not list(out.rglob("*.png"))

@@ -276,6 +276,7 @@ class LayerSeries:
     kx: array = field(default_factory=lambda: array("d"))
     ky: array = field(default_factory=lambda: array("d"))
     kz: array = field(default_factory=lambda: array("d"))
+    rectangles: list = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.i)
@@ -407,10 +408,10 @@ def read_materialmap(path: str) -> MaterialMapData:
                 invalid += 1
                 continue
 
-            _record(x0, i, xa, "cell_x0_mm", path, line_no)
-            _record(x1, i, xb, "cell_x1_mm", path, line_no)
-            _record(y0, j, ya, "cell_y0_mm", path, line_no)
-            _record(y1, j, yb, "cell_y1_mm", path, line_no)
+            x0[rows] = xa
+            x1[rows] = xb
+            y0[rows] = ya
+            y1[rows] = yb
 
             series = by_name.get(name)
             if series is None:
@@ -426,8 +427,9 @@ def read_materialmap(path: str) -> MaterialMapData:
                 )
                 by_name[name] = series
                 order.append(name)
-            series.i.append(i)
-            series.j.append(j)
+            series.rectangles.append((xa,ya,xb,yb))
+            series.i.append(rows)
+            series.j.append(rows)
             series.kx.append(values[0])  # type: ignore[arg-type]
             series.ky.append(values[1])  # type: ignore[arg-type]
             series.kz.append(values[2])  # type: ignore[arg-type]
@@ -628,14 +630,6 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
     channels = _channel_tables(palette)
     column_source = _column_source(xs)
 
-    indices = [bytearray([NO_DATA]) * (columns * bands) for _ in PANELS]
-    vx, vy, vz = series.kx, series.ky, series.kz
-    for cell in range(len(series)):
-        flat = rows[cell] * columns + cols[cell]
-        indices[0][flat] = _quantise(vx[cell], *bounds)
-        indices[1][flat] = _quantise(vy[cell], *bounds)
-        indices[2][flat] = _quantise(vz[cell], *bounds)
-
     font = options.font_scale
     line_h = FONT_HEIGHT * font + 6
     bar_h = max(10, 4 * font)
@@ -663,28 +657,23 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
 
     panel_y = margin + header_h + title_h
     bar_y = panel_y + panel_h + 10
-    for panel, ((title, _), index_data) in enumerate(zip(PANELS, indices)):
+    for panel, (title, field) in enumerate(PANELS):
         panel_x = margin + panel * (panel_w + gap)
         draw_text(canvas, panel_x, margin + header_h, f"{title}  W/(m.K)",
                   options.text_colour, font)
-        for band in range(bands):
-            if ys[band + 1] <= ys[band]:
-                continue
-            row_indices = bytes(index_data[band * columns:(band + 1) * columns])
-            rgb = _rgb_row(row_indices, column_source, channels)
-            # Page rows run downwards while board Y runs upwards: the highest
-            # band is the top of the picture, exactly as in the mask PNG.
-            top = panel_h - ys[band + 1]
-            bottom = panel_h - ys[band]
-            for y in range(top, bottom):
-                canvas.blit_row(panel_y + y, panel_x, rgb)
-        if options.draw_grid:
-            for cell in range(len(series)):
-                col, band = cols[cell], rows[cell]
-                if xs[col + 1] > xs[col] and ys[band + 1] > ys[band]:
-                    canvas.frame(panel_x + xs[col], panel_y + panel_h - ys[band + 1],
-                                 panel_x + xs[col + 1], panel_y + panel_h - ys[band],
-                                 options.grid_colour)
+        canvas.rect(panel_x,panel_y,panel_x+panel_w,panel_y+panel_h,NO_DATA_COLOUR)
+        values = series.values(field)
+        for cell, (xa,ya,xb,yb) in enumerate(series.rectangles):
+            left = round((xa-data.x_edges[0])*scale)
+            right = round((xb-data.x_edges[0])*scale)
+            top = panel_h-round((yb-data.y_edges[0])*scale)
+            bottom = panel_h-round((ya-data.y_edges[0])*scale)
+            level = _quantise(values[cell], *bounds)
+            colour = tuple(palette[3*level:3*level+3])
+            canvas.rect(panel_x+left,panel_y+top,panel_x+right,panel_y+bottom,colour)
+            if options.draw_grid and right>left and bottom>top:
+                canvas.frame(panel_x+left,panel_y+top,panel_x+right,panel_y+bottom,
+                             options.grid_colour)
         canvas.frame(panel_x, panel_y, panel_x + panel_w, panel_y + panel_h,
                      options.frame_colour)
 

@@ -1112,7 +1112,11 @@ name = "odbpp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pyclipper" },
+    { name = "shapely" },
 ]
 
 [package.optional-dependencies]
@@ -1138,10 +1142,12 @@ tools = [
 requires-dist = [
     { name = "lxml", marker = "extra == 'parse'", specifier = ">=5.0" },
     { name = "matplotlib", marker = "extra == 'tools'", specifier = ">=3.9" },
+    { name = "numpy", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'geometry'", specifier = ">=1.26" },
     { name = "pyclipper", specifier = ">=1.3.0.post6" },
     { name = "pypdf", marker = "extra == 'tools'", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "shapely", specifier = ">=2.0" },
     { name = "shapely", marker = "extra == 'geometry'", specifier = ">=2.0" },
 ]
 provides-extras = ["geometry", "parse", "tools", "test"]

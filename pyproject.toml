@@ -16,6 +16,8 @@ dependencies = [
     # needs pyclipper importable.  Leaving it in an extra made a plain
     # a base installation produce a package that cannot even be imported.
     "pyclipper>=1.3.0.post6",
+    "shapely>=2.0",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]

@@ -14,11 +14,11 @@ import statistics
 import xml.etree.ElementTree as ET
 
 from odbpp.equiv import rectify_step_outline
-from odbpp.rectify import RectifyOptions
+from odbpp.rectify import Rect, RectifyOptions
 
 
 def plot_regions(document: dict, directory: Path, *, px: int, py: int,
-                 tolerance: float | None = None) -> dict:
+                 tolerance: float | None = None, metadata: dict | None = None) -> dict:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -28,20 +28,30 @@ def plot_regions(document: dict, directory: Path, *, px: int, py: int,
     from matplotlib.ticker import MaxNLocator
 
     step = document["steps"][0]
-    result = rectify_step_outline(step, px, py, RectifyOptions(tolerance_mm=tolerance))
-    if not result.ok or not result.rectangles:
-        raise ValueError("outline rectification failed; refusing to plot a valid-looking board")
+    if metadata is None:
+        from odbpp.equiv import plan_geometry, EquivalenceOptions
+        from odbpp.grid import GridOptions
+        from odbpp.diagnostics import Diagnostics
+        result, _ = plan_geometry(step, EquivalenceOptions(GridOptions(px,py),
+                                   rectify=RectifyOptions(tolerance_mm=tolerance)),Diagnostics())
+        actual = result.as_dict()
+    else:
+        if metadata["schema"] != "odbpp/materialmap-4":
+            raise ValueError("region plot requires materialmap-4 metadata")
+        actual = metadata["rectification"]
+    if not actual["ok"] or not actual["rectangles"]:
+        raise ValueError("geometry failed; refusing to plot a valid-looking board")
     directory.mkdir(parents=True, exist_ok=True)
-    rects = result.rectangles
+    rects = [Rect(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in actual["rectangles"]]
     areas = [r.area for r in rects]
     shortest = [min(r.width, r.height) for r in rects]
-    bounds = result.bounds
+    bounds = tuple(metadata["raster"]["board_bounds_mm"]) if metadata else (min(r.x0 for r in rects), min(r.y0 for r in rects), max(r.x1 for r in rects), max(r.y1 for r in rects))
     x0, y0, x1, y1 = bounds
     records = [{"region_id": i, **r.as_dict(), "width_mm": r.width,
                 "height_mm": r.height, "area_mm2": r.area}
                for i, r in enumerate(rects)]
     stats = {"step": step["name"], "px": px, "py": py,
-             "rectification": result.as_dict(), "region_count": len(rects),
+             "rectification": actual, "region_count": len(rects),
              "min_area_mm2": min(areas), "median_area_mm2": statistics.median(areas),
              "max_area_mm2": max(areas),
              "min_short_edge_mm": min(shortest),
@@ -95,12 +105,15 @@ def plot_regions(document: dict, directory: Path, *, px: int, py: int,
                  orientation="horizontal",shrink=.6,pad=.08,label="Region area / mm² (log scale)")
     information.text(0,1,
         f"{len(rects)} rectangle regions\n"
-        f"Raster: {px} × {py}\nTolerance: {result.tolerance_mm:.4g} mm\n"
+        f"Physical initial step: {actual['tolerance_mm']:.4g} mm\n"
         f"Forced lines: X={stats['forced_x_lines']}, Y={stats['forced_y_lines']}\n\n"
         f"Area min / median / max:\n{min(areas):.3g} / {statistics.median(areas):.3g} / {max(areas):.3g} mm²\n"
         f"Shortest edge min: {min(shortest):.4g} mm\n"
         f"Short edge < 1 mm: {stats['short_edge_below_1mm_count']} regions\n"
         f"Area < 1 mm²: {stats['area_below_1mm2_count']} regions\n\n"
+        f"Loss: {actual['lost_area_mm2']:.4g} mm²\n"
+        f"Inscribed: {actual['audit']['inscribed']}\n"
+        f"Topology preserved: {actual['audit']['topology']['preserved']}\n\n"
         "Black lines = region borders\nRed dashed = original profile\n"
         "Colors represent region area,\nnot thermal conductivity.\n"
         "All region IDs and sizes: CSV\nHover regions in SVG for details.",
@@ -132,7 +145,7 @@ def main() -> None:
     parser.add_argument("json",type=Path)
     parser.add_argument("--px",type=int,required=True)
     parser.add_argument("--py",type=int,required=True)
-    parser.add_argument("--rectify-tolerance",type=float,default=None)
+    parser.add_argument("--metadata",type=Path)
     parser.add_argument("-o","--out",type=Path)
     args=parser.parse_args()
     if args.px<1 or args.py<1:
@@ -141,7 +154,7 @@ def main() -> None:
     if document.get("schema") != "odbpp/preview-2" or document.get("units") != "mm" or len(document.get("steps",[]))!=1:
         parser.error("requires one-step odbpp/preview-2 JSON in mm")
     stats=plot_regions(document,args.out or args.json.parent/"regions",
-                       px=args.px,py=args.py,tolerance=args.rectify_tolerance)
+                       px=args.px,py=args.py,metadata=json.loads(args.metadata.read_text(encoding="utf-8")) if args.metadata else None)
     print({k:v for k,v in stats.items() if k!="rectification"})
 
 

@@ -46,7 +46,7 @@ class TestGrid:
                           diagnostics=diagnostics)
         assert not grid.cells
         assert "grid.size_incompatible" in diagnostics.codes()
-        assert "X interval [0," in diagnostics.errors[0].message
+        assert "X region 0 interval [0," in diagnostics.errors[0].message
 
     def test_bounds_rounding_and_per_axis_constraints(self):
         grid = build_grid([Rect(0,0,10,6)], GridOptions(100,100,(1,1),(3,2)))
@@ -62,5 +62,8 @@ class TestGrid:
         grid = build_grid([Rect(0,0,10,10)], GridOptions(2,2,min(0.1,maximum),maximum),
                           diagnostics=diagnostics,
                           capacity_x=lambda a,b: axis.pixel_index(b)-axis.pixel_index(a))
-        assert not grid.cells
-        assert "grid.cell_without_pixel" in diagnostics.codes()
+        if maximum == 2:
+            assert grid.cells  # geometry survives sampling failure unchanged
+            assert "grid.cell_without_pixel" in diagnostics.codes()
+        else:
+            assert "grid.size_incompatible" in diagnostics.codes()
