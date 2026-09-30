@@ -75,10 +75,11 @@ def build_document(*, profile=None, layers=(), domains=None, z=0.035) -> dict:
                        "layers": layer_docs, "stackup": stackup}]}
 
 
-def run(document, *, px=10, py=10, nx=None, ny=None, tolerance=0.01,
+def run(document, *, px=10, py=10, max_cell_mm=None, tolerance=0.01,
         materials=None, diagnostics=None, warn_partial=False):
     options = EquivalenceOptions(
-        grid=GridOptions(px=px, py=py, nx=nx, ny=ny),
+        grid=GridOptions(px=px, py=py, min_cell_mm=0.001,
+                         max_cell_mm=max_cell_mm or (10/px, 10/py)),
         materials=materials or MaterialBook(diagnostics=diagnostics),
         rectify=RectifyOptions(tolerance_mm=tolerance),
         warn_partial_domains=warn_partial,
@@ -135,7 +136,7 @@ class TestFormulas:
         # One cell covering the whole board: copper on top, base below.  Every
         # pixel row is uniform, so x is parallel; every pixel column is half and
         # half in series, so y is the harmonic mean.
-        result = run(only_layer(polygons=[rect(0, 5, 10, 10)]), nx=1, ny=1)
+        result = run(only_layer(polygons=[rect(0, 5, 10, 10)]), max_cell_mm=10)
         cell = result.cells[0]
         assert cell.copper_fraction == pytest.approx(0.5)
         assert cell.kx == pytest.approx(PARALLEL)
@@ -143,7 +144,7 @@ class TestFormulas:
         assert cell.kz == pytest.approx(PARALLEL)
 
     def test_a_vertical_split_swaps_the_directions(self):
-        result = run(only_layer(polygons=[rect(0, 0, 5, 10)]), nx=1, ny=1)
+        result = run(only_layer(polygons=[rect(0, 0, 5, 10)]), max_cell_mm=10)
         cell = result.cells[0]
         assert cell.kx == pytest.approx(HARMONIC)
         assert cell.ky == pytest.approx(PARALLEL)
@@ -151,14 +152,14 @@ class TestFormulas:
 
     def test_a_checkerboard_is_series_in_both_plane_directions(self):
         result = run(only_layer(polygons=[rect(0, 0, 5, 5), rect(5, 5, 10, 10)]),
-                     nx=1, ny=1)
+                     max_cell_mm=10)
         cell = result.cells[0]
         assert cell.kx == pytest.approx(HARMONIC)
         assert cell.ky == pytest.approx(HARMONIC)
         assert cell.kz == pytest.approx(PARALLEL)
 
     def test_density_is_volume_weighted_and_specific_heat_mass_weighted(self):
-        result = run(only_layer(polygons=[rect(0, 5, 10, 10)]), nx=1, ny=1)
+        result = run(only_layer(polygons=[rect(0, 5, 10, 10)]), max_cell_mm=10)
         cell = result.cells[0]
         expected_density = 0.5 * RHO1 + 0.5 * RHO2
         expected_cp = (0.5 * RHO1 * C1 + 0.5 * RHO2 * C2) / expected_density
@@ -206,7 +207,7 @@ class TestPartialDomain:
             {"name": "CU", "type": "SIGNAL", "domain_id": "half",
              "polygons": []}])
         diagnostics = Diagnostics()
-        result = run(document, px=10, py=10, nx=1, ny=1,
+        result = run(document, px=10, py=10, max_cell_mm=10,
                      diagnostics=diagnostics, warn_partial=True)
         cell = result.cells[0]
         assert cell.x0 == 0.0 and cell.x1 == pytest.approx(10.0)
@@ -228,7 +229,7 @@ class TestPartialDomain:
              "polygons": []}])
         diagnostics = Diagnostics()
         options = EquivalenceOptions(
-            grid=GridOptions(px=10, py=10, nx=1, ny=1),
+            grid=GridOptions(px=10, py=10, max_cell_mm=10),
             materials=MaterialBook(diagnostics=diagnostics),
             rectify=RectifyOptions(tolerance_mm=0.01),
         )
@@ -237,7 +238,7 @@ class TestPartialDomain:
         assert "equiv.partial_domain" in diagnostics.codes()
 
     def test_a_fully_covered_cell_has_unit_coverage(self):
-        result = run(only_layer(polygons=[rect(0, 0, 10, 10)]), nx=1, ny=1)
+        result = run(only_layer(polygons=[rect(0, 0, 10, 10)]), max_cell_mm=10)
         cell = result.cells[0]
         assert cell.domain_coverage == pytest.approx(1.0)
         assert cell.partial_domain is False
@@ -538,7 +539,7 @@ class TestOutput:
         assert len(csv_path.read_text(encoding="utf-8").splitlines()) == \
             1 + len(result.cells)
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        assert meta["schema"] == "odbpp/materialmap-2"
+        assert meta["schema"] == "odbpp/materialmap-3"
         assert meta["units"]["thermal_conductivity"] == "W/(m*K)"
         assert meta["drill_model"] == "solid_copper"
         assert meta["z_axis"].startswith("increases downward")
@@ -599,7 +600,7 @@ class TestRealCases:
 
     def test_minimal_case_round_trips_through_the_document(self):
         document = self._document_for("minimal-test-odb")
-        result = run(document, px=20, py=20)
+        result = run(document, px=20, py=20, max_cell_mm=5)
         assert not result.fatal
         assert result.layers and all(r.status == "equivalent"
                                      for r in result.layers)
@@ -609,7 +610,7 @@ class TestRealCases:
 
     def test_kitchen_sink_dielectric_picks_up_its_drills(self):
         document = self._document_for("kicad-kitchen-sink")
-        result = run(document, px=500, py=500, tolerance=1.0)
+        result = run(document, px=500, py=500, tolerance=1.0, max_cell_mm=5)
         assert not result.fatal
         dielectric = [c for c in result.cells if c.layer_type == "DIELECTRIC"]
         assert dielectric
@@ -623,7 +624,7 @@ class TestCommandLine:
         from odbpp.cli import main
 
         code = main(["equivalent", str(case_path("minimal-test-odb")),
-                     "--px", "10", "--py", "10", "-o", str(tmp_path)])
+                     "--px", "10", "--py", "10", "--max-cell-mm", "20", "-o", str(tmp_path)])
         assert code == 0
         csv_path = tmp_path / "pcb.MaterialMap.csv"
         meta_path = tmp_path / "pcb.MaterialMap.meta.json"
@@ -639,15 +640,15 @@ class TestCommandLine:
         assert main(["export", str(case_path("minimal-test-odb")),
                      "-o", str(tmp_path), "--only-json"]) == 0
         code = main(["equivalent", "--from-json", str(preview),
-                     "--px", "8", "--py", "8", "-o", str(tmp_path / "eq")])
+                     "--px", "8", "--py", "8", "--max-cell-mm", "20", "-o", str(tmp_path / "eq")])
         assert code == 0
         assert (tmp_path / "eq" / "pcb.MaterialMap.csv").is_file()
 
-    def test_nx_beyond_px_is_rejected(self, tmp_path):
+    def test_invalid_cell_size_bounds_are_rejected(self, tmp_path):
         from odbpp.cli import main
 
         code = main(["equivalent", str(case_path("minimal-test-odb")),
-                     "--px", "10", "--py", "10", "--nx", "11",
+                     "--px", "10", "--py", "10", "--min-cell-mm", "6", "--max-cell-mm", "5",
                      "-o", str(tmp_path)])
         assert code == 2
         assert not list(tmp_path.glob("*.csv"))

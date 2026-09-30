@@ -131,9 +131,10 @@ def document(layers, *, profile=None, domains=None) -> dict:
                        "layers": layer_docs, "stackup": stackup}]}
 
 
-def run(document_dict, *, px=4, py=4, nx=None, ny=None, mask_sink=None):
+def run(document_dict, *, px=4, py=4, max_cell_mm=None, mask_sink=None):
     options = EquivalenceOptions(
-        grid=GridOptions(px=px, py=py, nx=nx, ny=ny),
+        grid=GridOptions(px=px, py=py, min_cell_mm=0.001,
+                         max_cell_mm=max_cell_mm or (10/px, 10/py)),
         materials=MaterialBook(),
         rectify=RectifyOptions(tolerance_mm=0.01),
         warn_partial_domains=False,
@@ -690,7 +691,7 @@ class TestCommandLine:
         out = tmp_path / "eq"
 
         assert main(["equivalent", "--from-json", str(preview),
-                     "--px", "10", "--py", "10", "--raster-scale", "1",
+                     "--px", "10", "--py", "10", "--max-cell-mm", "20", "--raster-scale", "1",
                      "-o", str(out)]) == 0
 
         expected = {"A_B.png", "A_B-2.png", "A_B-2-2.png",
@@ -713,7 +714,7 @@ class TestCommandLine:
         from odbpp.cli import main
 
         assert main(["equivalent", str(case_path("minimal-test-odb")),
-                     "--px", "8", "--py", "8", "-o", str(tmp_path),
+                     "--px", "8", "--py", "8", "--max-cell-mm", "20", "-o", str(tmp_path),
                      "--no-raster-png", "--no-heatmap", "--no-gallery"]) == 0
         stderr = capsys.readouterr().err
         assert stderr.count("materials.default_used") == 2
@@ -725,7 +726,7 @@ class TestCommandLine:
         from odbpp.cli import main
 
         code = main(["equivalent", str(case_path("minimal-test-odb")),
-                     "--px", "16", "--py", "16", "-o", str(tmp_path)])
+                     "--px", "16", "--py", "16", "--max-cell-mm", "20", "-o", str(tmp_path)])
         assert code == 0
         masks = sorted((tmp_path / "masks").glob("*.png"))
         maps = sorted((tmp_path / "heatmaps").glob("*.png"))
@@ -747,7 +748,7 @@ class TestCommandLine:
         from odbpp.cli import main
 
         code = main(["equivalent", str(case_path("minimal-test-odb")),
-                     "--px", "8", "--py", "8", "-o", str(tmp_path),
+                     "--px", "8", "--py", "8", "--max-cell-mm", "20", "-o", str(tmp_path),
                      "--no-raster-png", "--no-heatmap", "--no-gallery"])
         assert code == 0
         assert not (tmp_path / "masks").exists()
@@ -782,7 +783,7 @@ class TestCommandLine:
         from odbpp.cli import main
 
         assert main(["equivalent", str(case_path("minimal-test-odb")),
-                     "--px", "10", "--py", "10", "-o", str(tmp_path / "eq"),
+                     "--px", "10", "--py", "10", "--max-cell-mm", "20", "-o", str(tmp_path / "eq"),
                      "--no-raster-png", "--no-gallery"]) == 0
         csv_path = tmp_path / "eq" / "pcb.MaterialMap.csv"
         out = tmp_path / "from-csv"
@@ -804,7 +805,7 @@ class TestCommandLine:
         from odbpp.cli import main
 
         assert main(["equivalent", str(case_path("minimal-test-odb")),
-                     "--px", "8", "--py", "8", "-o", str(tmp_path / "eq")]) == 0
+                     "--px", "8", "--py", "8", "--max-cell-mm", "20", "-o", str(tmp_path / "eq")]) == 0
         code = main(["heatmap", str(tmp_path / "eq" / "pcb.MaterialMap.csv"),
                      "--panel-width", "120"])
         assert code == 0

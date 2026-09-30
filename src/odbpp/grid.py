@@ -1,30 +1,20 @@
-"""Allocate the board-wide XY grid over the rectangularised outline.
+"""Build a shared XY grid with strict cell-size bounds in millimetres.
 
-AGENTS constraint (外轮廓矩形化与网格) 3-5.  One grid is shared by every
-physical layer.  It is built from the region rectangles produced by
-:mod:`odbpp.rectify`:
-
-* every region boundary is a **forced grid line**, so no cell ever straddles
-  two regions;
-* ``nx``/``ny`` are the *board-wide* cell counts, not per-region counts.  The
-  cells left after the forced lines are distributed across the forced intervals
-  in proportion to their width;
-* a forced line count that does not fit in ``nx``/``ny`` is an input/config
-  mismatch and is reported, never absorbed by silently adding cells;
-* cells outside every region belong to no material layer ("板外不生成物性网格").
-
-The grid is only a partition; which cells actually carry a layer is decided by
-that layer's own computational domain during rasterisation.
+Every region boundary is preserved. Each forced interval is subdivided into
+as few equal cells as its maximum size permits, provided the minimum size and
+raster sampling requirements also hold. nx/ny describe the result only.
 """
 
 from __future__ import annotations
 
 from bisect import bisect_right
+import math
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
 from .diagnostics import (
-    GRID_FORCED_LINES_OVERFLOW,
+    GRID_SIZE_INCOMPATIBLE,
+    GRID_CELL_WITHOUT_PIXEL,
     GRID_NO_BOARD_CELLS,
     Diagnostics,
 )
@@ -33,37 +23,38 @@ from .rectify import Rect
 __all__ = ["GridOptions", "Cell", "BoardGrid", "build_grid"]
 
 
+DEFAULT_MIN_CELL_MM = 0.1
+DEFAULT_MAX_CELL_MM = 5.0
+
+
+def size_pair(value: float | Sequence[float]) -> tuple[float, float]:
+    """One size for both axes, or an explicit X/Y pair."""
+    if isinstance(value, (int, float)):
+        return float(value), float(value)
+    if len(value) == 1:
+        return float(value[0]), float(value[0])
+    if len(value) == 2:
+        return float(value[0]), float(value[1])
+    raise ValueError("cell size needs one value or two values (X Y), in mm")
+
+
 @dataclass(frozen=True)
 class GridOptions:
-    """Board-wide cell counts.
-
-    ``nx``/``ny`` default to the raster pixel counts when the caller leaves them
-    unset (AGENTS 等效器输入与材料规则 3), so the common case is "one cell per
-    pixel".  Explicit values must satisfy ``1 <= nx <= px`` and ``1 <= ny <= py``.
-    """
-
     px: int
     py: int
-    nx: Optional[int] = None
-    ny: Optional[int] = None
+    min_cell_mm: float | Sequence[float] = DEFAULT_MIN_CELL_MM
+    max_cell_mm: float | Sequence[float] = DEFAULT_MAX_CELL_MM
 
     def __post_init__(self) -> None:
         if self.px < 1 or self.py < 1:
             raise ValueError(f"pixel counts must be positive, got {self.px}x{self.py}")
-        if self.nx is not None and not 1 <= self.nx <= self.px:
-            raise ValueError(
-                f"nx={self.nx} must satisfy 1 <= nx <= px={self.px}")
-        if self.ny is not None and not 1 <= self.ny <= self.py:
-            raise ValueError(
-                f"ny={self.ny} must satisfy 1 <= ny <= py={self.py}")
-
-    @property
-    def cells_x(self) -> int:
-        return self.nx if self.nx is not None else self.px
-
-    @property
-    def cells_y(self) -> int:
-        return self.ny if self.ny is not None else self.py
+        low, high = size_pair(self.min_cell_mm), size_pair(self.max_cell_mm)
+        for axis, lo, hi in zip("XY", low, high):
+            if not math.isfinite(lo) or not math.isfinite(hi) or not 0 < lo <= hi:
+                raise ValueError(f"{axis} cell sizes require finite 0 < min <= max, "
+                                 f"got [{lo}, {hi}] mm")
+        object.__setattr__(self, "min_cell_mm", low)
+        object.__setattr__(self, "max_cell_mm", high)
 
 
 @dataclass(frozen=True)
@@ -97,6 +88,7 @@ class BoardGrid:
     cells: list[Cell]
     #: ``{j: [cell, ...]}`` so a rasteriser can stream one horizontal band.
     cells_by_band: dict[int, list[Cell]] = field(default_factory=dict)
+    size_constraints_mm: Optional[dict] = None
 
     @property
     def nx(self) -> int:
@@ -116,7 +108,13 @@ class BoardGrid:
                 max(r.y1 for r in self.rectangles))
 
     def as_dict(self) -> dict:
+        widths = [b-a for a, b in zip(self.x_lines, self.x_lines[1:])]
+        heights = [b-a for a, b in zip(self.y_lines, self.y_lines[1:])]
         return {
+            "size_constraints_mm": self.size_constraints_mm,
+            "actual_edge_range_mm": {
+                "x": [min(widths), max(widths)] if widths else None,
+                "y": [min(heights), max(heights)] if heights else None},
             "nx": self.nx,
             "ny": self.ny,
             "forced_x_line_count": len(self.forced_x),
@@ -129,66 +127,46 @@ class BoardGrid:
         }
 
 
-def _allocate(lines: Sequence[float], total: int, axis: str,
-              capacities: Optional[Sequence[int]],
-              diagnostics: Diagnostics) -> list[float]:
-    """Insert ``total - (len(lines) - 1)`` interior lines between forced lines.
-
-    Each forced interval keeps at least one cell, so its width can never be
-    silently zeroed.  The remaining cells are distributed with the
-    largest-remainder method, weighted by how many raster pixels each interval
-    still has spare.  Weighting by *spare pixels* rather than by width is what
-    keeps every cell on a raster sample: an interval with room for one cell must
-    not be asked to hold three, because a cell with no pixel centre inside it is
-    an error (AGENTS constraint 5), not a rounding detail.
-    """
-    intervals = len(lines) - 1
+def _allocate(lines: Sequence[float], minimum: float, maximum: float, axis: str,
+              capacity: Optional[Callable[[float, float], int]],
+              diagnostics: Diagnostics, pixel_limit: int) -> list[float]:
+    """Keep forced lines and enforce both bounds on each interval."""
     if not lines:
         return []
-    remaining = total - intervals
-    if remaining < 0:
-        diagnostics.error(
-            GRID_FORCED_LINES_OVERFLOW,
-            f"{_axis_name(axis)} has {len(lines)} forced region boundaries, "
-            f"which need at least {intervals} cells, but only {total} "
-            f"{axis}-cells were requested; the rectangularisation and the "
-            f"requested grid count are incompatible",
-        )
-        return []
-    if remaining == 0:
-        return list(lines)
-
-    if capacities is None:
-        widths = [lines[k + 1] - lines[k] for k in range(intervals)]
-        weights = [max(width, 0.0) for width in widths]
-    else:
-        # Capacity is the number of pixel centres in each forced interval; a cell
-        # gets at least one of them.
-        weights = [max(int(capacities[k]) - 1, 0) for k in range(intervals)]
-    total_weight = float(sum(weights)) or float(intervals)
-    if total_weight <= 0.0:
-        weights = [1.0] * intervals
-        total_weight = float(intervals)
-
-    exact = [weight / total_weight * remaining for weight in weights]
-    shares = [int(value) for value in exact]
-    left = remaining - sum(shares)
-    order = sorted(range(intervals), key=lambda k: (-(exact[k] - shares[k]), k))
-    for k in order[:left]:
-        shares[k] += 1
-
-    out: list[float] = [lines[0]]
-    for k in range(intervals):
-        count = shares[k] + 1
-        step = (lines[k + 1] - lines[k]) / count
-        for sub in range(1, count):
-            out.append(lines[k] + step * sub)
-        out.append(lines[k + 1])
+    out = [lines[0]]
+    for left, right in zip(lines, lines[1:]):
+        length = right - left
+        ratio = length / maximum
+        available = capacity(left, right) if capacity is not None else pixel_limit
+        if not math.isfinite(ratio) or ratio > available + 1e-10:
+            diagnostics.error(
+                GRID_CELL_WITHOUT_PIXEL,
+                f"{axis.upper()} interval [{left:g}, {right:g}] mm needs at least "
+                f"{ratio:g} cells for max={maximum:g} mm, but has at most {available} raster "
+                "pixel centres; increase px/py or increase max-cell-mm")
+            return []
+        count = max(1, math.ceil(ratio - 1e-10))
+        upper_ratio = length / minimum
+        upper = math.floor(upper_ratio + 1e-10) if math.isfinite(upper_ratio) else count
+        if count > upper:
+            diagnostics.error(
+                GRID_SIZE_INCOMPATIBLE,
+                f"{axis.upper()} interval [{left:g}, {right:g}] mm (width {length:g}) "
+                f"cannot be divided into cells within [{minimum:g}, {maximum:g}] mm; "
+                "forced region boundaries cannot be removed")
+            return []
+        step = length / count
+        edges = [left + step * sub for sub in range(1, count)] + [right]
+        if capacity is not None:
+            for a, b in zip([left] + edges[:-1], edges):
+                if capacity(a, b) < 1:
+                    diagnostics.error(
+                        GRID_CELL_WITHOUT_PIXEL,
+                        f"{axis.upper()} interval [{a:g}, {b:g}] mm contains no raster "
+                        "pixel centre; increase px/py or increase max-cell-mm")
+                    return []
+        out.extend(edges)
     return out
-
-
-def _axis_name(axis: str) -> str:
-    return "X" if axis == "x" else "Y"
 
 
 def build_grid(
@@ -199,7 +177,7 @@ def build_grid(
     capacity_x: Optional[Callable[[float, float], int]] = None,
     capacity_y: Optional[Callable[[float, float], int]] = None,
 ) -> BoardGrid:
-    """Build the shared board grid from *rectangles* and the cell counts.
+    """Build the shared board grid from *rectangles* and cell-size limits.
 
     ``capacity_x``/``capacity_y`` report how many raster pixel centres lie in a
     forced interval.  They let the allocator refuse to subdivide an interval past
@@ -211,15 +189,10 @@ def build_grid(
     forced_x = sorted({r.x0 for r in rectangles} | {r.x1 for r in rectangles})
     forced_y = sorted({r.y0 for r in rectangles} | {r.y1 for r in rectangles})
 
-    caps_x = None if capacity_x is None else [
-        capacity_x(forced_x[k], forced_x[k + 1]) for k in range(len(forced_x) - 1)
-    ]
-    caps_y = None if capacity_y is None else [
-        capacity_y(forced_y[k], forced_y[k + 1]) for k in range(len(forced_y) - 1)
-    ]
-
-    x_lines = _allocate(forced_x, options.cells_x, "x", caps_x, diags)
-    y_lines = _allocate(forced_y, options.cells_y, "y", caps_y, diags)
+    x_lines = _allocate(forced_x, options.min_cell_mm[0], options.max_cell_mm[0],
+                        "x", capacity_x, diags, options.px)
+    y_lines = _allocate(forced_y, options.min_cell_mm[1], options.max_cell_mm[1],
+                        "y", capacity_y, diags, options.py)
     if not x_lines or not y_lines:
         return BoardGrid([], [], forced_x, forced_y, list(rectangles), [])
 
@@ -265,4 +238,6 @@ def build_grid(
     return BoardGrid(x_lines=x_lines, y_lines=y_lines,
                      forced_x=forced_x, forced_y=forced_y,
                      rectangles=list(rectangles), cells=cells,
-                     cells_by_band=cells_by_band)
+                     cells_by_band=cells_by_band,
+                     size_constraints_mm={"min": list(options.min_cell_mm),
+                                          "max": list(options.max_cell_mm)})

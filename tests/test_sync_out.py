@@ -29,7 +29,7 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(sync_out, "ROOT", tmp_path)
     monkeypatch.setattr(sync_out, "CASES", source.parent)
     monkeypatch.setattr(sync_out, "OUT", out)
-    monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16"])
+    monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16", "--max-cell-mm", "10"])
 
     sync_out.main()
     result = out / "minimal-test-odb"
@@ -54,21 +54,21 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     stale = result / "masks" / "old-layer.png"
     stale.write_bytes(b"obsolete")
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16",
-                                      "--force-equivalent"])
+                                      "--max-cell-mm", "10", "--force-equivalent"])
     sync_out.main()
     assert not stale.exists()
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,
-                                         nx=16, ny=16) is not None
+                                         max_cell_mm=10) is not None
 
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "20", "--py", "16",
-                                      "--nx", "10"])
+                                      "--max-cell-mm", "10"])
     sync_out.main()
     changed = json.loads(meta.read_text(encoding="utf-8"))
     assert changed["raster"]["px"] == 20
-    assert (changed["grid"]["nx"], changed["grid"]["ny"]) == (10, 16)
+    assert (changed["grid"]["nx"], changed["grid"]["ny"]) == (10, 8)
 
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16",
-                                      "--coarse-grid", "4"])
+                                      "--max-cell-mm", "25", "20", "--heatmap-grid"])
     sync_out.main()
     coarse = json.loads(meta.read_text(encoding="utf-8"))
     assert (coarse["grid"]["nx"], coarse["grid"]["ny"]) == (4, 4)
@@ -78,26 +78,17 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     assert {int(r["pixel_count"]) for r in records} == {16}
     assert "4×4" in (out / "index.html").read_text(encoding="utf-8")
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,
-                                         nx=4, ny=4, draw_grid=True) is not None
+                                         max_cell_mm=(25,20), draw_grid=True) is not None
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,
-                                         nx=4, ny=4) is None
+                                         max_cell_mm=(25,20)) is None
     before = csv.stat().st_mtime_ns
     sync_out.main()
     assert csv.stat().st_mtime_ns == before
 
 
-def test_coarse_grid_preserves_hole_boundaries():
-    from test_visualize import document, rect, hole
-
-    data = document([], domains=[{
-        "id": "step_profile", "polygons": [rect(0, 0, 10, 10), hole(2, 2, 4, 4)]}])
-    assert sync_out.coarse_grid_counts(data, 100, 100, 1) == (3, 3)
-    assert sync_out.coarse_grid_counts(data, 100, 100, 10) == (10, 10)
-
-
-def test_coarse_grid_cannot_override_exact_counts(monkeypatch):
+def test_sync_rejects_invalid_size_bounds(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "100", "--py", "100",
-                                      "--coarse-grid", "10", "--nx", "5"])
+                                      "--min-cell-mm", "6", "--max-cell-mm", "5"])
     with pytest.raises(SystemExit) as exc:
         sync_out.main()
     assert exc.value.code == 2

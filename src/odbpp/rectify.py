@@ -284,7 +284,9 @@ def _bands(region: Region, tolerance: float,
             # Land the last step exactly on the snapped boundary: ``xa + step``
             # drifts a few ulp away from ``key * tolerance`` and would leave a
             # zero-width slab no rectangle owns.
-            xb = x1 if index == count - 1 else xa + step
+            # Evaluate shared internal endpoints by the identical expression
+            # on both sides; xa + step differs from x0 + step*(index+1) by ulps.
+            xb = x1 if index == count - 1 else x0 + step * (index + 1)
             intervals = _intervals(
                 _crossings(region.rings, (xa + xb) / 2.0), tolerance)
             if intervals is None:

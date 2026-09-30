@@ -76,7 +76,8 @@ __all__ = [
 #: Schema of the sidecar metadata document.  Bumped when its layout changes.
 #: ``materialmap-2`` adds the per-cell domain coverage columns and states their
 #: downstream meaning; a reader must not assume a ``materialmap-1`` layout.
-METADATA_SCHEMA = "odbpp/materialmap-2"
+#: ``materialmap-3`` records strict per-axis size constraints; nx/ny are derived.
+METADATA_SCHEMA = "odbpp/materialmap-3"
 
 #: The written CSV columns.  Deliberately self-describing: every quantity carries
 #: its unit in the header, because the file is meant to be readable without the
@@ -578,7 +579,7 @@ def _evaluate_layer(
                     f"layer {name!r}: grid cell (i={cell.i}, j={cell.j}) at "
                     f"x=[{cell.rect.x0:g},{cell.rect.x1:g}], "
                     f"y=[{cell.rect.y0:g},{cell.rect.y1:g}] mm contains no "
-                    f"raster pixel centre; increase px/py or reduce nx/ny",
+                    f"raster pixel centre; increase px/py or increase max-cell-mm",
                 )
                 continue
 

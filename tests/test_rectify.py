@@ -15,6 +15,13 @@ def region(*rings) -> "object":
 
 
 class TestRectify:
+    def test_adjacent_staircase_bands_share_bit_identical_boundaries(self):
+        result = rectify_region(region((
+            [(36.5, 0), (256.5, 100), (256.5, 0)], False)),
+            RectifyOptions(tolerance_mm=1.1155))
+        xs = sorted({x for r in result.rectangles for x in (r.x0, r.x1)})
+        assert all(b-a > 1e-6 for a, b in zip(xs, xs[1:]))
+
     def test_a_rectangle_is_one_exact_rectangle(self):
         result = rectify_region(region(([(0, 0), (10, 0), (10, 10), (0, 10)], False)),
                                 RectifyOptions(tolerance_mm=0.5))

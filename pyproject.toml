@@ -23,7 +23,10 @@ dependencies = [
 # itself; the parser and the exporter no longer depend on them at runtime.
 geometry = ["shapely>=2.0", "numpy>=1.26"]
 parse = ["lxml>=5.0"]
-tools = ["pypdf>=4.0"]
+tools = [
+    "matplotlib>=3.9",
+    "pypdf>=4.0",
+]
 test = ["pytest>=8.0"]
 
 [project.scripts]

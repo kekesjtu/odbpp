@@ -122,10 +122,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="raster pixels across the board in X (required)")
     p_eq.add_argument("--py", type=int, required=True,
                       help="raster pixels across the board in Y (required)")
-    p_eq.add_argument("--nx", type=int, default=None,
-                      help="board grid cells in X (default: px)")
-    p_eq.add_argument("--ny", type=int, default=None,
-                      help="board grid cells in Y (default: py)")
+    p_eq.add_argument("--min-cell-mm", type=float, nargs="+", default=[0.1], metavar="MM",
+                      help="minimum cell edge, one value or X Y (default 0.1 mm)")
+    p_eq.add_argument("--max-cell-mm", type=float, nargs="+", default=[5.0], metavar="MM",
+                      help="maximum cell edge, one value or X Y (default 5 mm)")
     p_eq.add_argument("--rectify-tolerance", type=float, default=None, metavar="MM",
                       help="staircase step for the board outline in mm "
                            "(default: twice the raster pixel pitch)")
@@ -661,7 +661,8 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
 
     try:
         options = EquivalenceOptions(
-            grid=GridOptions(px=args.px, py=args.py, nx=args.nx, ny=args.ny),
+            grid=GridOptions(px=args.px, py=args.py, min_cell_mm=args.min_cell_mm,
+                             max_cell_mm=args.max_cell_mm),
             materials=MaterialBook(config or None, diagnostics=diagnostics),
             rectify=RectifyOptions(
                 tolerance_mm=args.rectify_tolerance,
@@ -874,6 +875,11 @@ def _gallery_note(result, args) -> str:
     parts = [f"raster {result.raster_px}x{result.raster_py}px",
              f"grid {result.grid.nx}x{result.grid.ny}",
              "drill_model=solid_copper（见 meta.json）"]
+    if result.grid.size_constraints_mm:
+        limits = result.grid.size_constraints_mm
+        parts.append("单元边长 " + "，".join(
+            f"{axis}=[{limits['min'][i]:g}, {limits['max'][i]:g}] mm"
+            for i, axis in enumerate("XY")))
     if result.rectification.tolerance_mm is not None:
         parts.append(f"矩形化 tolerance={result.rectification.tolerance_mm:g} mm")
     if skipped:
