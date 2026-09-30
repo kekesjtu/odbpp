@@ -177,6 +177,8 @@ def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
         region_plot = preview_dir / "regions" / "regions.svg"
         if region_plot.is_file():
             links += (f' · <a href="{escape(relative)}/regions/regions.svg">region 分区</a>')
+        if (preview_dir / "grid" / "cartesian-grid.svg").is_file():
+            links += (f' · <a href="{escape(relative)}/grid/cartesian-grid.svg">全局笛卡尔栅</a>')
         equivalent_count = sum(r["status"] == "equivalent"
                                for r in equivalent["layers"])
         lines.append(f"<tr><td>{escape(name)}<br><small>{escape(source_rel)}"
@@ -303,9 +305,12 @@ def main() -> None:
             print(f"reuse  {name} equivalence", flush=True)
         try:
             from tools.plot_regions import plot_regions
+            from tools.plot_grid import plot_grid
         except ModuleNotFoundError:
             from plot_regions import plot_regions
+            from plot_grid import plot_grid
         plot_regions(valid[1], output / "regions", px=equivalent["raster"]["px"],py=equivalent["raster"]["py"],metadata=equivalent)
+        plot_grid(valid[1], output / "grid", equivalent)
         rows.append((name, source, output, valid[1], equivalent))
     (OUT / "index.html").write_text(render_index(rows), encoding="utf-8")
     if args.prune:

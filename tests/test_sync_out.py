@@ -46,6 +46,13 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     index = (out / "index.html").read_text(encoding="utf-8")
     assert "pcb.MaterialMap.csv" in index
     assert "pcb.images.html" in index
+    assert "grid/cartesian-grid.svg" in index
+    assert (result / "grid" / "cartesian-grid.png").is_file()
+    grid_stats=json.loads((result/"grid"/"cartesian-grid.stats.json").read_text(encoding="utf-8"))
+    final_grid=json.loads(meta.read_text(encoding="utf-8"))["grid"]
+    assert grid_stats["x_lines_mm"]==final_grid["x_lines_mm"]
+    assert grid_stats["y_lines_mm"]==final_grid["y_lines_mm"]
+    assert grid_stats["cell_count"]==final_grid["cell_count"]
 
     before = csv.stat().st_mtime_ns
     sync_out.main()

@@ -10,6 +10,7 @@ out/<case>/
   <step>.images.html
   masks/<layer>.png
   heatmaps/<layer>.png
+  grid/cartesian-grid.png / cartesian-grid.svg / cartesian-grid.stats.json
   regions/regions.png / regions.svg / regions.csv / regions.stats.json  # 分区诊断
 ```
 
@@ -66,3 +67,18 @@ uv run --all-extras python tools/plot_regions.py \
 此前按整板 400×400，以及目标 40×40 导出的结果已被尺寸约束版本替换。
 目标格数取强制边界最低数量时，曾产生中央 64.52 mm 宽的单列，说明最低格数
 不能代表合理的空间分辨率。当前实现及验证见 [05](05-inscribed-architecture.md)；[04](04-grid-sizes-and-regions.md) 为历史记录。
+
+## 全局笛卡尔栅示意图
+
+每个 case 的 `grid/cartesian-grid.png/svg` 直接读取最终 meta 的
+`grid.x_lines_mm/y_lines_mm`，不重新划网格；同时逐单元检查实际边界与轴线一致。
+图中蓝线为建模域内单元边界，灰色虚线为域外轴线延伸，橙线为 region 边界，
+红色虚线为原始 step profile。包含整板、边缘和主体放大图；右侧列出实际 nx/ny、
+实体单元数、region 数及尺寸约束。该图是共享 XY 几何，逐层存在性仍以 meta/CSV 为准。
+
+```powershell
+uv run --all-extras python tools/plot_grid.py out/kicad-kitchen-sink/PCB.json
+```
+
+`sync_out.py` 自动生成并在 `out/index.html` 增加“全局笛卡尔栅”链接。
+该图与 region 面积诊断图、材料掩膜及物性热图分别保存。
