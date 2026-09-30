@@ -5,6 +5,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [06-drill-rasterization.md](06-drill-rasterization.md) | 通孔/盲孔/埋孔、二维孔形、跨度判定、扫描线逻辑及 NPTH/空心孔/背钻的当前简化 |
 | [05-inscribed-architecture.md](05-inscribed-architecture.md) | 当前 v5：竖条内接阶梯、独立密集光栅、全局笛卡尔栅、自适应档位、完整体积物性、内部预算与限制 |
 | [output-validation.json](output-validation.json) | 18 个最终输出的逐单元全局轴线、域归属、完整体积、采样容量和物性范围核查 |
 | [architecture-validation.json](architecture-validation.json) | 可重放的基线对比、真实案例几何坐标哈希、逐物性采样误差、运行时间与峰值内存 |
