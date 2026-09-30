@@ -157,7 +157,7 @@ def unique_image_stem(name: str, used: set[str]) -> str:
 
 
 #: Longest side, in pixels, an automatically scaled mask picture aims for.
-MASK_TARGET_PX = 700
+MASK_TARGET_PX = 1400
 #: Ceiling on a mask picture, so a very fine raster on a narrow board cannot
 #: ask for a gigapixel PNG.
 MASK_MAX_PIXELS = 4_000_000
@@ -525,7 +525,7 @@ class HeatmapOptions:
     """Layout knobs.  Defaults keep one layer's sheet readable on its own."""
 
     #: Width of one panel in pixels; height follows the board aspect ratio.
-    panel_width_px: int = 720
+    panel_width_px: int = 1440
     #: Upper bound for either panel side, so an extremely long board cannot
     #: allocate a gigapixel canvas.
     max_panel_px: int = 2400

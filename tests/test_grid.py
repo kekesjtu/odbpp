@@ -46,7 +46,7 @@ class TestGrid:
                           diagnostics=diagnostics)
         assert not grid.cells
         assert "grid.size_incompatible" in diagnostics.codes()
-        assert "X region 0 interval [0," in diagnostics.errors[0].message
+        assert "X interval [0," in diagnostics.errors[0].message
 
     def test_bounds_rounding_and_per_axis_constraints(self):
         grid = build_grid([Rect(0,0,10,6)], GridOptions(100,100,(1,1),(3,2)))

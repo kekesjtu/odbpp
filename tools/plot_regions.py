@@ -36,8 +36,8 @@ def plot_regions(document: dict, directory: Path, *, px: int, py: int,
                                    rectify=RectifyOptions(tolerance_mm=tolerance)),Diagnostics())
         actual = result.as_dict()
     else:
-        if metadata["schema"] != "odbpp/materialmap-4":
-            raise ValueError("region plot requires materialmap-4 metadata")
+        if metadata["schema"] != "odbpp/materialmap-5":
+            raise ValueError("region plot requires materialmap-5 metadata")
         actual = metadata["rectification"]
     if not actual["ok"] or not actual["rectangles"]:
         raise ValueError("geometry failed; refusing to plot a valid-looking board")

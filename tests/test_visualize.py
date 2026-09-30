@@ -398,7 +398,7 @@ class TestReadMaterialMap:
         assert data.x_edges == (0.0, 2.5, 5.0, 7.5, 10.0)
         assert data.bounds_mm() == (0.0, 0.0, 10.0, 10.0)
         assert len(data.series[0]) == 16
-        assert data.series[0].rectangles[3] == (0.0,7.5,2.5,10.0)
+        assert data.series[0].rectangles[3] == (7.5,0.0,10.0,2.5)
         assert data.y_edges == (0,2.5,5,7.5,10)
 
     def test_a_foreign_csv_is_refused_with_the_missing_columns(self, tmp_path):
@@ -737,10 +737,10 @@ class TestCommandLine:
             assert colour == 0
             # 100 x 75 mm of rectified board at 7 px/mm, so the picture keeps the
             # board's proportions instead of forcing a square.
-            assert (width, height) == (700, 560)
+            assert (width, height) == (1400, 1120)
         for path in maps:
             assert decode_png(path)[2] == 2
-        assert "up to 700x560 px" in capsys.readouterr().out
+        assert "up to 1400x1120 px" in capsys.readouterr().out
         assert not list(tmp_path.rglob("*.tmp"))
 
     def test_the_visualisations_can_be_turned_off(self, tmp_path):

@@ -14,8 +14,8 @@ from tools import sync_out
 from conftest import case_path
 
 
-def test_sync_out_requires_raster_dimensions(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["sync_out.py"])
+def test_sync_out_requires_paired_raster_dimensions(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "100"])
     with pytest.raises(SystemExit) as exc:
         sync_out.main()
     assert exc.value.code == 2

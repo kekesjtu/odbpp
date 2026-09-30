@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
 
-from .clipper import Region, Ring, difference, intersection, union
+from .clipper import Region, Ring, difference, intersection, union, region_from_rings
 from .diagnostics import (
     EQUIV_DIELECTRIC_FEATURES,
     EQUIV_DRILL_SPAN_UNKNOWN,
@@ -45,8 +45,8 @@ __all__ = [
     "write_metadata",
 ]
 
-#: v4: complete inscribed cells and local per-region grids; v2/v3 coverage semantics retired.
-METADATA_SCHEMA = "odbpp/materialmap-4"
+#: v5: global Cartesian axes and adaptive presets; complete inscribed cell semantics.
+METADATA_SCHEMA = "odbpp/materialmap-5"
 
 #: The written CSV columns.  Deliberately self-describing: every quantity carries
 #: its unit in the header, because the file is meant to be readable without the
@@ -108,7 +108,7 @@ def pipeline_fingerprint() -> str:
     from pathlib import Path
     digest = hashlib.sha256()
     for name in ("equiv.py", "rectify.py", "grid.py", "raster.py",
-                 "materials.py", "visualize.py"):
+                 "materials.py", "visualize.py", "mesh.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
     return digest.hexdigest()
 
@@ -309,8 +309,7 @@ def _region_from_polygons(polygons: Sequence[Mapping[str, Any]]) -> Region:
     for polygon in polygons or ():
         points = [(float(x), float(y)) for x, y in polygon.get("points", ())]
         rings.append((points, not bool(polygon.get("island", True))))
-    return Region([r for r in (Ring(points, is_hole) for points, is_hole in rings)
-                   if len(r) >= 3])
+    return region_from_rings(rings)
 
 
 def rectify_step_outline(step: Mapping[str, Any], px: int, py: int,
@@ -517,7 +516,7 @@ def _merge_spans(spans):
 def _evaluate_layer(name, type_name, domain, black, drill_names, z_start, z_end,
                     thickness_known, materials, grid, x_axis, y_axis, diagnostics,
                     emit, *, warn_partial, mask=None, step_domain=None):
-    """Independent full-board scanlines; integrate each complete local cell."""
+    """Independent full-board scanlines; integrate complete Cartesian cells."""
     import numpy as np
     from .rectify import _intersect_spans
     # Exactly one layer resident. Complex material patterns are never booleaned.
@@ -537,35 +536,48 @@ def _evaluate_layer(name, type_name, domain, black, drill_names, z_start, z_end,
     d1,c1=materials.black.density_kg_m3,materials.black.specific_heat_j_kgk
     d2,c2=materials.white.density_kg_m3,materials.white.specific_heat_j_kgk
     emitted=no_pixel=0
-    for cell in grid.cells:
-        a0,a1=x_axis.range_for(cell.rect.x0,cell.rect.x1)
-        b0,b1=y_axis.range_for(cell.rect.y0,cell.rect.y1)
-        block=pixels[b0:b1,a0:a1]
-        if block.size == 0 or np.any(block == LayerMask.OUTSIDE):
-            no_pixel+=1
-            diagnostics.error(GRID_CELL_WITHOUT_PIXEL,
-                f"layer {name!r} region {cell.region_id} cell ({cell.i},{cell.j}) "
-                f"bounds={cell.bounds}: insufficient raster samples or domain/geometry contradiction; "
-                "increase px/py; geometry is unchanged")
-            continue
-        ink=block == LayerMask.BLACK
-        row_phi=ink.mean(axis=1)
-        col_phi=ink.mean(axis=0)
-        phi=float(ink.mean())
-        kx=float(np.mean(1/(row_phi/k1+(1-row_phi)/k2)))
-        ky=float(np.mean(1/(col_phi/k1+(1-col_phi)/k2)))
-        density=phi*d1+(1-phi)*d2
-        cp=(phi*d1*c1+(1-phi)*d2*c2)/density
-        emit(EquivalentCell(name,type_name,cell.region_id,cell.i,cell.j,
-             cell.rect.x0,cell.rect.y0,cell.rect.x1,cell.rect.y1,z_start,z_end,
-             thickness_known,phi,kx,ky,phi*k1+(1-phi)*k2,density,cp,
-             b1-b0,a1-a0,int(block.size),cell.rect.area,cell.rect.area,1.0,False))
-        emitted+=1
+    minimum_samples=(grid.mesh_configuration or {}).get("minimum_samples_per_axis",1)
+    # Row-prefix integration avoids rescanning wide regions for each global cell.
+    bands={}
+    for cell in grid.cells: bands.setdefault(cell.j,[]).append(cell)
+    for band_cells in bands.values():
+        b0,b1=y_axis.range_for(band_cells[0].rect.y0,band_cells[0].rect.y1)
+        band=pixels[b0:b1]
+        ink=band == LayerMask.BLACK
+        prefix=np.zeros((b1-b0,x_axis.count+1),dtype=np.uint32)
+        np.cumsum(ink,axis=1,dtype=np.uint32,out=prefix[:,1:])
+        col_counts=ink.sum(axis=0,dtype=np.uint32)
+        outside=(band == LayerMask.OUTSIDE).any(axis=0)
+        for cell in band_cells:
+            a0,a1=x_axis.range_for(cell.rect.x0,cell.rect.x1)
+            cols,rows=a1-a0,b1-b0
+            if min(cols,rows)<minimum_samples or outside[a0:a1].any():
+                no_pixel+=1
+                if no_pixel<=20:
+                    diagnostics.error(GRID_CELL_WITHOUT_PIXEL,
+                        f"layer {name!r} region {cell.region_id} cell ({cell.i},{cell.j}) "
+                        f"bounds={cell.bounds}: samples={cols}x{rows}, required per axis={minimum_samples}; "
+                        "insufficient raster samples or domain/geometry contradiction; increase px/py; geometry is unchanged")
+                continue
+            row_phi=(prefix[:,a1]-prefix[:,a0])/cols
+            col_phi=col_counts[a0:a1]/rows
+            phi=float(row_phi.mean())
+            kx=float(np.mean(1/(row_phi/k1+(1-row_phi)/k2)))
+            ky=float(np.mean(1/(col_phi/k1+(1-col_phi)/k2)))
+            density=phi*d1+(1-phi)*d2
+            cp=(phi*d1*c1+(1-phi)*d2*c2)/density
+            emit(EquivalentCell(name,type_name,cell.region_id,cell.i,cell.j,
+                 cell.rect.x0,cell.rect.y0,cell.rect.x1,cell.rect.y1,z_start,z_end,
+                 thickness_known,phi,kx,ky,phi*k1+(1-phi)*k2,density,cp,
+                 rows,cols,rows*cols,cell.rect.area,cell.rect.area,1.0,False))
+            emitted+=1
+    if no_pixel>20:
+        diagnostics.error(GRID_CELL_WITHOUT_PIXEL,f"layer {name!r}: {no_pixel} cells have insufficient sampling; first 20 locations reported")
     return emitted,0,no_pixel
 
 
 def plan_geometry(step, options, diagnostics):
-    """Common local XY partition and explicit layer-domain membership, no pixels."""
+    """Common physical XY partition and explicit layer-domain membership, no pixels."""
     from shapely.geometry import box
     from shapely.ops import unary_union
     rectification=rectify_step_outline(step,0,0,options.rectify,diagnostics=diagnostics)
@@ -711,14 +723,17 @@ def equivalence_from_document(
     bounds = _region_from_polygons(domains["step_profile"].get("polygons")).bounds
     assert bounds is not None
     x_min, y_min, x_max, y_max = bounds
+    from .mesh import resolve_mesh, resolve_raster
+    mesh_options,mesh_config=resolve_mesh(step,rectification.rectangles,options.grid)
+    grid = build_grid(rectification.rectangles,mesh_options,diagnostics=diags)
+    if grid.cells:
+        px,py=resolve_raster(bounds,grid,mesh_options,mesh_config)
+    grid.mesh_configuration=mesh_config
     dx = (x_max - x_min) / px
     dy = (y_max - y_min) / py
     x_axis = RasterAxis(x_min, dx, px)
     y_axis = RasterAxis(y_min, dy, py)
 
-    grid = build_grid(
-        rectification.rectangles, options.grid, diagnostics=diags,
-    )
     if not grid.cells:
         return EquivalenceResult(
             cells=[], layers=[], grid=grid, rectification=rectification,

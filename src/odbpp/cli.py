@@ -118,13 +118,15 @@ def build_parser() -> argparse.ArgumentParser:
                       help="with an ODB++ input, inventory only (not useful here)")
     p_eq.add_argument("-o", "--out", default=None,
                       help="output directory (default: out/<job name>)")
-    p_eq.add_argument("--px", type=int, required=True,
-                      help="raster pixels across the board in X (required)")
-    p_eq.add_argument("--py", type=int, required=True,
-                      help="raster pixels across the board in Y (required)")
-    p_eq.add_argument("--min-cell-mm", type=float, nargs="+", default=[0.1], metavar="MM",
+    p_eq.add_argument("--px", type=int, default=None,
+                      help="X raster pixels (default: dense geometry-aware sampling)")
+    p_eq.add_argument("--py", type=int, default=None,
+                      help="Y raster pixels (provide together with --px)")
+    p_eq.add_argument("--grid-level", choices=("coarse","standard","fine"), default=None,
+                      help="adaptive mesh preset (default: standard; expert sizes override)")
+    p_eq.add_argument("--min-cell-mm", type=float, nargs="+", default=None, metavar="MM",
                       help="minimum cell edge, one value or X Y (default 0.1 mm)")
-    p_eq.add_argument("--max-cell-mm", type=float, nargs="+", default=[5.0], metavar="MM",
+    p_eq.add_argument("--max-cell-mm", type=float, nargs="+", default=None, metavar="MM",
                       help="maximum cell edge, one value or X Y (default 5 mm)")
     p_eq.add_argument("--diagnostic-geometry-step-mm", dest="rectify_tolerance",
                       type=float, default=None, help=argparse.SUPPRESS)
@@ -151,15 +153,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_eq.add_argument("--raster-scale", type=int, default=0, metavar="N",
                       help="isotropic nearest-neighbour zoom for the mask PNGs, "
                            "stretching a non-square board (default 0 = auto: "
-                           "about 700 px on the long side, board proportions "
+                           "about 1400 px on the long side, board proportions "
                            "kept; 1 = exactly px x py)")
     p_eq.add_argument("--no-heatmap", dest="heatmap", action="store_false",
                       default=True,
                       help="do not write the per-layer kx/ky/kz heat maps "
                            "under <out>/heatmaps/")
-    p_eq.add_argument("--heatmap-panel-width", type=int, default=720,
+    p_eq.add_argument("--heatmap-panel-width", type=int, default=1440,
                       metavar="PX",
-                      help="width of one heat-map panel in pixels (default 720; "
+                      help="width of one heat-map panel in pixels (default 1440; "
                            "height follows the board aspect ratio)")
     p_eq.add_argument("--heatmap-shared-scale", action="store_true",
                       help="use one colour scale for every layer instead of one "
@@ -183,8 +185,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="output directory (default: <csv dir>/heatmaps)")
     p_map.add_argument("--layer", action="append", default=None, metavar="NAME",
                        help="only these layers (repeatable)")
-    p_map.add_argument("--panel-width", type=int, default=720, metavar="PX",
-                       help="width of one panel in pixels (default 720)")
+    p_map.add_argument("--panel-width", type=int, default=1440, metavar="PX",
+                       help="width of one panel in pixels (default 1440)")
     p_map.add_argument("--shared-scale", action="store_true",
                        help="use one colour scale for every layer")
     p_map.add_argument("--grid", action="store_true",
@@ -651,10 +653,18 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
             merged.setdefault(phase, {}).update(entry)
         config["global"] = merged
 
+    if (args.px is None) != (args.py is None):
+        print("--px and --py must be provided together", file=sys.stderr)
+        return 2
+    if args.grid_level and (args.min_cell_mm is not None or args.max_cell_mm is not None):
+        print("--grid-level cannot be combined with expert cell sizes", file=sys.stderr)
+        return 2
     try:
         options = EquivalenceOptions(
-            grid=GridOptions(px=args.px, py=args.py, min_cell_mm=args.min_cell_mm,
-                             max_cell_mm=args.max_cell_mm),
+            grid=GridOptions(px=4096 if args.px is None else args.px, py=4096 if args.py is None else args.py,
+                             min_cell_mm=args.min_cell_mm or .1, max_cell_mm=args.max_cell_mm or 5,
+                             mesh_preset=args.grid_level or (None if args.min_cell_mm is not None or args.max_cell_mm is not None else "standard"),
+                             auto_raster=args.px is None),
             materials=MaterialBook(config or None, diagnostics=diagnostics),
             rectify=RectifyOptions(
                 tolerance_mm=args.rectify_tolerance,
@@ -737,7 +747,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
 
     equivalent_layers = [r for r in result.layers if r.status == "equivalent"]
     print(f"step {step_name!r}: {count} equivalent cell(s) over "
-          f"{len(equivalent_layers)} layer(s); raster {args.px}x{args.py}, "
+          f"{len(equivalent_layers)} layer(s); raster {result.raster_px}x{result.raster_py}, "
           f"grid {result.grid.nx}x{result.grid.ny}, "
           f"{len(result.grid.cells)} board cell(s)")
     for report in result.layers:

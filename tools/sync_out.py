@@ -1,6 +1,6 @@
 """Keep previews and material maps for every case together under out/.
 
-Run through ``uv run --all-extras python tools/sync_out.py --px 400 --py 400`` from the project
+Run through ``uv run --all-extras python tools/sync_out.py --grid-level standard`` from the project
 root. Existing valid outputs are reused; pass ``--force`` to regenerate them.
 KiCad native and curated clean ZIPs have separate preview directories, so the
 source of every output remains visible and the two versions can be compared.
@@ -70,7 +70,8 @@ def image_names(layers: list[str]) -> set[str]:
 
 
 def existing_equivalence(directory: Path, preview: Path, *,
-                         px: int, py: int, min_cell_mm=0.1, max_cell_mm=5.0,
+                         px: int | None, py: int | None, min_cell_mm=0.1, max_cell_mm=5.0,
+                         grid_level: str | None = None,
                          draw_grid: bool = False) -> dict | None:
     """Reuse only a complete result for this JSON and this raster/grid choice."""
     stem = preview.stem
@@ -87,14 +88,21 @@ def existing_equivalence(directory: Path, preview: Path, *,
         data = json.loads(meta.read_text(encoding="utf-8"))
         expected_source = preview.relative_to(ROOT).as_posix()
         actual_source = data["source"]["path"].replace("\\", "/")
-        if (data["schema"] != "odbpp/materialmap-4"
+        config=data["grid"].get("mesh_configuration") or {}
+        if config.get("mode") != ("preset" if grid_level else "expert"):
+            return None
+        if grid_level and config.get("preset")!=grid_level:
+            return None
+        if (config.get("raster") or {}).get("mode") != ("automatic" if px is None else "explicit"):
+            return None
+        if (data["schema"] != "odbpp/materialmap-5"
                 or data.get("pipeline_fingerprint") != pipeline_fingerprint()
                 or data["source"]["preview_schema"] != "odbpp/preview-2"
                 or actual_source != expected_source
-                or data["raster"]["px"] != px or data["raster"]["py"] != py
-                or data["grid"]["size_constraints_mm"] != {
-                    "min": list(GridOptions(px, py, min_cell_mm, max_cell_mm).min_cell_mm),
-                    "max": list(GridOptions(px, py, min_cell_mm, max_cell_mm).max_cell_mm)}
+                or (px is not None and (data["raster"]["px"] != px or data["raster"]["py"] != py))
+                or (not grid_level and data["grid"]["size_constraints_mm"] != {
+                    "min": list(GridOptions(px or 4096, py or 4096, min_cell_mm, max_cell_mm).min_cell_mm),
+                    "max": list(GridOptions(px or 4096, py or 4096, min_cell_mm, max_cell_mm).max_cell_mm)})
                 or not data["rectification"]["ok"]
                 or any(d["level"] == "error" for d in data["diagnostics"])):
             return None
@@ -176,8 +184,8 @@ def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
                      f"<td>{equivalent_count}</td>"
                      f"<td>{equivalent['grid']['nx']}×{equivalent['grid']['ny']}</td>"
                      f"<td>{links}</td></tr>")
-    lines += ["</table>", "<p><small>运行 tools/sync_out.py --px 400 --py 400 --min-cell-mm 0.1 --max-cell-mm 5 --heatmap-grid "
-              "生成粗网格；表中为各 case 实际网格数。"
+    lines += ["</table>", "<p><small>光栅与尺寸约束以各 case 的 meta 为准；"
+              "表中 nx/ny 是全局笛卡尔栅的轴向区间数，完整实体单元见 CSV。"
               "修改解析器后使用 --force 重新生成。</small></p>", "</html>"]
     return "\n".join(lines) + "\n"
 
@@ -213,21 +221,31 @@ def main() -> None:
                         help="regenerate previews and equivalence outputs")
     parser.add_argument("--force-equivalent", action="store_true",
                         help="regenerate equivalence outputs but reuse valid previews")
-    parser.add_argument("--px", type=int, required=True,
-                        help="X raster pixels per case (required)")
-    parser.add_argument("--py", type=int, required=True,
-                        help="Y raster pixels per case (required)")
-    parser.add_argument("--min-cell-mm", type=float, nargs="+", default=[0.1], metavar="MM",
+    parser.add_argument("--px", type=int, default=None,
+                        help="X raster pixels per case (default: dense automatic)")
+    parser.add_argument("--py", type=int, default=None,
+                        help="Y raster pixels per case (provide with --px)")
+    parser.add_argument("--grid-level", choices=("coarse","standard","fine"), default=None,
+                        help="adaptive grid preset (default standard; expert sizes override)")
+    parser.add_argument("--min-cell-mm", type=float, nargs="+", default=None, metavar="MM",
                         help="minimum edge, one value or X Y (default 0.1 mm)")
-    parser.add_argument("--max-cell-mm", type=float, nargs="+", default=[5.0], metavar="MM",
+    parser.add_argument("--max-cell-mm", type=float, nargs="+", default=None, metavar="MM",
                         help="maximum edge, one value or X Y (default 5 mm)")
     parser.add_argument("--heatmap-grid", action="store_true",
                         help="outline each CSV cell in heatmaps")
     parser.add_argument("--prune", action="store_true",
                         help="remove out/ entries with no corresponding case")
     args = parser.parse_args()
+    if (args.px is None)!=(args.py is None):
+        parser.error("--px and --py must be provided together")
+    expert=args.min_cell_mm is not None or args.max_cell_mm is not None
+    if expert and args.grid_level:
+        parser.error("--grid-level cannot be combined with expert cell sizes")
+    grid_level=args.grid_level or (None if expert else "standard")
     try:
-        sizes = GridOptions(args.px, args.py, args.min_cell_mm, args.max_cell_mm)
+        sizes = GridOptions(4096 if args.px is None else args.px,
+                            4096 if args.py is None else args.py,
+                            args.min_cell_mm or .1,args.max_cell_mm or 5)
     except ValueError as exc:
         parser.error(str(exc))
     draw_grid = args.heatmap_grid
@@ -255,14 +273,18 @@ def main() -> None:
                       existing_equivalence(output, preview, px=args.px,
                                            py=args.py, min_cell_mm=sizes.min_cell_mm,
                                            max_cell_mm=sizes.max_cell_mm,
-                                           draw_grid=draw_grid))
+                                           draw_grid=draw_grid,grid_level=grid_level))
         if equivalent is None:
             command = [sys.executable, "-m", "odbpp", "equivalent",
                        "--from-json", preview.relative_to(ROOT).as_posix(),
-                       "--px", str(args.px), "--py", str(args.py),
-                       "--min-cell-mm", *map(str, sizes.min_cell_mm),
-                       "--max-cell-mm", *map(str, sizes.max_cell_mm),
                        "-o", output.relative_to(ROOT).as_posix()]
+            if args.px is not None:
+                command.extend(["--px",str(args.px),"--py",str(args.py)])
+            if grid_level:
+                command.extend(["--grid-level",grid_level])
+            else:
+                command.extend(["--min-cell-mm",*map(str,sizes.min_cell_mm),
+                                "--max-cell-mm",*map(str,sizes.max_cell_mm)])
             if draw_grid:
                 command.append("--heatmap-grid")
             print(f"equiv  {name}", flush=True)
@@ -274,7 +296,7 @@ def main() -> None:
             equivalent = existing_equivalence(output, preview, px=args.px,
                                                py=args.py, min_cell_mm=sizes.min_cell_mm,
                                                max_cell_mm=sizes.max_cell_mm,
-                                               draw_grid=draw_grid)
+                                               draw_grid=draw_grid,grid_level=grid_level)
             if equivalent is None:
                 raise RuntimeError(f"equivalence was not complete: {output}")
         else:
@@ -283,7 +305,7 @@ def main() -> None:
             from tools.plot_regions import plot_regions
         except ModuleNotFoundError:
             from plot_regions import plot_regions
-        plot_regions(valid[1], output / "regions", px=args.px,py=args.py,metadata=equivalent)
+        plot_regions(valid[1], output / "regions", px=equivalent["raster"]["px"],py=equivalent["raster"]["py"],metadata=equivalent)
         rows.append((name, source, output, valid[1], equivalent))
     (OUT / "index.html").write_text(render_index(rows), encoding="utf-8")
     if args.prune:

@@ -112,7 +112,7 @@ class RectifyResult:
 
     def as_dict(self) -> dict:
         return {
-            "strategy": "inscribed-envelope-largest-rectangle-v1",
+            "strategy": "inscribed-vertical-staircase-v2",
             "audit": self.audit,
             "tolerance_mm": self.tolerance_mm,
             "rectangle_count": len(self.rectangles),
@@ -233,35 +233,14 @@ def _envelope(region, a, b, pitch, origin, orthogonal):
 
 
 def _pack(bands):
-    """Largest common rectangles first, avoiding thin strips across the body."""
-    bands = [[a,b,list(spans)] for a,b,spans in bands]
-    rectangles = []
-    while any(row[2] for row in bands):
-        best_area, best = 0, None
-        for i,(a,b,spans) in enumerate(bands):
-            common = spans
-            if not common: continue
-            for j in range(i,len(bands)):
-                if j > i:
-                    if abs(bands[j-1][1]-bands[j][0]) > 1e-8: break
-                    common = _intersect_spans(common,bands[j][2])
-                if not common: break
-                for low,high in common:
-                    area = (bands[j][1]-a)*(high-low)
-                    if area > best_area + 1e-10:
-                        best_area,best = area,(i,j,low,high)
-        if best is None: break
-        i,j,low,high = best
-        rectangles.append(Rect(bands[i][0],low,bands[j][1],high))
-        for row in bands[i:j+1]:
-            remaining = []
-            for l,h in row[2]:
-                if h <= low or l >= high: remaining.append((l,h))
-                else:
-                    if l < low-1e-9: remaining.append((l,low))
-                    if h > high+1e-9: remaining.append((high,h))
-            row[2] = remaining
-    return sorted(rectangles,key=lambda r: r.bounds)
+    """Merge neighboring vertical strips with identical complete Y envelopes."""
+    merged=[]
+    for a,b,spans in bands:
+        if merged and merged[-1][2] == spans and abs(merged[-1][1]-a)<1e-8:
+            merged[-1]=(merged[-1][0],b,spans)
+        else:
+            merged.append((a,b,spans))
+    return [Rect(a,l,b,h) for a,b,spans in merged for l,h in spans]
 
 
 def rectify_region(region, options=None, *, diagnostics=None):

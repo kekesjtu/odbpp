@@ -539,7 +539,7 @@ class TestOutput:
         assert len(csv_path.read_text(encoding="utf-8").splitlines()) == \
             1 + len(result.cells)
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        assert meta["schema"] == "odbpp/materialmap-4"
+        assert meta["schema"] == "odbpp/materialmap-5"
         assert meta["units"]["thermal_conductivity"] == "W/(m*K)"
         assert meta["drill_model"] == "solid_copper"
         assert meta["z_axis"].startswith("increases downward")
@@ -671,8 +671,9 @@ class TestCommandLine:
         assert not list(out.glob("*.csv"))
         assert not list(out.glob("*.tmp"))
 
-    def test_px_py_are_required(self):
+    def test_px_py_default_to_dense_automatic_sampling(self):
         from odbpp.cli import build_parser
 
-        with pytest.raises(SystemExit):
-            build_parser().parse_args(["equivalent", "some/path"])
+        args=build_parser().parse_args(["equivalent", "some/path"])
+        assert args.px is None and args.py is None
+        assert args.min_cell_mm is None and args.max_cell_mm is None

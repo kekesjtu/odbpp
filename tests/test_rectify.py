@@ -59,12 +59,13 @@ def test_bending_flex_connection_refines_locally():
     assert result.audit["topology"]["positive_width_connections"]
 
 
-def test_slanted_staircase_is_inside_and_largest_body_is_coarse():
+def test_slanted_staircase_is_inside_and_uses_vertical_strips():
     source=region(([(0,0),(80,0),(80,80)],False))
     result=rectify_region(source)
     audit(source,result)
     assert result.net_area_error_mm2 < 0
-    assert max(r.area for r in result.rectangles)>1000
+    assert max(r.width for r in result.rectangles)<=.5
+    assert any(r.height>70 for r in result.rectangles)
 
 
 def test_budget_is_never_relaxed_by_perimeter():

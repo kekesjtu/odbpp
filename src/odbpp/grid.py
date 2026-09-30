@@ -43,8 +43,12 @@ class GridOptions:
     py: int
     min_cell_mm: float | Sequence[float] = DEFAULT_MIN_CELL_MM
     max_cell_mm: float | Sequence[float] = DEFAULT_MAX_CELL_MM
+    mesh_preset: str | None = None
+    auto_raster: bool = False
 
     def __post_init__(self) -> None:
+        if self.mesh_preset not in (None, "coarse", "standard", "fine"):
+            raise ValueError("mesh preset must be coarse, standard or fine")
         if self.px < 1 or self.py < 1:
             raise ValueError(f"pixel counts must be positive, got {self.px}x{self.py}")
         low, high = size_pair(self.min_cell_mm), size_pair(self.max_cell_mm)
@@ -88,6 +92,7 @@ class BoardGrid:
     #: ``{j: [cell, ...]}`` so a rasteriser can stream one horizontal band.
     cells_by_band: dict[int, list[Cell]] = field(default_factory=dict)
     size_constraints_mm: Optional[dict] = None
+    mesh_configuration: Optional[dict] = None
 
     @property
     def nx(self) -> int:
@@ -114,7 +119,8 @@ class BoardGrid:
             "actual_edge_range_mm": {
                 "x": [min(widths), max(widths)] if widths else None,
                 "y": [min(heights), max(heights)] if heights else None},
-            "layout": "local-region-grids",
+            "layout": "global-cartesian",
+            "mesh_configuration": self.mesh_configuration,
             "nx": self.nx,
             "ny": self.ny,
             "forced_x_line_count": len(self.forced_x),
@@ -148,26 +154,31 @@ def _allocate(lines, minimum, maximum, axis, diagnostics):
 
 
 def build_grid(rectangles, options, *, diagnostics=None, capacity_x=None, capacity_y=None):
-    """Independently subdivide every region, then check sampling capacity."""
+    """Propagate every region boundary into shared Cartesian axis lines."""
     diags = diagnostics if diagnostics is not None else Diagnostics()
     forced_x = sorted({x for r in rectangles for x in (r.x0,r.x1)})
     forced_y = sorted({y for r in rectangles for y in (r.y0,r.y1)})
-    planned = []
-    x_pairs,y_pairs = set(),set()
+    axes=[]
+    for axis,forced,lo,hi in zip("XY",(forced_x,forced_y),options.min_cell_mm,options.max_cell_mm):
+        lines=[]
+        for left,right in zip(forced,forced[1:]):
+            part=_allocate((left,right),lo,hi,axis,diags)
+            if not part:
+                return BoardGrid([],[],forced_x,forced_y,list(rectangles),[])
+            lines.extend(part[:-1])
+        if forced: lines.append(forced[-1])
+        axes.append(lines)
+    xs,ys=axes
+    xi={x:i for i,x in enumerate(xs)}; yi={y:j for j,y in enumerate(ys)}
+    cells=[]; occupied=set()
     for rid,r in enumerate(rectangles):
-        xs = _allocate((r.x0,r.x1),options.min_cell_mm[0],options.max_cell_mm[0],f"X region {rid}",diags)
-        ys = _allocate((r.y0,r.y1),options.min_cell_mm[1],options.max_cell_mm[1],f"Y region {rid}",diags)
-        if not xs or not ys:
-            return BoardGrid([],[],forced_x,forced_y,list(rectangles),[])
-        for a,b in zip(xs,xs[1:]):
-            for c,d in zip(ys,ys[1:]):
-                planned.append((rid,Rect(a,c,b,d)))
-                x_pairs.add((a,b)); y_pairs.add((c,d))
-    xi={pair:i for i,pair in enumerate(sorted(x_pairs))}
-    yi={pair:j for j,pair in enumerate(sorted(y_pairs))}
-    cells=[Cell(xi[(r.x0,r.x1)],yi[(r.y0,r.y1)],r,rid) for rid,r in planned]
-    grid=BoardGrid(sorted({x for p in x_pairs for x in p}),sorted({y for p in y_pairs for y in p}),
-                   forced_x,forced_y,list(rectangles),cells,
+        for j in range(yi[r.y0],yi[r.y1]):
+            for i in range(xi[r.x0],xi[r.x1]):
+                if (i,j) in occupied:
+                    raise ValueError(f"overlapping regions at global Cartesian cell ({i},{j})")
+                occupied.add((i,j))
+                cells.append(Cell(i,j,Rect(xs[i],ys[j],xs[i+1],ys[j+1]),rid))
+    grid=BoardGrid(xs,ys,forced_x,forced_y,list(rectangles),cells,
                    size_constraints_mm={"min":list(options.min_cell_mm),"max":list(options.max_cell_mm)})
     for c in cells: grid.cells_by_band.setdefault(c.j,[]).append(c)
     for cell in cells:
@@ -176,7 +187,6 @@ def build_grid(rectangles, options, *, diagnostics=None, capacity_x=None, capaci
             if capacity is not None and capacity(lo,hi)<1:
                 diags.error(GRID_CELL_WITHOUT_PIXEL,
                     f"{axis} region {cell.region_id} interval [{lo:g}, {hi:g}] mm has no pixel centre; increase px/py")
-                # The coordinates were already planned; never adapt geometry.
                 return grid
     if not cells: diags.error(GRID_NO_BOARD_CELLS,"no modeled board cells")
     return grid
