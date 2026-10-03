@@ -57,10 +57,10 @@ class RectifyOptions:
     tolerance_mm: Optional[float] = None
     #: Reject the result when lost or gained area exceeds this fraction of the
     #: original outline area.
-    max_relative_area_error: float = 0.02
-    #: ... or this many square millimetres, whichever is larger.  The absolute
-    #: floor keeps a tiny board from failing on a rounding-scale difference.
-    max_absolute_area_error_mm2: float = 0.01
+    max_relative_area_error: float = 0.05
+    #: Optional absolute floor for internal diagnostics. Disabled by default so
+    #: the 5% limit applies even to small boards.
+    max_absolute_area_error_mm2: float = 0.0
     min_step_mm: float = 0.0625
     max_refinement_rounds: int = 8
     basis_mm: Optional[tuple[float, float, float, float]] = None
@@ -112,7 +112,7 @@ class RectifyResult:
 
     def as_dict(self) -> dict:
         return {
-            "strategy": "inscribed-vertical-staircase-v2",
+            "strategy": "inscribed-vertical-staircase-v3",
             "audit": self.audit,
             "tolerance_mm": self.tolerance_mm,
             "rectangle_count": len(self.rectangles),
@@ -243,6 +243,113 @@ def _pack(bands):
     return [Rect(a,l,b,h) for a,b,spans in merged for l,h in spans]
 
 
+def _coarsen(envelopes, original, allowed, step, origin):
+    """Spend boundary-loss budget to reduce globally propagated axis lines.
+
+    Every candidate is a subset of the already inscribed model. Narrow spans
+    stay at their protected scale; vector topology gates every accepted change.
+    """
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    def packed(bands):
+        rects = _pack(bands)
+        return rects, unary_union([box(*r.bounds) for r in rects])
+
+    def score(bands):
+        rects = _pack(bands)
+        xs = {v for r in rects for v in (r.x0, r.x1)}
+        ys = {v for r in rects for v in (r.y0, r.y1)}
+        return (len(xs) + len(ys), len(rects))
+
+    def acceptable(bands):
+        _, model = packed(bands)
+        return (original.area - model.area <= allowed + 1e-8
+                and model.difference(original).area <= 1e-8
+                and _topology(original, model)["preserved"])
+
+    before = score(envelopes)
+    chosen = envelopes
+    chosen_pitch = None
+    # One shared physical Y origin/pitch removes mixed refinement levels from
+    # ordinary boundaries, without quantising away narrow connection spans.
+    for pitch in (step / 2, step, step * 2, step * 4, step * 8):
+        candidate = []
+        for a, b, spans in envelopes:
+            snapped = []
+            for low, high in spans:
+                lo = round(origin + math.ceil((low-origin)/pitch-1e-9)*pitch, 9)
+                hi = round(origin + math.floor((high-origin)/pitch+1e-9)*pitch, 9)
+                # Exact inward containment, including numerical rounding.
+                lo, hi = max(low, lo), min(high, hi)
+                snapped.append((lo, hi) if hi-lo >= pitch and high-low >= 2*pitch
+                               else (low, high))
+            candidate.append((a, b, snapped))
+        if score(candidate) < score(chosen) and acceptable(candidate):
+            chosen, chosen_pitch = candidate, pitch
+
+    merged_pairs = 0
+    rejected_topology = 0
+    for _ in range(12):
+        # Collapse equal envelopes before considering different Y boundaries.
+        bands = []
+        for a, b, spans in chosen:
+            if bands and bands[-1][2] == spans and abs(bands[-1][1]-a) < 1e-8:
+                bands[-1] = (bands[-1][0], b, spans)
+            else:
+                bands.append((a, b, spans))
+        _, model = packed(bands)
+        remaining = allowed - (original.area-model.area)
+        proposals = []
+        for i, (left, right) in enumerate(zip(bands, bands[1:])):
+            a, b, ls = left
+            c, d, rs = right
+            spans = _intersect_spans(ls, rs)
+            if abs(b-c) > 1e-8 or not ls or len(ls) != len(rs) or len(spans) != len(ls):
+                continue
+            cost = ((b-a)*sum(h-l for l,h in ls) + (d-c)*sum(h-l for l,h in rs)
+                    - (d-a)*sum(h-l for l,h in spans))
+            if cost <= remaining + 1e-8:
+                proposals.append((cost, i, (a, d, spans)))
+        selected = {}
+        occupied = set()
+        for cost, i, band in sorted(proposals):
+            if i in occupied or i+1 in occupied or cost > remaining + 1e-8:
+                continue
+            selected[i] = band
+            occupied.update((i, i+1))
+            remaining -= cost
+        if not selected:
+            chosen = bands
+            break
+        candidate = [selected.get(i, band) for i,band in enumerate(bands)
+                     if i-1 not in selected]
+        if acceptable(candidate):
+            chosen = candidate
+            merged_pairs += len(selected)
+        else:
+            # A batch can cut a protected branch. Recheck individual changes;
+            # reject them rather than spending area budget on topology loss.
+            chosen = bands
+            accepted = 0
+            for i, band in sorted(selected.items(), reverse=True):
+                candidate = chosen[:i] + [band] + chosen[i+2:]
+                if acceptable(candidate):
+                    chosen = candidate
+                    accepted += 1
+                else:
+                    rejected_topology += 1
+            merged_pairs += accepted
+            if not accepted:
+                break
+    return chosen, {"objective": "reduce forced XY axes, then region count",
+                    "shared_y_pitch_mm": chosen_pitch,
+                    "axis_score_before": list(before),
+                    "axis_score_after": list(score(chosen)),
+                    "merged_adjacent_pairs": merged_pairs,
+                    "topology_rejected_merges": rejected_topology}
+
+
 def rectify_region(region, options=None, *, diagnostics=None):
     from shapely.geometry import box
     from shapely.ops import unary_union
@@ -254,6 +361,9 @@ def rectify_region(region, options=None, *, diagnostics=None):
         return RectifyResult([],step,0,0,0,0,0,False)
     original = profile_shape(region)
     x0,y0,x1,y1 = original.bounds
+    if opts.tolerance_mm is None:
+        basis = opts.basis_mm or original.bounds
+        step = max(DEFAULT_TOLERANCE_MM, min(basis[2]-basis[0], basis[3]-basis[1])/32)
     orthogonal = all(abs(a-c)<1e-9 or abs(b-d)<1e-9 for r in region.rings
                      for (a,b),(c,d) in zip(tuple(r.points),tuple(r.points[1:])+tuple(r.points[:1])))
     if orthogonal:
@@ -287,6 +397,14 @@ def rectify_region(region, options=None, *, diagnostics=None):
             else: refined.append((a,b,pitch))
         if not changed: break
         bands=refined
+    coarsening = {}
+    if topology["preserved"] and lost <= allowed and outside <= 1e-8:
+        origin = (opts.basis_mm or original.bounds)[1]
+        envelopes, coarsening = _coarsen(envelopes, original, allowed, step, origin)
+        model = unary_union([box(*r.bounds) for r in _pack(envelopes)])
+        topology = _topology(original,model)
+        lost = original.difference(model).area
+        outside = model.difference(original).area
     rectangles = _pack(envelopes)
     ok = topology["preserved"] and lost <= allowed+1e-8 and outside <= 1e-8
     if not ok:
@@ -300,7 +418,11 @@ def rectify_region(region, options=None, *, diagnostics=None):
                          shape_deviation_mm2=lost+outside,region=rectified,
                          audit={"inscribed":outside <= 1e-8,"non_overlapping":
                                 abs(sum(r.area for r in rectangles)-model.area)<1e-7,
-                                "area_budget_mm2":allowed,"min_step_mm":opts.min_step_mm,
+                                "area_budget_mm2":allowed,
+                                "relative_area_budget":opts.max_relative_area_error,
+                                "min_step_mm":opts.min_step_mm,
+                                "initial_scale_rule":"max(0.5 mm, shorter board side / 32)",
+                                "coarsening":coarsening,
                                 "topology":topology,"local_refinement":history})
 
 

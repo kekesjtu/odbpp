@@ -1,0 +1,1047 @@
+{
+  "baseline_ref": "9559b86",
+  "cases": {
+    "designodb-rigidflex.tgz": {
+      "before": {
+        "regions": 287,
+        "forced_x": 157,
+        "forced_y": 125,
+        "grid_cells": 15354,
+        "nx": 241,
+        "ny": 129,
+        "loss_ratio": 0.013894882088061479,
+        "seconds": 1.9959692000002178,
+        "peak_process_memory_mb": 403.74609375,
+        "geometry_sha256": "2ca5d6cc7db8442a36d45599114424ba510667f0586901ec8a76fb65aa00f301",
+        "domains": {
+          "step_profile": {
+            "loss_ratio": 0.013894882088062622,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_13": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_15": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_17": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_19": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_3": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_5": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_7": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_9": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:FLEX_5": {
+            "loss_ratio": 0.013862908609109091,
+            "topology_preserved": true
+          },
+          "layer_profile:FLEX_6": {
+            "loss_ratio": 0.013862908609109091,
+            "topology_preserved": true
+          },
+          "layer_profile:PLANE_4": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:POLYIMIDE_BASE_11": {
+            "loss_ratio": 0.013862908609109091,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_1": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_10": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_2": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_3": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_7": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_8": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_9": {
+            "loss_ratio": 0.019575621440718095,
+            "topology_preserved": true
+          }
+        }
+      },
+      "after": {
+        "regions": 45,
+        "forced_x": 31,
+        "forced_y": 43,
+        "grid_cells": 4262,
+        "nx": 145,
+        "ny": 56,
+        "loss_ratio": 0.049850571707187076,
+        "seconds": 1.708486499999708,
+        "peak_process_memory_mb": 403.359375,
+        "geometry_sha256": "6ee2026ebacc0398a13f54fb7bb42cf3c11160fc7634315b9c9ce2698f676c1b",
+        "domains": {
+          "step_profile": {
+            "loss_ratio": 0.04985057170718778,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_13": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_15": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_17": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_19": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_3": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_5": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_7": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:DIELECTRIC_9": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:FLEX_5": {
+            "loss_ratio": 0.04981976407205618,
+            "topology_preserved": true
+          },
+          "layer_profile:FLEX_6": {
+            "loss_ratio": 0.04981976407205618,
+            "topology_preserved": true
+          },
+          "layer_profile:PLANE_4": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:POLYIMIDE_BASE_11": {
+            "loss_ratio": 0.04981976407205618,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_1": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_10": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_2": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_3": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_7": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_8": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          },
+          "layer_profile:SIGNAL_9": {
+            "loss_ratio": 0.048056402476202555,
+            "topology_preserved": true
+          }
+        }
+      },
+      "presets": {
+        "coarse": {
+          "regions": 45,
+          "forced_x": 31,
+          "forced_y": 43,
+          "grid_cells": 1852,
+          "nx": 79,
+          "ny": 45,
+          "loss_ratio": 0.049850571707187076,
+          "seconds": 1.7412915000004432,
+          "peak_process_memory_mb": 403.15625,
+          "geometry_sha256": "d0d422f6c9d8d67e7883594738cf52d15bfcd9c33738858ab21bf4b5820888b7",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04985057170718778,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_13": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_15": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_17": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_19": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_5": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_5": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_6": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:PLANE_4": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:POLYIMIDE_BASE_11": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_1": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_10": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_2": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_8": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            }
+          }
+        },
+        "standard": {
+          "regions": 45,
+          "forced_x": 31,
+          "forced_y": 43,
+          "grid_cells": 4262,
+          "nx": 145,
+          "ny": 56,
+          "loss_ratio": 0.049850571707187076,
+          "seconds": 1.7747509999999238,
+          "peak_process_memory_mb": 403.4609375,
+          "geometry_sha256": "6ee2026ebacc0398a13f54fb7bb42cf3c11160fc7634315b9c9ce2698f676c1b",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04985057170718778,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_13": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_15": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_17": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_19": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_5": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_5": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_6": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:PLANE_4": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:POLYIMIDE_BASE_11": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_1": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_10": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_2": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_8": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            }
+          }
+        },
+        "fine": {
+          "regions": 45,
+          "forced_x": 31,
+          "forced_y": 43,
+          "grid_cells": 15485,
+          "nx": 273,
+          "ny": 106,
+          "loss_ratio": 0.049850571707187076,
+          "seconds": 1.7340910000002623,
+          "peak_process_memory_mb": 403.3515625,
+          "geometry_sha256": "609b42a1387cd127b84390e27ac1352726c5d0fa6f78c7e7664fd939c4fddb47",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04985057170718778,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_13": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_15": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_17": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_19": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_5": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_5": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_6": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:PLANE_4": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:POLYIMIDE_BASE_11": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_1": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_10": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_2": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_8": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            }
+          }
+        }
+      },
+      "sampling": {
+        "geometry_invariant": true,
+        "automatic": {
+          "regions": 45,
+          "forced_x": 31,
+          "forced_y": 43,
+          "grid_cells": 4262,
+          "nx": 145,
+          "ny": 56,
+          "loss_ratio": 0.049850571707187076,
+          "seconds": 6.353151200000866,
+          "peak_process_memory_mb": 403.47265625,
+          "geometry_sha256": "6ee2026ebacc0398a13f54fb7bb42cf3c11160fc7634315b9c9ce2698f676c1b",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04985057170718778,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_13": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_15": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_17": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_19": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_5": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_5": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_6": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:PLANE_4": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:POLYIMIDE_BASE_11": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_1": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_10": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_2": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_8": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            }
+          },
+          "raster": [
+            4096,
+            1089
+          ],
+          "material_rows": 66274
+        },
+        "double": {
+          "regions": 45,
+          "forced_x": 31,
+          "forced_y": 43,
+          "grid_cells": 4262,
+          "nx": 145,
+          "ny": 56,
+          "loss_ratio": 0.049850571707187076,
+          "seconds": 9.118158299999777,
+          "peak_process_memory_mb": 403.3828125,
+          "geometry_sha256": "6ee2026ebacc0398a13f54fb7bb42cf3c11160fc7634315b9c9ce2698f676c1b",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04985057170718778,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_13": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_15": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_17": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_19": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_5": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:DIELECTRIC_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_5": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:FLEX_6": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:PLANE_4": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:POLYIMIDE_BASE_11": {
+              "loss_ratio": 0.04981976407205618,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_1": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_10": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_2": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_3": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_7": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_8": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            },
+            "layer_profile:SIGNAL_9": {
+              "loss_ratio": 0.048056402476202555,
+              "topology_preserved": true
+            }
+          },
+          "raster": [
+            8192,
+            2178
+          ],
+          "material_rows": 66274
+        },
+        "relative_error_vs_double": {
+          "kx": {
+            "median": 5.551115123125781e-16,
+            "p95": 0.1235841671702545,
+            "max": 48.189329927047844
+          },
+          "ky": {
+            "median": 5.551115123125781e-16,
+            "p95": 0.11525173499169138,
+            "max": 75.43137254901963
+          },
+          "kz": {
+            "median": 0.0,
+            "p95": 0.19947892061531552,
+            "max": 9.292270531400966
+          },
+          "density": {
+            "median": 0.0,
+            "p95": 0.029756908065637345,
+            "max": 0.20967266293128878
+          },
+          "specific_heat": {
+            "median": 0.0,
+            "p95": 0.018801377642964766,
+            "max": 0.17268873889597974
+          }
+        }
+      }
+    },
+    "kicad-kitchen-sink": {
+      "before": {
+        "regions": 450,
+        "forced_x": 360,
+        "forced_y": 282,
+        "grid_cells": 61092,
+        "nx": 365,
+        "ny": 281,
+        "loss_ratio": 0.011591645531184825,
+        "seconds": 0.37334869999995135,
+        "peak_process_memory_mb": 67.13671875,
+        "geometry_sha256": "fd31bccf563f875b03088490975eefa0e83201c3fc3ab70fcc13f938d9e95ad5",
+        "domains": {
+          "step_profile": {
+            "loss_ratio": 0.011591645531184091,
+            "topology_preserved": true
+          }
+        }
+      },
+      "after": {
+        "regions": 78,
+        "forced_x": 63,
+        "forced_y": 62,
+        "grid_cells": 4217,
+        "nx": 104,
+        "ny": 63,
+        "loss_ratio": 0.04997061915469787,
+        "seconds": 0.25683760000083566,
+        "peak_process_memory_mb": 44.10546875,
+        "geometry_sha256": "8da83afc2645d7c58447d2381fdcd172be83577c14c236778c22f0c2a5527909",
+        "domains": {
+          "step_profile": {
+            "loss_ratio": 0.04997061915469854,
+            "topology_preserved": true
+          }
+        }
+      },
+      "presets": {
+        "coarse": {
+          "regions": 78,
+          "forced_x": 63,
+          "forced_y": 62,
+          "grid_cells": 2673,
+          "nx": 72,
+          "ny": 61,
+          "loss_ratio": 0.04997061915469787,
+          "seconds": 0.26167220000024827,
+          "peak_process_memory_mb": 43.23046875,
+          "geometry_sha256": "9203caf1141b9684ab0b2b4af1e01f45ee38fb1c8bfd0ea88f80f65103cc687f",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04997061915469854,
+              "topology_preserved": true
+            }
+          }
+        },
+        "standard": {
+          "regions": 78,
+          "forced_x": 63,
+          "forced_y": 62,
+          "grid_cells": 4217,
+          "nx": 104,
+          "ny": 63,
+          "loss_ratio": 0.04997061915469787,
+          "seconds": 0.2481142999995427,
+          "peak_process_memory_mb": 43.87890625,
+          "geometry_sha256": "8da83afc2645d7c58447d2381fdcd172be83577c14c236778c22f0c2a5527909",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04997061915469854,
+              "topology_preserved": true
+            }
+          }
+        },
+        "fine": {
+          "regions": 78,
+          "forced_x": 63,
+          "forced_y": 62,
+          "grid_cells": 15336,
+          "nx": 195,
+          "ny": 124,
+          "loss_ratio": 0.04997061915469787,
+          "seconds": 0.2569415999996636,
+          "peak_process_memory_mb": 48.47265625,
+          "geometry_sha256": "379a273b025cd504a8683853e9a651557a322d0ea9fd09b0eb7600fc3604ed91",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04997061915469854,
+              "topology_preserved": true
+            }
+          }
+        }
+      },
+      "sampling": {
+        "geometry_invariant": true,
+        "automatic": {
+          "regions": 78,
+          "forced_x": 63,
+          "forced_y": 62,
+          "grid_cells": 4217,
+          "nx": 104,
+          "ny": 63,
+          "loss_ratio": 0.04997061915469787,
+          "seconds": 0.6119908000000578,
+          "peak_process_memory_mb": 65.3125,
+          "geometry_sha256": "8da83afc2645d7c58447d2381fdcd172be83577c14c236778c22f0c2a5527909",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04997061915469854,
+              "topology_preserved": true
+            }
+          },
+          "raster": [
+            4096,
+            2595
+          ],
+          "material_rows": 12651
+        },
+        "double": {
+          "regions": 78,
+          "forced_x": 63,
+          "forced_y": 62,
+          "grid_cells": 4217,
+          "nx": 104,
+          "ny": 63,
+          "loss_ratio": 0.04997061915469787,
+          "seconds": 0.9478288000000248,
+          "peak_process_memory_mb": 99.625,
+          "geometry_sha256": "8da83afc2645d7c58447d2381fdcd172be83577c14c236778c22f0c2a5527909",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04997061915469854,
+              "topology_preserved": true
+            }
+          },
+          "raster": [
+            8192,
+            5190
+          ],
+          "material_rows": 12651
+        },
+        "relative_error_vs_double": {
+          "kx": {
+            "median": 1.8503717077085943e-16,
+            "p95": 0.011512745083393412,
+            "max": 4.098301444121923
+          },
+          "ky": {
+            "median": 1.8503717077085946e-16,
+            "p95": 0.010635354968154064,
+            "max": 12.876913949719418
+          },
+          "kz": {
+            "median": 0.0,
+            "p95": 0.008844397524996786,
+            "max": 27.249583333333334
+          },
+          "density": {
+            "median": 0.0,
+            "p95": 0.004724467830608955,
+            "max": 0.08338269919501076
+          },
+          "specific_heat": {
+            "median": 0.0,
+            "p95": 0.0029588063524003585,
+            "max": 0.061967405852616654
+          }
+        }
+      }
+    },
+    "kicad-video-odb.tgz": {
+      "before": {
+        "regions": 26,
+        "forced_x": 27,
+        "forced_y": 23,
+        "grid_cells": 5069,
+        "nx": 128,
+        "ny": 54,
+        "loss_ratio": 0.0041481889510952275,
+        "seconds": 0.35926689999996597,
+        "peak_process_memory_mb": 171.25390625,
+        "geometry_sha256": "59257e6cf1a3c38cac8850ce41b3a53083ab8c125e7a92901bead584684457cf",
+        "domains": {
+          "step_profile": {
+            "loss_ratio": 0.004148188951095381,
+            "topology_preserved": true
+          }
+        }
+      },
+      "after": {
+        "regions": 6,
+        "forced_x": 7,
+        "forced_y": 5,
+        "grid_cells": 3441,
+        "nx": 112,
+        "ny": 39,
+        "loss_ratio": 0.04926703614666542,
+        "seconds": 0.3446514000006573,
+        "peak_process_memory_mb": 171.2890625,
+        "geometry_sha256": "db2dca4fe93b3c56c13c9651894ad6d1df15491fb141f453ef09d67207096bcd",
+        "domains": {
+          "step_profile": {
+            "loss_ratio": 0.04926703614666531,
+            "topology_preserved": true
+          }
+        }
+      },
+      "presets": {
+        "coarse": {
+          "regions": 6,
+          "forced_x": 7,
+          "forced_y": 5,
+          "grid_cells": 929,
+          "nx": 58,
+          "ny": 21,
+          "loss_ratio": 0.04926703614666542,
+          "seconds": 0.35158990000036283,
+          "peak_process_memory_mb": 171.3828125,
+          "geometry_sha256": "1002d52e00d86a3727a12259788cbd13b5288cec6dc1c7e8d882013449ad442e",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04926703614666531,
+              "topology_preserved": true
+            }
+          }
+        },
+        "standard": {
+          "regions": 6,
+          "forced_x": 7,
+          "forced_y": 5,
+          "grid_cells": 3441,
+          "nx": 112,
+          "ny": 39,
+          "loss_ratio": 0.04926703614666542,
+          "seconds": 0.36439270000028046,
+          "peak_process_memory_mb": 171.0703125,
+          "geometry_sha256": "db2dca4fe93b3c56c13c9651894ad6d1df15491fb141f453ef09d67207096bcd",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04926703614666531,
+              "topology_preserved": true
+            }
+          }
+        },
+        "fine": {
+          "regions": 6,
+          "forced_x": 7,
+          "forced_y": 5,
+          "grid_cells": 13497,
+          "nx": 221,
+          "ny": 77,
+          "loss_ratio": 0.04926703614666542,
+          "seconds": 0.3946679000000586,
+          "peak_process_memory_mb": 171.34375,
+          "geometry_sha256": "923c13e3361356c4c117c86d71fc0223fe4846dfea1d4669b4b5a683555168e1",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04926703614666531,
+              "topology_preserved": true
+            }
+          }
+        }
+      },
+      "sampling": {
+        "geometry_invariant": true,
+        "automatic": {
+          "regions": 6,
+          "forced_x": 7,
+          "forced_y": 5,
+          "grid_cells": 3441,
+          "nx": 112,
+          "ny": 39,
+          "loss_ratio": 0.04926703614666542,
+          "seconds": 2.0481417999999394,
+          "peak_process_memory_mb": 195.8984375,
+          "geometry_sha256": "db2dca4fe93b3c56c13c9651894ad6d1df15491fb141f453ef09d67207096bcd",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04926703614666531,
+              "topology_preserved": true
+            }
+          },
+          "raster": [
+            4096,
+            1401
+          ],
+          "material_rows": 24087
+        },
+        "double": {
+          "regions": 6,
+          "forced_x": 7,
+          "forced_y": 5,
+          "grid_cells": 3441,
+          "nx": 112,
+          "ny": 39,
+          "loss_ratio": 0.04926703614666542,
+          "seconds": 3.3119957999997496,
+          "peak_process_memory_mb": 216.4609375,
+          "geometry_sha256": "db2dca4fe93b3c56c13c9651894ad6d1df15491fb141f453ef09d67207096bcd",
+          "domains": {
+            "step_profile": {
+              "loss_ratio": 0.04926703614666531,
+              "topology_preserved": true
+            }
+          },
+          "raster": [
+            8192,
+            2802
+          ],
+          "material_rows": 24087
+        },
+        "relative_error_vs_double": {
+          "kx": {
+            "median": 0.000801659761348567,
+            "p95": 0.1451267437907396,
+            "max": 29.01098282526011
+          },
+          "ky": {
+            "median": 0.001133296832702032,
+            "p95": 0.12372431743131934,
+            "max": 16.844680013829688
+          },
+          "kz": {
+            "median": 0.004608553309930765,
+            "p95": 0.14256332338935299,
+            "max": 8.208392603129447
+          },
+          "density": {
+            "median": 0.0017001209986641107,
+            "p95": 0.041430644619297775,
+            "max": 0.14299751758378132
+          },
+          "specific_heat": {
+            "median": 0.00110430596997638,
+            "p95": 0.03029641064391398,
+            "max": 0.11959534514863181
+          }
+        }
+      }
+    }
+  }
+}

@@ -131,9 +131,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_eq.add_argument("--diagnostic-geometry-step-mm", dest="rectify_tolerance",
                       type=float, default=None, help=argparse.SUPPRESS)
     p_eq.add_argument("--diagnostic-area-error-ratio", dest="max_area_error_ratio",
-                      type=float, default=0.02, help=argparse.SUPPRESS)
+                      type=float, default=0.05, help=argparse.SUPPRESS)
     p_eq.add_argument("--diagnostic-area-error-mm2", dest="max_area_error_mm2",
-                      type=float, default=0.01, help=argparse.SUPPRESS)
+                      type=float, default=0.0, help=argparse.SUPPRESS)
     p_eq.add_argument("--materials", default=None, metavar="FILE",
                       help="JSON material configuration (global and per-layer "
                            "overrides)")

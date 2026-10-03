@@ -64,7 +64,9 @@ def test_slanted_staircase_is_inside_and_uses_vertical_strips():
     result=rectify_region(source)
     audit(source,result)
     assert result.net_area_error_mm2 < 0
-    assert max(r.width for r in result.rectangles)<=.5
+    assert len(result.rectangles) < 40
+    assert result.relative_error <= .05
+    assert result.audit["coarsening"]["axis_score_after"] <= result.audit["coarsening"]["axis_score_before"]
     assert any(r.height>70 for r in result.rectangles)
 
 
@@ -75,3 +77,14 @@ def test_budget_is_never_relaxed_by_perimeter():
                          max_absolute_area_error_mm2=0),diagnostics=diagnostics)
     assert not result.ok
     assert "rectify.area_error" in diagnostics.codes()
+
+
+def test_boundary_ripples_share_y_envelopes_without_cutting_hole_or_neck():
+    points=[(0,0),(20,0),(20,10)]
+    points += [(x,10 + (.02 if x % 2 else 0)) for x in range(19,-1,-1)]
+    source=region((points,False), ([(8,4),(8.2,4),(8.2,6),(8,6)],True))
+    result=rectify_region(source)
+    audit(source,result)
+    assert result.relative_error <= .05
+    assert len(result.rectangles) < 10
+    assert result.audit["topology"]["model_holes"] == 1
