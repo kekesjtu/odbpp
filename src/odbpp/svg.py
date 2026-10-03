@@ -32,7 +32,7 @@ whoever needs to check the board.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from .clipper import Ring, region_from_geometry, snap_to_grid
 from .export import (
@@ -407,6 +407,19 @@ body.wire .odb-layer path{fill:none;stroke:currentColor;stroke-width:1px;vector-
 #matrix th,#matrix td{padding:6px 8px;text-align:left;border-bottom:1px solid #232a31}
 #matrix th{position:sticky;top:0;background:#1a2129}
 #matrix button{float:right;cursor:pointer}
+#matrix-layout{position:relative;padding-left:var(--span-width);min-width:950px}
+#matrix-spans{position:absolute;left:0;top:0;width:var(--span-width);overflow:visible}
+.drill-span{color:#8b949e;cursor:pointer;outline:none}
+.drill-span .span-line{stroke:currentColor;stroke-width:2;fill:none}
+.drill-span .span-hit{stroke:transparent;stroke-width:14;fill:none}
+.drill-span[aria-pressed="true"]{color:#ff4d4f}
+.drill-span:focus-visible .span-line{stroke-width:4}
+.matrix-row{cursor:pointer}
+.matrix-row:hover{background:#1a2129}
+.matrix-row[aria-selected="true"]{background:#303944}
+.matrix-row.span-endpoint td:nth-child(2){color:#ff7477;background:#3d2025}
+.matrix-row:focus-visible{outline:1px solid #58a6ff;outline-offset:-1px}
+#matrix-selection{color:#ff7477;min-height:1.5em}
 #measure-value{color:#ffd166}
 #overview{height:130px;border-top:1px solid #232a31;padding:6px;flex-shrink:0}
 #overview svg{width:100%;height:100%;display:block;cursor:crosshair}
@@ -546,6 +559,7 @@ _JS = r"""
   function select(name){
     selected = name;
     rows.forEach(function(r){ r.classList.toggle('sel', r.dataset.name === name); });
+    updateMatrixSelection();
     var el = document.getElementById('info');
     var row = rows.filter(function(r){ return r.dataset.name === name; })[0];
     if (!row) { el.style.display = 'none'; return; }
@@ -610,7 +624,43 @@ _JS = r"""
     if(measuring){document.getElementById('info').style.display='none';document.getElementById('propertiesbtn').classList.remove('on');}
   };
   document.getElementById('propertiesbtn').onclick=function(){this.classList.toggle('on');select(selected);};
-  document.getElementById('matrixbtn').onclick=function(){document.getElementById('matrix').showModal();};
+  // Span endpoints follow actual row centres, including wrapped text and resizing.
+  var matrixRows=Array.from(document.querySelectorAll('.matrix-row'));
+  var spans=Array.from(document.querySelectorAll('.drill-span'));
+  function updateMatrixSelection(){
+    var active=spans.find(function(s){return s.dataset.name===selected;});
+    matrixRows.forEach(function(r,i){
+      r.setAttribute('aria-selected',r.dataset.name===selected?'true':'false');
+      r.classList.toggle('span-endpoint',!!active &&
+        (i===Number(active.dataset.start) || i===Number(active.dataset.end)));
+    });
+    spans.forEach(function(s){s.setAttribute('aria-pressed',s===active?'true':'false');});
+    var current=matrixRows.find(function(r){return r.dataset.name===selected;});
+    document.getElementById('matrix-selection').textContent=current && current.dataset.span ?
+      current.dataset.name+'：'+current.dataset.span : '选择钻孔层查看起止层；红色箭头表示当前选择。';
+  }
+  function layoutSpans(){
+    if(!document.getElementById('matrix').open)return;
+    var layout=document.getElementById('matrix-layout'), box=layout.getBoundingClientRect();
+    document.getElementById('matrix-spans').setAttribute('height',layout.offsetHeight);
+    spans.forEach(function(s){
+      var a=matrixRows[Number(s.dataset.start)].getBoundingClientRect();
+      var b=matrixRows[Number(s.dataset.end)].getBoundingClientRect();
+      var y1=a.top+a.height/2-box.top, y2=b.top+b.height/2-box.top;
+      var x=12+Number(s.dataset.lane)*18, direction=y2>=y1?1:-1;
+      var d='M '+(x-4)+' '+y1+' H '+(x+4)+' M '+x+' '+y1+' V '+y2+
+        ' M '+(x-4)+' '+(y2-direction*6)+' L '+x+' '+y2+' L '+(x+4)+' '+(y2-direction*6);
+      Array.from(s.querySelectorAll('path')).forEach(function(p){p.setAttribute('d',d);});
+    });
+  }
+  matrixRows.concat(spans).forEach(function(el){
+    el.addEventListener('click',function(){select(el.dataset.name);});
+    el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();select(el.dataset.name);}});
+  });
+  new ResizeObserver(layoutSpans).observe(document.querySelector('#matrix-layout table'));
+  document.getElementById('matrixbtn').onclick=function(){
+    document.getElementById('matrix').showModal();updateMatrixSelection();layoutSpans();
+  };
   document.getElementById('matrix-close').onclick=function(){document.getElementById('matrix').close();};
   document.getElementById('layer-search').oninput=function(){
     var term=this.value.trim().toLowerCase(), count=0;
@@ -705,18 +755,78 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
     return "".join(rows)
 
 
+def _matrix_panel(layers: Sequence[Mapping]) -> str:
+    """Use authored matrix endpoints, never infer a through-board drill span."""
+    ordered = sorted(layers, key=lambda layer: layer['row'])
+    names: dict[str, list[int]] = {}
+    for index, layer in enumerate(ordered):
+        names.setdefault(layer['name'].casefold(), []).append(index)
+    spans, errors = [], {}
+    for index, layer in enumerate(ordered):
+        if layer['type'].upper() != 'DRILL':
+            continue
+        endpoints = [names.get((layer.get(key) or '').casefold(), [])
+                     for key in ('start_layer', 'end_layer')]
+        if any(len(matches) != 1 for matches in endpoints):
+            errors[index] = '跨度未解析：起止层缺失、不在当前矩阵或名称不唯一'
+            continue
+        start, end = (matches[0] for matches in endpoints)
+        spans.append((min(start, end), max(start, end), index, start, end))
+    # Disjoint intervals may share a lane; overlapping spans remain distinguishable.
+    lane_ends, arrows = [], []
+    for top, bottom, index, start, end in sorted(spans):
+        lane = next((i for i, last in enumerate(lane_ends) if last < top), len(lane_ends))
+        if lane == len(lane_ends):
+            lane_ends.append(bottom)
+        else:
+            lane_ends[lane] = bottom
+        layer = ordered[index]
+        label = f"{layer['name']}：{ordered[start]['name']} → {ordered[end]['name']}"
+        arrows.append(
+            f'<g class="drill-span" data-name="{_escape(layer["name"])}" '
+            f'data-start="{start}" data-end="{end}" data-lane="{lane}" '
+            f'tabindex="0" role="button" aria-pressed="false" aria-label="{_escape(label)}">'
+            f'<title>{_escape(label)}</title><path class="span-hit"/>'
+            '<path class="span-line"/></g>')
+    rows = []
+    for index, layer in enumerate(ordered):
+        extent = layer.get('z_mm')
+        span = f"{layer.get('start_layer') or '—'} → {layer.get('end_layer') or '—'}"
+        if index in errors:
+            span += f"（{errors[index]}）"
+        values = [str(layer['row']), layer['name'], layer['type'], layer['context'],
+                  layer['polarity'], layer['form'], span,
+                  '—' if extent is None else f"{extent['start_mm']:.6f} .. {extent['end_mm']:.6f}",
+                  '—' if extent is None else ('已知' if extent['thickness_known'] else '估计'),
+                  '—' if extent is None else extent['source']]
+        details = span if layer['type'].upper() == 'DRILL' else ''
+        rows.append(f'<tr class="matrix-row" data-name="{_escape(layer["name"])}" '
+                    f'data-span="{_escape(details)}" tabindex="0" aria-selected="false">' +
+                    ''.join(f'<td>{_escape(v)}</td>' for v in values) + '</tr>')
+    width = max(44, len(lane_ends) * 18 + 8)
+    return ('<dialog id="matrix" aria-label="层叠矩阵">'
+            '<button id="matrix-close">关闭</button><h2>层叠矩阵</h2>'
+            '<p>按原始矩阵顺序；Z 自叠层顶面向下，单位 mm。估计厚度需核对来源。</p>'
+            '<p id="matrix-selection">选择钻孔层查看起止层；红色箭头表示当前选择。</p>'
+            f'<div id="matrix-layout" style="--span-width:{width}px">'
+            '<svg id="matrix-spans" xmlns="http://www.w3.org/2000/svg" aria-label="钻孔起止层箭头">' +
+            ''.join(arrows) + '</svg><table role="grid" aria-label="层叠层列表"><thead><tr>' +
+            ''.join(f'<th>{v}</th>' for v in
+                    ('行','层名','类型','上下文','原始极性','形态','钻孔跨度','Z 起止 mm','厚度可信','来源')) +
+            '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div></dialog>')
+
+
 def _inspection_panels(ordered: Sequence[LayerPreview]) -> str:
     """Inspection metadata stays in the viewer; preview-2 geometry is unchanged."""
-    rows, histograms = [], []
+    layers, histograms = [], []
     for layer in sorted(ordered, key=lambda l: l.layer.ref.row):
         ref, extent = layer.layer.ref, layer.z_extent()
-        values = [str(ref.row), layer.name, layer.type_name, ref.context.value,
-                  ref.polarity.value, ref.form.value,
-                  f"{ref.start_name or '—'} .. {ref.end_name or '—'}",
-                  "—" if extent is None else f"{extent.start_mm:.6f} .. {extent.end_mm:.6f}",
-                  "—" if extent is None else ("已知" if extent.thickness_known else "估计"),
-                  "—" if extent is None else extent.source]
-        rows.append('<tr>' + ''.join(f'<td>{_escape(v)}</td>' for v in values) + '</tr>')
+        layers.append(dict(row=ref.row, name=layer.name, type=layer.type_name,
+                           context=ref.context.value, polarity=ref.polarity.value,
+                           form=ref.form.value, start_layer=ref.start_name, end_layer=ref.end_name,
+                           z_mm=None if extent is None else dict(
+                               start_mm=extent.start_mm, end_mm=extent.end_mm,
+                               thickness_known=extent.thickness_known, source=extent.source)))
         features = layer.layer.features
         groups = features.histogram() if features is not None else []
         histogram = ['<p>输入图元统计（规整前；不代表输出材料面积）。'
@@ -727,12 +837,7 @@ def _inspection_panels(ordered: Sequence[LayerPreview]) -> str:
                              for k in ('kind','polarity','symbol','symbol_units','count')) + '</tr>')
         histogram.append('</table>')
         histograms.append(f'<template id="hist-{ref.row}">{"".join(histogram)}</template>')
-    return (''.join(histograms) + '<dialog id="matrix" aria-label="层叠矩阵">'
-            '<button id="matrix-close">关闭</button><h2>层叠矩阵</h2>'
-            '<p>按原始矩阵顺序；Z 自叠层顶面向下，单位 mm。估计厚度需核对来源。</p>'
-            '<table><thead><tr>' + ''.join(f'<th>{v}</th>' for v in
-             ('行','层名','类型','上下文','原始极性','形态','钻孔跨度','Z 起止 mm','厚度可信','来源'))
-            + '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></dialog>')
+    return ''.join(histograms) + _matrix_panel(layers)
 
 
 def _thickness_note(preview: StepPreview) -> str:
