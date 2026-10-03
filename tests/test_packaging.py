@@ -37,7 +37,7 @@ class TestRuntimeDependencies:
     def test_importing_the_package_needs_no_extra(self):
         # The import itself is the regression: it must not raise ModuleNotFoundError
         # on an install that skipped every extra.
-        import odbpp  # noqa: F401
+        import odbpp as odbpp  # noqa: F401
         import odbpp.clipper  # noqa: F401
 
     def test_pyclipper_is_a_core_dependency(self):
