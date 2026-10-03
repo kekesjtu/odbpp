@@ -4,6 +4,18 @@ Markdown 文档按 `research/`、`reviews/`、`fixes/`、`equivalence/` 分类�
 连续编号，文件名统一为 `NN-kebab-case-topic.md`；日期保留在正文标题或元信息中。
 同一轮审阅与修复通过各目录的索引互相链接，不再共用一个跨目录序号。
 
+## `Flotherm_reference_MaterialMap.csv`
+
+该参考文件约 117 MB，使用 Git LFS 保存；Git 历史中只存储指针，完整 CSV
+保存在 LFS 中。克隆仓库前请安装 Git LFS；已有工作区可执行：
+
+```bash
+git lfs install
+git lfs pull
+```
+
+完整文件仍位于 `docs/Flotherm_reference_MaterialMap.csv`，用于参考输出格式。
+
 ## `ODB++_Format_User_Guide.pdf`
 
 | 项 | 值 |
