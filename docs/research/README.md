@@ -49,6 +49,9 @@ python tools/census_cases.py
 
 ## 实现期新增的发现
 
+本机 Viewer 的 UI 实测与本项目采用的交互见
+[10-viewer-ui-workflow.md](10-viewer-ui-workflow.md)。
+
 `05-spec-ambiguities.md` 是**实现阶段**的产物，与上述
 四份「开工前调研」性质不同：它逐条记录规范原文不足以唯一确定语义的地方、本仓库
 择定的读法、以及该读法是否被真实样本验证过。新增实现若引入新的未证实假设，

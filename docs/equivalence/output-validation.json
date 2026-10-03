@@ -3,33 +3,33 @@
   "cases": [
     {
       "case": "designodb-rigidflex.tgz",
-      "region_count": 287,
-      "nx": 241,
-      "ny": 129,
-      "grid_cells": 15354,
-      "material_rows": 204766,
+      "region_count": 45,
+      "nx": 145,
+      "ny": 56,
+      "grid_cells": 4262,
+      "material_rows": 66274,
       "raster": [
-        5887,
-        1563
+        4096,
+        1089
       ],
-      "minimum_samples_per_axis": 9,
-      "area_loss_mm2": 56.33472847077829,
+      "minimum_samples_per_axis": 16,
+      "area_loss_mm2": 202.1117130350002,
       "layer_count": 19,
       "all_checks_passed": true
     },
     {
       "case": "kicad-kitchen-sink",
-      "region_count": 450,
-      "nx": 365,
-      "ny": 281,
-      "grid_cells": 61092,
-      "material_rows": 183276,
+      "region_count": 78,
+      "nx": 104,
+      "ny": 63,
+      "grid_cells": 4217,
+      "material_rows": 12651,
       "raster": [
         4096,
         2595
       ],
-      "minimum_samples_per_axis": 9,
-      "area_loss_mm2": 237.3629931767396,
+      "minimum_samples_per_axis": 20,
+      "area_loss_mm2": 1023.2521087315918,
       "layer_count": 3,
       "all_checks_passed": true
     },
@@ -259,17 +259,17 @@
     },
     {
       "case": "kicad-video-odb.tgz",
-      "region_count": 26,
-      "nx": 128,
-      "ny": 54,
-      "grid_cells": 5069,
-      "material_rows": 35483,
+      "region_count": 6,
+      "nx": 112,
+      "ny": 39,
+      "grid_cells": 3441,
+      "material_rows": 24087,
       "raster": [
-        5626,
-        1921
+        4096,
+        1401
       ],
-      "minimum_samples_per_axis": 9,
-      "area_loss_mm2": 116.27076060000333,
+      "minimum_samples_per_axis": 29,
+      "area_loss_mm2": 1380.9196815319187,
       "layer_count": 7,
       "all_checks_passed": true
     },

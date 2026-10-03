@@ -34,7 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Optional, Sequence
 
-from .clipper import Ring
+from .clipper import Ring, region_from_geometry, snap_to_grid
 from .export import (
     LayerPreview,
     PreviewOptions,
@@ -319,6 +319,23 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
             continue
         out.append(f'<g {attributes}><path d="{data}"/></g>')
 
+    if view.step.profile is not None:
+        profile, _ = snap_to_grid(region_from_geometry(view.step.profile), digits)
+        out.append(f'<path id="odb-profile" d="{path_data(profile.rings, digits)}" '
+                   'fill="none" stroke="#c9d1d9" stroke-width="1" '
+                   'vector-effect="non-scaling-stroke" pointer-events="none"/>')
+    out.append('<g id="odb-domains" fill="none" stroke="#56d6a0" '
+               'stroke-dasharray="6 4" pointer-events="none">')
+    for index, layer in enumerate(chosen):
+        profile = layer.layer.profile if layer.layer.profile is not None else view.step.profile
+        if profile is not None and layer.layer.profile_error is None:
+            domain, _ = snap_to_grid(region_from_geometry(profile), digits)
+            out.append(f'<path data-name="{_escape(layer.name)}" '
+                       f'd="{path_data(domain.rings, digits)}" style="display:none" '
+                       'stroke-width="1.5" vector-effect="non-scaling-stroke"/>')
+    out.append('</g><g id="odb-measure" pointer-events="none" '
+               'stroke="#ffd166" fill="none" stroke-width="2" '
+               'vector-effect="non-scaling-stroke"></g>')
     out.append("</g></g></svg>")
     return "".join(out)
 
@@ -375,12 +392,41 @@ html,body{margin:0;height:100%;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,
 body.wire .odb-layer path{fill:none;stroke:currentColor;stroke-width:1px;vector-effect:non-scaling-stroke}
 #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   color:#484f58;pointer-events:none}
+#searchbar{padding:8px 10px;border-bottom:1px solid #232a31}
+#layer-search{width:100%;background:#1a2129;color:#c9d1d9;border:1px solid #2c353f;padding:6px}
+#search-count{font-size:11px;color:#7d8590;padding-top:4px}
+.row:focus-visible{outline:1px solid #58a6ff;outline-offset:-1px}
+.row[hidden]{display:none}
+#info{max-height:75%;overflow:auto;max-width:390px}
+#info td{overflow-wrap:anywhere;white-space:normal}
+#info td:first-child{white-space:nowrap}
+#matrix{width:90vw;max-width:1200px;max-height:85vh;background:#0f1317;color:#c9d1d9;
+  border:1px solid #3d4954;border-radius:8px;padding:18px;overflow:auto}
+#matrix::backdrop{background:#0009}
+#matrix table{border-collapse:collapse;width:100%;font-size:11px}
+#matrix th,#matrix td{padding:6px 8px;text-align:left;border-bottom:1px solid #232a31}
+#matrix th{position:sticky;top:0;background:#1a2129}
+#matrix button{float:right;cursor:pointer}
+#measure-value{color:#ffd166}
+#overview{height:130px;border-top:1px solid #232a31;padding:6px;flex-shrink:0}
+#overview svg{width:100%;height:100%;display:block;cursor:crosshair}
+@media(max-width:700px){
+  #app{flex-direction:column}
+  #side{width:100%;min-width:0;max-height:45%;border-right:0;border-bottom:1px solid #232a31}
+  #head .meta{display:none}
+  #layers{min-height:60px}
+  #overview{display:none}
+  #stage{min-height:45%}
+  #info{max-width:calc(100% - 20px);max-height:55%}
+  #status{flex-wrap:wrap;gap:4px}
+}
 """
 
 _JS = r"""
 (function(){
   var svg  = document.querySelector('.odb-svg');
   var root = document.getElementById('odb-root');      // pan/zoom handle
+  var flip = document.getElementById('odb-flip');
   var vb   = svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
   var t    = {k:1, x:0, y:0};                          // in viewBox units
 
@@ -392,9 +438,13 @@ _JS = r"""
   // Model <-> screen go through the root group's CTM, which already contains
   // the viewBox mapping *and* the y-flip of the inner group.  Recomputing the
   // transform by hand is how pan/zoom ends up subtly wrong under letterboxing.
-  function toModel(cx, cy){
+  function toRoot(cx, cy){
     var p = svg.createSVGPoint(); p.x = cx; p.y = cy;
     return p.matrixTransform(root.getScreenCTM().inverse());
+  }
+  function toModel(cx, cy){
+    var p = svg.createSVGPoint(); p.x = cx; p.y = cy;
+    return p.matrixTransform(flip.getScreenCTM().inverse());
   }
   function toScreen(x, y){
     var p = svg.createSVGPoint(); p.x = x; p.y = y;
@@ -411,7 +461,7 @@ _JS = r"""
   }
 
   function zoomAt(cx, cy, factor){
-    var before = toModel(cx, cy);
+    var before = toRoot(cx, cy);
     t.k = Math.max(0.02, Math.min(5000, t.k * factor));
     apply();
     var now = toScreen(before.x, before.y);
@@ -424,13 +474,33 @@ _JS = r"""
   function fit(){ t = {k:1, x:0, y:0}; apply(); }
 
   var dragging = false, lastX = 0, lastY = 0;
+  var measuring = false, measureStart = null;
+  var measureGroup = document.getElementById('odb-measure');
   svg.addEventListener('mousedown', function(e){
     if (e.button !== 0) return;
+    if (measuring) {
+      var point = toModel(e.clientX,e.clientY);
+      if (!measureStart) {
+        measureStart = point; measureGroup.replaceChildren();
+        document.getElementById('measure-value').textContent = '选择终点';
+      } else {
+        var line = document.createElementNS(svg.namespaceURI,'line');
+        line.setAttribute('x1',measureStart.x); line.setAttribute('y1',measureStart.y);
+        line.setAttribute('x2',point.x); line.setAttribute('y2',point.y);
+        line.setAttribute('vector-effect','non-scaling-stroke'); measureGroup.appendChild(line);
+        var dx=point.x-measureStart.x, dy=point.y-measureStart.y;
+        document.getElementById('measure-value').textContent =
+          'ΔX '+dx.toFixed(3)+' · ΔY '+dy.toFixed(3)+' · 距离 '+Math.hypot(dx,dy).toFixed(3)+' mm';
+        measureStart=null;
+      }
+      return;
+    }
     dragging = true; lastX = e.clientX; lastY = e.clientY;
     svg.classList.add('drag');
     e.preventDefault();
   });
   window.addEventListener('mousemove', function(e){
+    if (!svg.contains(e.target) && !dragging) return;
     var m = toModel(e.clientX, e.clientY);
     document.getElementById('pos').textContent =
       'x ' + m.x.toFixed(3) + '   y ' + m.y.toFixed(3) + ' mm';
@@ -447,9 +517,9 @@ _JS = r"""
   }, {passive:false});
 
   document.getElementById('zin').onclick  = function(){
-    zoomAt(svg.clientWidth/2, svg.clientHeight/2, 1.25); };
+    var r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2, r.top+r.height/2, 1.25); };
   document.getElementById('zout').onclick = function(){
-    zoomAt(svg.clientWidth/2, svg.clientHeight/2, 1/1.25); };
+    var r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2, r.top+r.height/2, 1/1.25); };
   document.getElementById('fit').onclick  = fit;
 
   // ---- layer list -------------------------------------------------------
@@ -479,33 +549,34 @@ _JS = r"""
     var el = document.getElementById('info');
     var row = rows.filter(function(r){ return r.dataset.name === name; })[0];
     if (!row) { el.style.display = 'none'; return; }
-    el.innerHTML =
-      '<h2>' + row.dataset.name + '</h2><table>' +
-      '<tr><td>type</td><td>' + row.dataset.type + '</td></tr>' +
-      '<tr><td>rings</td><td>' + row.dataset.rings + '</td></tr>' +
-      '<tr><td>area</td><td>' + row.dataset.area + ' mm&sup2;</td></tr>' +
-      '<tr><td>z</td><td>' + (row.dataset.zStart === undefined
-          ? 'not on the board'
-          : row.dataset.zStart + ' .. ' + row.dataset.zEnd + ' mm' +
-            (row.dataset.zKnown === 'false' ? ' (partly assumed)' : '')) +
-      '</td></tr>' +
-      '<tr><td>colour</td><td>' + row.dataset.colour + '</td></tr>' +
-      '</table>';
-    el.style.display = 'block';
+    el.replaceChildren();
+    var heading=document.createElement('h2'); heading.textContent=row.dataset.name; el.appendChild(heading);
+    var table=document.createElement('table'); el.appendChild(table);
+    var values=[['类型',row.dataset.type],['实体环',row.dataset.rings],['面积',row.dataset.area+' mm²'],
+      ['Z',row.dataset.zStart === undefined ? '非板内层' : row.dataset.zStart+' .. '+row.dataset.zEnd+' mm'+
+       (row.dataset.zKnown === 'false' ? ' (部分厚度为估计)' : '')],
+      ['厚度来源',row.dataset.thicknessSource],['原始极性',row.dataset.polarity],
+      ['计算域',row.dataset.domainSource],['形态',row.dataset.form],['钻孔跨度',row.dataset.span],
+      ['输入图元',row.dataset.features]];
+    values.forEach(function(pair){var tr=table.insertRow(); pair.forEach(function(v){tr.insertCell().textContent=v || '—';});});
+    var histogram=document.getElementById('hist-'+row.dataset.row);
+    if(histogram) el.appendChild(histogram.content.cloneNode(true));
+    el.style.display = document.getElementById('propertiesbtn').classList.contains('on') ? 'block' : 'none';
+    updateDomain();
   }
 
   rows.forEach(function(row){
     var box = row.querySelector('input');
     var name = row.dataset.name;
     box.addEventListener('change', function(){ setVisible(name, box.checked); });
-    row.addEventListener('click', function(e){
-      if (e.target !== box) { box.checked = !box.checked; setVisible(name, box.checked); }
-      select(name);
-    });
+    row.addEventListener('click', function(){ select(name); });
+    row.addEventListener('dblclick', function(e){if(e.target !== box){select(name);bulk('isolate');}});
+    row.addEventListener('keydown',function(e){if(e.target === row && e.key === 'Enter'){select(name);bulk('isolate');}});
     setVisible(name, box.checked);
   });
 
   function bulk(mode){
+    if(mode === 'isolate' && !selected) return;
     rows.forEach(function(row){
       var box = row.querySelector('input');
       var on = box.checked;
@@ -524,6 +595,50 @@ _JS = r"""
   document.getElementById('isolate').onclick = function(){ bulk('isolate'); };
   document.getElementById('invert').onclick  = function(){ bulk('invert'); };
 
+  function updateDomain(){
+    Array.prototype.forEach.call(document.querySelectorAll('#odb-domains path'),function(p){
+      p.style.display = p.dataset.name === selected && document.getElementById('domainbtn').classList.contains('on') ? '' : 'none';
+    });
+  }
+  document.getElementById('domainbtn').onclick=function(){this.classList.toggle('on');updateDomain();};
+  document.getElementById('profilebtn').onclick=function(){
+    var on=this.classList.toggle('on'); var p=document.getElementById('odb-profile'); if(p)p.style.display=on?'':'none';
+  };
+  document.getElementById('measurebtn').onclick=function(){
+    measuring=this.classList.toggle('on'); measureStart=null; measureGroup.replaceChildren();
+    document.getElementById('measure-value').textContent=measuring?'选择测距起点':'';
+    if(measuring){document.getElementById('info').style.display='none';document.getElementById('propertiesbtn').classList.remove('on');}
+  };
+  document.getElementById('propertiesbtn').onclick=function(){this.classList.toggle('on');select(selected);};
+  document.getElementById('matrixbtn').onclick=function(){document.getElementById('matrix').showModal();};
+  document.getElementById('matrix-close').onclick=function(){document.getElementById('matrix').close();};
+  document.getElementById('layer-search').oninput=function(){
+    var term=this.value.trim().toLowerCase(), count=0;
+    rows.forEach(function(row){row.hidden=!(row.dataset.name+' '+row.dataset.type).toLowerCase().includes(term); if(!row.hidden)count++;});
+    document.getElementById('search-count').textContent=count+' / '+rows.length+' 层';
+  };
+  document.getElementById('fit-layer').onclick=function(){
+    var g=groups[selected]; if(!g || !g.querySelector('path'))return;
+    setVisible(selected,true); rows.find(function(r){return r.dataset.name===selected;}).querySelector('input').checked=true;
+    var bounds=g.getBoundingClientRect(), viewport=svg.getBoundingClientRect();
+    if(bounds.width<=0 || bounds.height<=0)return;
+    zoomAt(bounds.left+bounds.width/2,bounds.top+bounds.height/2,
+           .9*Math.min(viewport.width/bounds.width,viewport.height/bounds.height));
+    bounds=g.getBoundingClientRect();
+    pan(viewport.left+viewport.width/2-bounds.left-bounds.width/2,
+        viewport.top+viewport.height/2-bounds.top-bounds.height/2);
+  };
+
+  // Small overview uses only the profile, avoiding a second copy of copper.
+  var overview=document.querySelector('#overview svg');
+  var outline=document.getElementById('odb-profile');
+  if(outline){var copy=outline.cloneNode(true);copy.removeAttribute('id');
+    var og=document.createElementNS(svg.namespaceURI,'g');og.setAttribute('transform',flip.getAttribute('transform'));
+    og.appendChild(copy);overview.appendChild(og);}
+  overview.onclick=function(e){var p=overview.createSVGPoint();p.x=e.clientX;p.y=e.clientY;
+    p=p.matrixTransform(overview.getScreenCTM().inverse());var screen=toScreen(p.x,p.y),v=svg.getBoundingClientRect();
+    pan(v.left+v.width/2-screen.x,v.top+v.height/2-screen.y);};
+
   var wire = document.getElementById('wirebtn');
   function toggleWire(){
     var on = document.body.classList.toggle('wire');
@@ -532,13 +647,14 @@ _JS = r"""
   wire.onclick = toggleWire;
 
   window.addEventListener('keydown', function(e){
-    if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.target && /INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName) || document.getElementById('matrix').open) return;
     if (e.key === 'f' || e.key === 'F') fit();
     else if (e.key === 'a') bulk('all');
     else if (e.key === 'n') bulk('none');
     else if (e.key === 'c') bulk('copper');
     else if (e.key === 'i') bulk('invert');
     else if (e.key === 'w' || e.key === 'W') toggleWire();
+    else if(e.key === 'Escape'){measureStart=null;measureGroup.replaceChildren();}
   });
 
   apply();
@@ -559,12 +675,26 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
             f'data-z-end="{extent.end_mm:.3f}" '
             f'data-z-known="{str(extent.thickness_known).lower()}" '
         )
+        profile_source = (f"error: {layer.layer.profile_error}" if layer.layer.profile_error else
+                          "layer_profile" if layer.layer.profile is not None else
+                          "step_profile" if preview.step.profile is not None else "missing")
+        details = (
+            f'data-context="{layer.layer.ref.context.value}" '
+            f'data-polarity="{layer.layer.ref.polarity.value}" '
+            f'data-form="{layer.layer.ref.form.value}" '
+            f'data-domain-source="{_escape(profile_source)}" '
+            f'data-thickness-source="{_escape(extent.source if extent else "")}" '
+            f'data-span="{_escape(layer.layer.ref.start_name or "")} .. '
+            f'{_escape(layer.layer.ref.end_name or "")}" '
+            f'data-features="{layer.geometry.records}" '
+        )
         rows.append(
             f'<div class="row" data-name="{_escape(layer.name)}" '
             f'data-type="{layer.type_name}" data-row="{layer.layer.ref.row}" '
             f'data-rings="{len(layer.rings)}" '
             f'data-area="{layer.area_mm2:.3f}" data-colour="{colour}" '
-            f'{z_attributes}>'
+            f'{z_attributes}{details} tabindex="0" role="button" '
+            'title="单击查看属性；双击单独显示；复选框控制可见性">'
             f'<input type="checkbox"{checked}>'
             f'<span class="chip" style="background:{colour}"></span>'
             f'<span class="nm">{_escape(layer.name)}</span>'
@@ -573,6 +703,36 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
             f'</div>'
         )
     return "".join(rows)
+
+
+def _inspection_panels(ordered: Sequence[LayerPreview]) -> str:
+    """Inspection metadata stays in the viewer; preview-2 geometry is unchanged."""
+    rows, histograms = [], []
+    for layer in sorted(ordered, key=lambda l: l.layer.ref.row):
+        ref, extent = layer.layer.ref, layer.z_extent()
+        values = [str(ref.row), layer.name, layer.type_name, ref.context.value,
+                  ref.polarity.value, ref.form.value,
+                  f"{ref.start_name or '—'} .. {ref.end_name or '—'}",
+                  "—" if extent is None else f"{extent.start_mm:.6f} .. {extent.end_mm:.6f}",
+                  "—" if extent is None else ("已知" if extent.thickness_known else "估计"),
+                  "—" if extent is None else extent.source]
+        rows.append('<tr>' + ''.join(f'<td>{_escape(v)}</td>' for v in values) + '</tr>')
+        features = layer.layer.features
+        groups = features.histogram() if features is not None else []
+        histogram = ['<p>输入图元统计（规整前；不代表输出材料面积）。'
+                     '符号参数：MM 作用域用 µm，INCH 用 mil；输出坐标统一为 mm。</p>',
+                     '<table><tr><th>图元</th><th>极性</th><th>符号</th><th>作用域</th><th>数量</th></tr>']
+        for group in groups:
+            histogram.append('<tr>' + ''.join(f'<td>{_escape(str(group[k]))}</td>'
+                             for k in ('kind','polarity','symbol','symbol_units','count')) + '</tr>')
+        histogram.append('</table>')
+        histograms.append(f'<template id="hist-{ref.row}">{"".join(histogram)}</template>')
+    return (''.join(histograms) + '<dialog id="matrix" aria-label="层叠矩阵">'
+            '<button id="matrix-close">关闭</button><h2>层叠矩阵</h2>'
+            '<p>按原始矩阵顺序；Z 自叠层顶面向下，单位 mm。估计厚度需核对来源。</p>'
+            '<table><thead><tr>' + ''.join(f'<th>{v}</th>' for v in
+             ('行','层名','类型','上下文','原始极性','形态','钻孔跨度','Z 起止 mm','厚度可信','来源'))
+            + '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></dialog>')
 
 
 def _thickness_note(preview: StepPreview) -> str:
@@ -652,7 +812,7 @@ def _render_html(view: StepPreview, opts: SvgOptions,
         )
 
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -677,7 +837,15 @@ def _render_html(view: StepPreview, opts: SvgOptions,
       <button id="zin" title="zoom in">+</button>
       <button id="zout" title="zoom out">&minus;</button>
       <button id="fit" title="fit to window (f)">fit</button>
+      <button id="fit-layer" title="缩放到选中层">定位层</button>
+      <button id="profilebtn" class="on" title="原始 step profile">板框</button>
+      <button id="domainbtn" title="选中层的计算域（绿色虚线）">层域</button>
+      <button id="matrixbtn">层叠矩阵</button>
+      <button id="propertiesbtn" class="on" title="显示或隐藏选中层属性和输入图元统计">属性</button>
+      <button id="measurebtn" title="依次点击两点；测量规整后的毫米坐标">测距</button>
     </div>
+    <div id="searchbar"><input id="layer-search" type="search" placeholder="搜索层名或类型"
+      aria-label="搜索图层"><div id="search-count">{len(ordered)} / {len(ordered)} 层 · 单击属性，双击隔离</div></div>
     <label id="sorter" for="sort-order">Layer order
       <select id="sort-order" aria-label="Layer order">
         <option value="type">By type</option>
@@ -685,16 +853,21 @@ def _render_html(view: StepPreview, opts: SvgOptions,
       </select>
     </label>
     <div id="layers">{_layer_rows(view, opts, ordered)}</div>
+    <div id="overview"><svg xmlns="http://www.w3.org/2000/svg"
+      viewBox="{' '.join(str(v) for v in _viewbox(view, _render_digits(view, opts)))}"
+      aria-label="板框导航：点击移动视图"></svg></div>
   </div>
   <div id="stage">
     {body}
     <div id="info"></div>
     <div id="status">
       <span><b id="pos">&ndash;</b></span>
+      <span id="measure-value"></span>
       <span>drag to pan &middot; wheel to zoom &middot; f fit &middot; w wireframe</span>
     </div>
   </div>
 </div>
+{_inspection_panels(ordered)}
 <script>{_JS}</script>
 </body>
 </html>

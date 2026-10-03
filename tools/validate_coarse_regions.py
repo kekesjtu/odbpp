@@ -105,6 +105,10 @@ def main():
         report['cases'][case]=runs
     destination=args.output or ROOT/'docs/equivalence/coarse-region-validation.json'
     destination.write_text(json.dumps(report,indent=2),encoding='utf-8')
+    for path in list(SCRATCH.glob('*.json')) + list(SCRATCH.glob('*.npy')):
+        if path.is_symlink() or not path.resolve().is_relative_to(SCRATCH.resolve()):
+            raise RuntimeError(f'refusing to clean scratch outside {SCRATCH}: {path}')
+        path.unlink()
 
 
 if __name__=='__main__':

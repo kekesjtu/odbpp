@@ -251,6 +251,23 @@ class FeatureFile:
             out[rec.kind] = out.get(rec.kind, 0) + 1
         return out
 
+    def histogram(self) -> list[dict]:
+        """Viewer inspection groups; raw polarity is never material geometry.
+
+        Keep symbol unit scope in the grouping: an explicit I/M override is
+        physically different even when the standard-symbol name is identical.
+        """
+        from collections import Counter
+        counts = Counter()
+        for rec in self.records:
+            symbol = getattr(rec, "symbol", None)
+            counts[(rec.kind, rec.polarity.value,
+                    symbol.name if symbol else "",
+                    symbol.effective_unit(self.units.system).value if symbol else "")] += 1
+        return [{"kind": kind, "polarity": polarity, "symbol": symbol,
+                 "symbol_units": units, "count": count}
+                for (kind, polarity, symbol, units), count in sorted(counts.items())]
+
     def surface_geometry(self) -> SurfaceGeometry:
         """Merge every surface record into one geometry container."""
         merged = SurfaceGeometry()
