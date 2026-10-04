@@ -380,6 +380,7 @@ html,body{margin:0;height:100%;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,
 #stage{position:relative;flex:1;overflow:hidden;background:#0b0e11}
 #stage svg{width:100%;height:100%;display:block;cursor:grab}
 #stage svg.drag{cursor:grabbing}
+#stage .odb-layer,#odb-profile,#odb-domains,#odb-measure{pointer-events:none}
 #status{position:absolute;left:0;right:0;bottom:0;padding:3px 10px;display:flex;gap:14px;
   background:#0b0e11cc;border-top:1px solid #232a31;color:#7d8590;font-size:11px;pointer-events:none}
 #status b{color:#c9d1d9;font-weight:500}
@@ -440,28 +441,49 @@ _JS = r"""
   var svg  = document.querySelector('.odb-svg');
   var root = document.getElementById('odb-root');      // pan/zoom handle
   var flip = document.getElementById('odb-flip');
-  var vb   = svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
   var t    = {k:1, x:0, y:0};                          // in viewBox units
+  var pos = document.getElementById('pos');
+  var frame = null, transformDirty = false, positionText = null;
+  var modelMatrix = flip.transform.baseVal.consolidate().matrix;
 
   function apply(){
     root.setAttribute('transform',
       'translate(' + t.x + ' ' + t.y + ') scale(' + t.k + ')');
+    transformDirty = false;
   }
 
-  // Model <-> screen go through the root group's CTM, which already contains
-  // the viewBox mapping *and* the y-flip of the inner group.  Recomputing the
-  // transform by hand is how pan/zoom ends up subtly wrong under letterboxing.
-  function toRoot(cx, cy){
+  // Keep every input delta, but paint at most once per animation frame. The
+  // logical transform is also used for coordinates while a paint is pending.
+  function renderFrame(){
+    frame = null;
+    if(transformDirty) apply();
+    if(positionText !== null){
+      if(pos.textContent !== positionText) pos.textContent = positionText;
+      positionText = null;
+    }
+  }
+  function schedule(){if(frame === null) frame = requestAnimationFrame(renderFrame);}
+  function changed(){transformDirty = true; schedule();}
+  function flushTransform(){if(transformDirty) apply();}
+
+  // Read the browser's viewBox CTM (including letterboxing), then apply the
+  // logical root transform. No write/read/write CTM round trip is needed.
+  function rootScreenMatrix(base){
+    // SVG transform lists store float32 values. Match that representation even
+    // before the scheduled DOM write, including coordinate-display rounding.
+    return (base || svg.getScreenCTM()).translate(Math.fround(t.x),Math.fround(t.y)).scale(Math.fround(t.k));
+  }
+  function toRoot(cx, cy, base){
     var p = svg.createSVGPoint(); p.x = cx; p.y = cy;
-    return p.matrixTransform(root.getScreenCTM().inverse());
+    return p.matrixTransform(rootScreenMatrix(base).inverse());
   }
   function toModel(cx, cy){
     var p = svg.createSVGPoint(); p.x = cx; p.y = cy;
-    return p.matrixTransform(flip.getScreenCTM().inverse());
+    return p.matrixTransform(rootScreenMatrix().multiply(modelMatrix).inverse());
   }
-  function toScreen(x, y){
+  function toScreen(x, y, base){
     var p = svg.createSVGPoint(); p.x = x; p.y = y;
-    return p.matrixTransform(root.getScreenCTM());
+    return p.matrixTransform(rootScreenMatrix(base));
   }
   // Pixels per viewBox unit.  Root translations are in viewBox units, so screen
   // deltas have to be divided by this before being added to t.
@@ -470,21 +492,21 @@ _JS = r"""
   function pan(dx, dy){
     var s = vbScale();
     t.x += dx / s; t.y += dy / s;
-    apply();
+    changed();
   }
 
   function zoomAt(cx, cy, factor){
-    var before = toRoot(cx, cy);
+    var base = svg.getScreenCTM();
+    var before = toRoot(cx, cy, base);
     t.k = Math.max(0.02, Math.min(5000, t.k * factor));
-    apply();
-    var now = toScreen(before.x, before.y);
-    var s = vbScale();
+    var now = toScreen(before.x, before.y, base);
+    var s = base.a || 1;
     t.x += (cx - now.x) / s;
     t.y += (cy - now.y) / s;
-    apply();
+    changed();
   }
 
-  function fit(){ t = {k:1, x:0, y:0}; apply(); }
+  function fit(){ t = {k:1, x:0, y:0}; changed(); }
 
   var dragging = false, lastX = 0, lastY = 0;
   var measuring = false, measureStart = null;
@@ -515,8 +537,9 @@ _JS = r"""
   window.addEventListener('mousemove', function(e){
     if (!svg.contains(e.target) && !dragging) return;
     var m = toModel(e.clientX, e.clientY);
-    document.getElementById('pos').textContent =
+    positionText =
       'x ' + m.x.toFixed(3) + '   y ' + m.y.toFixed(3) + ' mm';
+    schedule();
     if (!dragging) return;
     pan(e.clientX - lastX, e.clientY - lastY);
     lastX = e.clientX; lastY = e.clientY;
@@ -537,32 +560,48 @@ _JS = r"""
 
   // ---- layer list -------------------------------------------------------
   var rows = Array.prototype.slice.call(document.querySelectorAll('.row'));
+  var rowsByName = new Map(), boxes = new Map(), searchText = new Map();
+  rows.forEach(function(row){
+    rowsByName.set(row.dataset.name,row);
+    boxes.set(row,row.querySelector('input'));
+    searchText.set(row,(row.dataset.name+' '+row.dataset.type).toLowerCase());
+  });
   var layerList = document.getElementById('layers');
   document.getElementById('sort-order').addEventListener('change', function(e){
     var sorted = rows.slice();
     if (e.target.value === 'stackup') {
       sorted.sort(function(a, b){ return Number(a.dataset.row) - Number(b.dataset.row); });
     }
-    sorted.forEach(function(row){ layerList.appendChild(row); });
+    var fragment = document.createDocumentFragment();
+    sorted.forEach(function(row){ fragment.appendChild(row); });
+    layerList.appendChild(fragment);
   });
-  var groups = {};
+  var groups = Object.create(null);
   Array.prototype.forEach.call(document.querySelectorAll('.odb-layer'), function(g){
     groups[g.dataset.name] = g;
   });
 
   function setVisible(name, on){
     var g = groups[name];
-    if (g) g.style.display = on ? '' : 'none';
+    var display = on ? '' : 'none';
+    if (g && g.style.display !== display) g.style.display = display;
   }
 
   var selected = null;
+  var selectedRow = null, infoName = null;
   function select(name){
     selected = name;
-    rows.forEach(function(r){ r.classList.toggle('sel', r.dataset.name === name); });
+    var nextRow = rowsByName.get(name);
+    if(selectedRow !== nextRow){
+      if(selectedRow) selectedRow.classList.remove('sel');
+      selectedRow = nextRow;
+      if(selectedRow) selectedRow.classList.add('sel');
+    }
     updateMatrixSelection();
     var el = document.getElementById('info');
-    var row = rows.filter(function(r){ return r.dataset.name === name; })[0];
+    var row = selectedRow;
     if (!row) { el.style.display = 'none'; return; }
+    if(infoName !== name){
     el.replaceChildren();
     var heading=document.createElement('h2'); heading.textContent=row.dataset.name; el.appendChild(heading);
     var table=document.createElement('table'); el.appendChild(table);
@@ -575,12 +614,14 @@ _JS = r"""
     values.forEach(function(pair){var tr=table.insertRow(); pair.forEach(function(v){tr.insertCell().textContent=v || '—';});});
     var histogram=document.getElementById('hist-'+row.dataset.row);
     if(histogram) el.appendChild(histogram.content.cloneNode(true));
+    infoName = name;
+    } else el.scrollTop = 0;
     el.style.display = document.getElementById('propertiesbtn').classList.contains('on') ? 'block' : 'none';
     updateDomain();
   }
 
   rows.forEach(function(row){
-    var box = row.querySelector('input');
+    var box = boxes.get(row);
     var name = row.dataset.name;
     box.addEventListener('change', function(){ setVisible(name, box.checked); });
     row.addEventListener('click', function(){ select(name); });
@@ -592,14 +633,14 @@ _JS = r"""
   function bulk(mode){
     if(mode === 'isolate' && !selected) return;
     rows.forEach(function(row){
-      var box = row.querySelector('input');
+      var box = boxes.get(row);
       var on = box.checked;
       if (mode === 'all')          on = true;
       else if (mode === 'none')    on = false;
       else if (mode === 'copper')  on = /SIGNAL|POWER_GROUND|MIXED/.test(row.dataset.type);
       else if (mode === 'isolate') on = (row.dataset.name === selected);
       else if (mode === 'invert')  on = !box.checked;
-      box.checked = on;
+      if(box.checked !== on) box.checked = on;
       setVisible(row.dataset.name, on);
     });
   }
@@ -609,9 +650,12 @@ _JS = r"""
   document.getElementById('isolate').onclick = function(){ bulk('isolate'); };
   document.getElementById('invert').onclick  = function(){ bulk('invert'); };
 
+  var domainPaths = Array.from(document.querySelectorAll('#odb-domains path'));
   function updateDomain(){
-    Array.prototype.forEach.call(document.querySelectorAll('#odb-domains path'),function(p){
-      p.style.display = p.dataset.name === selected && document.getElementById('domainbtn').classList.contains('on') ? '' : 'none';
+    var on = document.getElementById('domainbtn').classList.contains('on');
+    domainPaths.forEach(function(p){
+      var display = p.dataset.name === selected && on ? '' : 'none';
+      if(p.style.display !== display) p.style.display = display;
     });
   }
   document.getElementById('domainbtn').onclick=function(){this.classList.toggle('on');updateDomain();};
@@ -627,14 +671,20 @@ _JS = r"""
   // Span endpoints follow actual row centres, including wrapped text and resizing.
   var matrixRows=Array.from(document.querySelectorAll('.matrix-row'));
   var spans=Array.from(document.querySelectorAll('.drill-span'));
+  var spanPaths = new Map();
+  spans.forEach(function(s){spanPaths.set(s,Array.from(s.querySelectorAll('path')));});
+  var spanEndpoints = new Set();
+  spans.forEach(function(s){spanEndpoints.add(Number(s.dataset.start));spanEndpoints.add(Number(s.dataset.end));});
   function updateMatrixSelection(){
     var active=spans.find(function(s){return s.dataset.name===selected;});
     matrixRows.forEach(function(r,i){
-      r.setAttribute('aria-selected',r.dataset.name===selected?'true':'false');
+      var state=r.dataset.name===selected?'true':'false';
+      if(r.getAttribute('aria-selected') !== state)r.setAttribute('aria-selected',state);
       r.classList.toggle('span-endpoint',!!active &&
         (i===Number(active.dataset.start) || i===Number(active.dataset.end)));
     });
-    spans.forEach(function(s){s.setAttribute('aria-pressed',s===active?'true':'false');});
+    spans.forEach(function(s){var state=s===active?'true':'false';
+      if(s.getAttribute('aria-pressed') !== state)s.setAttribute('aria-pressed',state);});
     var current=matrixRows.find(function(r){return r.dataset.name===selected;});
     document.getElementById('matrix-selection').textContent=current && current.dataset.span ?
       current.dataset.name+'：'+current.dataset.span : '选择钻孔层查看起止层；红色箭头表示当前选择。';
@@ -642,15 +692,17 @@ _JS = r"""
   function layoutSpans(){
     if(!document.getElementById('matrix').open)return;
     var layout=document.getElementById('matrix-layout'), box=layout.getBoundingClientRect();
-    document.getElementById('matrix-spans').setAttribute('height',layout.offsetHeight);
+    var height = layout.offsetHeight;
+    var centres = new Map();
+    spanEndpoints.forEach(function(i){var b=matrixRows[i].getBoundingClientRect();centres.set(i,b.top+b.height/2-box.top);});
+    var spanSvg=document.getElementById('matrix-spans');
+    if(spanSvg.getAttribute('height') !== String(height))spanSvg.setAttribute('height',height);
     spans.forEach(function(s){
-      var a=matrixRows[Number(s.dataset.start)].getBoundingClientRect();
-      var b=matrixRows[Number(s.dataset.end)].getBoundingClientRect();
-      var y1=a.top+a.height/2-box.top, y2=b.top+b.height/2-box.top;
+      var y1=centres.get(Number(s.dataset.start)), y2=centres.get(Number(s.dataset.end));
       var x=12+Number(s.dataset.lane)*18, direction=y2>=y1?1:-1;
       var d='M '+(x-4)+' '+y1+' H '+(x+4)+' M '+x+' '+y1+' V '+y2+
         ' M '+(x-4)+' '+(y2-direction*6)+' L '+x+' '+y2+' L '+(x+4)+' '+(y2-direction*6);
-      Array.from(s.querySelectorAll('path')).forEach(function(p){p.setAttribute('d',d);});
+      spanPaths.get(s).forEach(function(p){if(p.getAttribute('d') !== d)p.setAttribute('d',d);});
     });
   }
   matrixRows.concat(spans).forEach(function(el){
@@ -664,16 +716,18 @@ _JS = r"""
   document.getElementById('matrix-close').onclick=function(){document.getElementById('matrix').close();};
   document.getElementById('layer-search').oninput=function(){
     var term=this.value.trim().toLowerCase(), count=0;
-    rows.forEach(function(row){row.hidden=!(row.dataset.name+' '+row.dataset.type).toLowerCase().includes(term); if(!row.hidden)count++;});
+    rows.forEach(function(row){var hidden=!searchText.get(row).includes(term);if(row.hidden !== hidden)row.hidden=hidden; if(!hidden)count++;});
     document.getElementById('search-count').textContent=count+' / '+rows.length+' 层';
   };
   document.getElementById('fit-layer').onclick=function(){
     var g=groups[selected]; if(!g || !g.querySelector('path'))return;
-    setVisible(selected,true); rows.find(function(r){return r.dataset.name===selected;}).querySelector('input').checked=true;
+    setVisible(selected,true); boxes.get(rowsByName.get(selected)).checked=true;
+    flushTransform();
     var bounds=g.getBoundingClientRect(), viewport=svg.getBoundingClientRect();
     if(bounds.width<=0 || bounds.height<=0)return;
     zoomAt(bounds.left+bounds.width/2,bounds.top+bounds.height/2,
            .9*Math.min(viewport.width/bounds.width,viewport.height/bounds.height));
+    flushTransform();
     bounds=g.getBoundingClientRect();
     pan(viewport.left+viewport.width/2-bounds.left-bounds.width/2,
         viewport.top+viewport.height/2-bounds.top-bounds.height/2);
