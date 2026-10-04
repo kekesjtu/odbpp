@@ -867,9 +867,6 @@ def _gallery_entries(result, images, mask_hrefs: dict, gallery_dir: str) -> list
             cells=report.cell_count,
             heatmap=heatmap,
             mask=mask_hrefs.get(report.name),
-            directions={} if image is None else {
-                direction: os.path.relpath(path, gallery_dir).replace(os.sep, "/")
-                for direction, path in image.direction_paths.items()},
         ))
     return entries
 

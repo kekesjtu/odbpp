@@ -442,47 +442,9 @@ class TestReadMaterialMap:
 # heat maps
 # ---------------------------------------------------------------------------
 
-def frames(rows: list[bytes], colour: tuple[int, int, int]):
-    """Contiguous row and column runs that contain *colour*."""
-    target = bytes(colour)
-    height = len(rows)
-    width = len(rows[0]) // 3
-    columns = [x for x in range(width)
-               if any(rows[y][3 * x:3 * x + 3] == target for y in range(height))]
-    lined = [y for y in range(height)
-             if any(rows[y][3 * x:3 * x + 3] == target for x in range(width))]
-    return _runs(columns), _runs(lined)
-
-
-def _runs(values: list[int]) -> list[tuple[int, int]]:
-    out: list[list[int]] = []
-    for value in values:
-        if out and value == out[-1][1] + 1:
-            out[-1][1] = value
-        else:
-            out.append([value, value])
-    return [(a, b) for a, b in out]
-
-
-def panels(rows: list[bytes], frame_colour: tuple[int, int, int]):
-    """The three panel bodies and the three colour bars, as bounding boxes.
-
-    The panel bodies are located *by their frame*, so the test does not have to
-    repeat the layout arithmetic that produced the image.  The tallest framed
-    band is the panel body; the last one is its colour bar (the legend swatch in
-    the header is framed too, which is why the body is found by size).
-    """
-    columns, lines = frames(rows, frame_colour)
-    assert len(columns) == 3, "kx, ky and kz are three panels side by side"
-    assert len(lines) >= 2, "each panel needs a body and a colour bar"
-    body_top, body_bottom = max(lines, key=lambda run: run[1] - run[0])
-    bar_top, bar_bottom = max(lines, key=lambda run: run[0])
-    assert (bar_top, bar_bottom) != (body_top, body_bottom)
-    boxes = []
-    for x0, x1 in columns:
-        boxes.append(((x0 + 1, body_top + 1, x1 - 1, body_bottom - 1),
-                      (x0 + 1, bar_top + 1, x1 - 1, bar_bottom - 1)))
-    return boxes
+def panels(image):
+    """Use measured plotting artist bounds; do not duplicate the layout."""
+    return [(box, image.colourbar_box) for box in image.panel_boxes]
 
 
 def sample(box, u: float, v: float, rows: list[bytes]):
@@ -493,8 +455,8 @@ def sample(box, u: float, v: float, rows: list[bytes]):
     return rgb(rows, x, y)
 
 
-RAMP_LOW = (12, 12, 64)
-RAMP_HIGH = (176, 16, 32)
+RAMP_LOW = (68, 1, 84)
+RAMP_HIGH = (253, 231, 37)
 
 
 def near(actual, expected, tolerance: int = 16) -> bool:
@@ -507,7 +469,7 @@ class TestHeatmapRendering:
                 layers=None, **kwargs):
         csv_path = tmp_path / "pcb.MaterialMap.csv"
         write_materialmap(run(document_dict, px=px, py=py), str(csv_path))
-        options = HeatmapOptions(panel_width_px=200, font_scale=1, **kwargs)
+        options = HeatmapOptions(panel_width_px=200, font_size_pt=12, **kwargs)
         return render_heatmaps(str(csv_path), str(tmp_path / out),
                                options=options, layers=layers)
 
@@ -521,12 +483,12 @@ class TestHeatmapRendering:
             {"name": "FR", "type": "DIELECTRIC", "polygons": []},
         ], domains=domains), draw_grid=True)
         rows = decode_png(report.images[0].path)[3]
-        for body, _ in panels(rows, HeatmapOptions().frame_colour):
-            x0, y0 = body[0] - 1, body[1] - 1
+        for body, _ in panels(report.images[0]):
+            x0, y0 = body[0], body[1]
             # CSV cells have width/height 50 px. The first interior vertical
             # boundary is visible, but cell interiors retain their data colour.
-            assert rgb(rows, x0 + 50, y0 + 25) == HeatmapOptions().grid_colour
-            assert rgb(rows, x0 + 25, y0 + 25) != HeatmapOptions().grid_colour
+            assert near(rgb(rows, x0 + 50, y0 + 25), (105, 119, 135), tolerance=8)
+            assert not near(rgb(rows, x0 + 25, y0 + 25), (105, 119, 135))
             # The absent right half has neither colour data nor grid outlines.
             assert rgb(rows, x0 + 150, y0 + 25) == NO_DATA_COLOUR
 
@@ -540,23 +502,16 @@ class TestHeatmapRendering:
         assert len(list(Path(report.out_dir).glob("*.png"))) == 2
         width, height, colour, rows = decode_png(report.images[0].path)
         assert colour == 2
-        boxes = panels(rows, HeatmapOptions().frame_colour)
+        boxes = panels(report.images[0])
         assert len(boxes) == 3, "kx, ky and kz must be three panels side by side"
         # The colour bar spans the layer's range from end to end.
         for _, bar in boxes:
             assert near(sample(bar, 0.0, 0.5, rows), RAMP_LOW)
             assert near(sample(bar, 1.0, 0.5, rows), RAMP_HIGH)
-        # The standalone images must contain the exact overview data, including
-        # its orientation and scale, with no second sampling or interpolation.
-        for direction, (body, bar) in zip(("kx", "ky", "kz"), boxes):
-            standalone = decode_png(report.images[0].direction_paths[direction])[3]
-            columns, lines = frames(standalone, HeatmapOptions().frame_colour)
-            assert len(columns) == 1
-            x0, x1 = columns[0]
-            top, bottom = max(lines, key=lambda run: run[1] - run[0])
-            single_body = (x0 + 1, top + 1, x1 - 1, bottom - 1)
-            for u, v in ((0.25, 0.25), (0.5, 0.99), (0.75, 0.01)):
-                assert sample(single_body, u, v, standalone) == sample(body, u, v, rows)
+        assert len(report.images[0].panel_boxes) == 3
+        assert not (Path(report.out_dir) / "directions").exists()
+        assert all(boxes[i][0][2] < boxes[i + 1][0][0] for i in range(2))
+        assert report.images[0].colourbar_box[1] > max(box[3] for box in report.images[0].panel_boxes)
 
     def test_values_map_to_the_ramp_in_board_order(self, tmp_path):
         # Copper on the top half: the top row of cells is the ramp maximum, the
@@ -564,10 +519,52 @@ class TestHeatmapRendering:
         report = self._report(tmp_path, document([
             {"name": "HALF", "polygons": [rect(0, 5, 10, 10)]}]))
         rows = decode_png(report.images[0].path)[3]
-        boxes = panels(rows, HeatmapOptions().frame_colour)
+        boxes = panels(report.images[0])
         for body, _ in boxes:
-            assert near(sample(body, 0.5, 0.01, rows), RAMP_HIGH)
-            assert near(sample(body, 0.5, 0.99, rows), RAMP_LOW)
+            assert near(sample(body, 0.5, 0.1, rows), RAMP_HIGH)
+            assert near(sample(body, 0.5, 0.9, rows), RAMP_LOW)
+
+    def test_three_axes_show_their_own_conductivity_values(self, tmp_path):
+        import csv
+        report = self._report(tmp_path, document([
+            {"name": "CU", "polygons": [rect(0, 0, 10, 10)]}]))
+        path = Path(report.csv_path)
+        with path.open(encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            records = list(reader)
+            columns = reader.fieldnames
+        for record in records:
+            record.update(kx_w_mk="385", ky_w_mk="0.3", kz_w_mk="192.65")
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(records)
+        image = render_heatmaps(str(path), report.out_dir,
+                                options=HeatmapOptions(panel_width_px=200)).images[0]
+        rows = decode_png(image.path)[3]
+        for box, expected in zip(image.panel_boxes,
+                                 (RAMP_HIGH, RAMP_LOW, (33, 145, 140))):
+            assert near(sample(box, 0.4, 0.4, rows), expected, tolerance=2)
+
+    def test_wide_board_preserves_aspect_and_separates_header(self, tmp_path, monkeypatch):
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+        original = FigureCanvasAgg.draw
+        checked = []
+
+        def inspect_layout(canvas):
+            original(canvas)
+            renderer = canvas.get_renderer()
+            labels = list(canvas.figure.texts) + [a.title for a in canvas.figure.axes[:3]]
+            boxes = [label.get_window_extent(renderer) for label in labels]
+            assert all(not a.overlaps(b) for i, a in enumerate(boxes) for b in boxes[i + 1:])
+            checked.append(True)
+
+        monkeypatch.setattr(FigureCanvasAgg, "draw", inspect_layout)
+        report = self._report(tmp_path, document([
+            {"name": "WIDE", "polygons": []}], profile=rect(0, 0, 10, 2)))
+        for left, top, right, bottom in report.images[0].panel_boxes:
+            assert (right - left) / (bottom - top) == pytest.approx(5, rel=0.02)
+        assert checked
 
     def test_a_uniform_layer_sits_in_the_middle_of_its_range(self, tmp_path):
         report = self._report(tmp_path, document([
@@ -575,7 +572,7 @@ class TestHeatmapRendering:
         image = report.images[0]
         assert image.vmin == image.vmax == pytest.approx(385.0)
         rows = decode_png(image.path)[3]
-        for body, bar in panels(rows, HeatmapOptions().frame_colour):
+        for body, bar in panels(report.images[0]):
             assert not near(sample(body, 0.5, 0.5, rows), RAMP_LOW)
             assert not near(sample(body, 0.5, 0.5, rows), RAMP_HIGH)
             assert sample(bar, 0.0, 0.5, rows) == sample(bar, 1.0, 0.5, rows)
@@ -599,7 +596,7 @@ class TestHeatmapRendering:
             layers=["CU"])
         assert [image.layer for image in report.images] == ["CU"]
         rows = decode_png(report.images[0].path)[3]
-        for body, _ in panels(rows, HeatmapOptions().frame_colour):
+        for body, _ in panels(report.images[0]):
             # The left half is the layer, the right half has no domain at all.
             assert sample(body, 0.25, 0.5, rows) != NO_DATA_COLOUR
             assert sample(body, 0.75, 0.5, rows) == NO_DATA_COLOUR
@@ -620,10 +617,9 @@ class TestHeatmapRendering:
         # the maximum, which is the whole point of the option.
         alone_rows = decode_png(alone.images[0].path)[3]
         shared_rows = decode_png(shared.images[0].path)[3]
-        frame = HeatmapOptions().frame_colour
-        assert not near(sample(panels(alone_rows, frame)[0][0], 0.5, 0.5,
+        assert not near(sample(panels(alone.images[0])[0][0], 0.5, 0.5,
                                alone_rows), RAMP_HIGH)
-        assert near(sample(panels(shared_rows, frame)[0][0], 0.5, 0.5,
+        assert near(sample(panels(shared.images[0])[0][0], 0.5, 0.5,
                            shared_rows), RAMP_HIGH)
 
     def test_the_layer_filter_selects_and_validates(self, tmp_path):
@@ -649,7 +645,7 @@ class TestHeatmapRendering:
         ])), str(csv_path))
         report = render_heatmaps(str(csv_path), str(tmp_path / "clash"),
                                  options=HeatmapOptions(panel_width_px=120,
-                                                        font_scale=1))
+                                                        font_size_pt=12))
         assert {Path(image.path).name for image in report.images} == {
             "A_B.png", "A_B-2.png", "A_B-2-2.png"}
         assert all(Path(image.path).is_file() for image in report.images)
@@ -668,7 +664,7 @@ class TestGallery:
             {"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])), str(csv_path))
         report = render_heatmaps(str(csv_path), str(tmp_path / "heatmaps"),
                                  options=HeatmapOptions(panel_width_px=120,
-                                                        font_scale=1))
+                                                        font_size_pt=12))
         masks = {"CU": "masks/CU.png"}
         path = write_gallery_html(
             str(tmp_path / "pcb.images.html"), "pcb 图例",
@@ -680,10 +676,9 @@ class TestGallery:
         assert "masks/CU.png" in text
         assert "drill_model=solid_copper" in text
         assert "z " in text
-        assert "class='heatmaps'" in text
-        assert "auto-fit" in text
-        for direction in ("kx", "ky", "kz"):
-            assert f"heatmaps/directions/CU.{direction}.png" in text
+        assert "class='heatmap-view'" in text
+        assert "横向滚动" in text
+        assert "directions/" not in text
         assert "<details class='mask'>" in text
 
 

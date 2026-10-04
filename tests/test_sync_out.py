@@ -58,22 +58,12 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     sync_out.main()
     assert csv.stat().st_mtime_ns == before
 
-    direction = result / "heatmaps" / "directions" / "top.kx.png"
-    saved = direction.read_bytes()
-    direction.unlink()
-    assert sync_out.existing_equivalence(result, preview, px=16, py=16,
-                                         max_cell_mm=10) is None
-    direction.write_bytes(saved)
-
     stale = result / "masks" / "old-layer.png"
     stale.write_bytes(b"obsolete")
-    stale_direction = result / "heatmaps" / "directions" / "old-layer.kx.png"
-    stale_direction.write_bytes(b"obsolete")
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16",
                                       "--max-cell-mm", "10", "--force-equivalent"])
     sync_out.main()
     assert not stale.exists()
-    assert not stale_direction.exists()
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,
                                          max_cell_mm=10) is not None
 

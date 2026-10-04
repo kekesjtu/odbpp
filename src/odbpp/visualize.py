@@ -1,6 +1,6 @@
 """Human-viewable renderings of the equivalence stage.
 
-Two artefacts, both deliberately dependency-free (see :mod:`odbpp.png`):
+Two artefacts: standard-library mask PNGs and Matplotlib conductivity figures:
 
 * **material masks** -- one greyscale PNG per equivalented layer, containing
   exactly the black/white raster the formulas integrate over.  A reviewer can
@@ -40,19 +40,14 @@ from typing import Mapping, Optional, Sequence
 
 from .errors import OdbError
 from .png import (
-    Canvas,
-    FONT_ADVANCE,
-    FONT_HEIGHT,
     Rgb,
-    draw_text,
-    text_width,
     write_greyscale_png,
+    write_rgb_png,
 )
 from .raster import LayerMask
 
 __all__ = [
     "VisualizeError",
-    "NO_DATA",
     "NO_DATA_COLOUR",
     "MASK_TARGET_PX",
     "MASK_MAX_PIXELS",
@@ -80,26 +75,9 @@ class VisualizeError(OdbError):
     """The input cannot be turned into a picture, and guessing is not an option."""
 
 
-#: Palette index reserved for "this layer has no cell here".
-NO_DATA = 255
-#: Number of palette indices available for values (0 .. 254).
-_DATA_LEVELS = NO_DATA
+#: Missing cells remain visually distinct from low conductivity.
+NO_DATA_COLOUR: Rgb = (232, 236, 241)
 
-#: Colour of an absent cell.  Light and neutral on purpose: the value ramp starts
-#: dark, so absence never reads as a low value.
-NO_DATA_COLOUR: Rgb = (222, 222, 226)
-
-#: Our own blue -> cyan -> green -> yellow -> red ramp.  Anchor colours, linearly
-#: interpolated; deliberately not a copy of a published colour map.
-_COLOUR_STOPS: tuple[tuple[float, Rgb], ...] = (
-    (0.00, (12, 12, 64)),
-    (0.18, (24, 76, 176)),
-    (0.36, (0, 160, 200)),
-    (0.54, (0, 172, 96)),
-    (0.72, (216, 208, 24)),
-    (0.86, (244, 132, 4)),
-    (1.00, (176, 16, 32)),
-)
 
 #: Panel titles, in drawing order.  The CSV columns are ``kx_w_mk`` ... one
 #: direction per panel, all three on one shared scale so they can be compared.
@@ -462,104 +440,30 @@ def read_materialmap(path: str) -> MaterialMapData:
 
 
 # ---------------------------------------------------------------------------
-# colour
-# ---------------------------------------------------------------------------
-
-def _interpolate(t: float) -> Rgb:
-    stops = _COLOUR_STOPS
-    if t <= stops[0][0]:
-        return stops[0][1]
-    for (t0, c0), (t1, c1) in zip(stops, stops[1:]):
-        if t <= t1:
-            span = t1 - t0
-            weight = 0.0 if span <= 0.0 else (t - t0) / span
-            return (int(round(c0[0] + (c1[0] - c0[0]) * weight)),
-                    int(round(c0[1] + (c1[1] - c0[1]) * weight)),
-                    int(round(c0[2] + (c1[2] - c0[2]) * weight)))
-    return stops[-1][1]
-
-
-def _palette() -> bytes:
-    """256 RGB triples: 0..254 the value ramp, 255 :data:`NO_DATA_COLOUR`."""
-    table = bytearray(_DATA_LEVELS * 3)
-    for index in range(_DATA_LEVELS):
-        t = index / (_DATA_LEVELS - 1)
-        r, g, b = _interpolate(t)
-        table[3 * index:3 * index + 3] = bytes((r, g, b))
-    table += bytes(NO_DATA_COLOUR)
-    return bytes(table)
-
-
-def _channel_tables(palette: bytes) -> tuple[bytes, bytes, bytes]:
-    """Per-channel 256-entry translation tables for a fast palette lookup."""
-    return (palette[0::3], palette[1::3], palette[2::3])
-
-
-def _quantise(value: float, vmin: float, vmax: float) -> int:
-    if not vmax > vmin:
-        return _DATA_LEVELS // 2
-    t = (value - vmin) / (vmax - vmin)
-    if t <= 0.0:
-        return 0
-    if t >= 1.0:
-        return _DATA_LEVELS - 1
-    return int(t * (_DATA_LEVELS - 1) + 0.5)
-
-
-def _rgb_row(indices: bytes, column_source: array,
-             channels: tuple[bytes, bytes, bytes]) -> bytes:
-    """Expand one cell-index row to panel width and colour it."""
-    expanded = bytes(map(indices.__getitem__, column_source))
-    out = bytearray(3 * len(expanded))
-    out[0::3] = expanded.translate(channels[0])
-    out[1::3] = expanded.translate(channels[1])
-    out[2::3] = expanded.translate(channels[2])
-    return bytes(out)
-
-
-# ---------------------------------------------------------------------------
-# heat map rendering
+# conductivity figures: one layer, three axes, one shared colour bar
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class HeatmapOptions:
-    """Layout knobs.  Defaults keep one layer's sheet readable on its own."""
+    """Output resolution and presentation; these never change CSV geometry."""
 
-    #: Width of one panel in pixels; height follows the board aspect ratio.
     panel_width_px: int = 1440
-    #: Upper bound for either panel side, so an extremely long board cannot
-    #: allocate a gigapixel canvas.
     max_panel_px: int = 2400
-    #: Use one colour scale for every layer instead of one per layer.  Per-layer
-    #: is the default because it resolves the layer; shared makes layers
-    #: comparable to each other at the cost of contrast.
     shared_scale: bool = False
-    #: Outline only cells present in the CSV; missing layer domains stay blank.
     draw_grid: bool = False
-    grid_colour: Rgb = (110, 110, 110)
-    font_scale: int = 2
-    margin_px: int = 14
-    gap_px: int = 18
-    text_colour: Rgb = (28, 32, 40)
-    frame_colour: Rgb = (70, 76, 88)
-    background: Rgb = (255, 255, 255)
+    font_size_pt: float = 12.0
 
     def __post_init__(self) -> None:
         if self.panel_width_px < 32:
-            raise ValueError(
-                f"panel_width_px must be at least 32, got {self.panel_width_px}")
+            raise ValueError("panel_width_px must be at least 32")
         if self.max_panel_px < self.panel_width_px:
-            raise ValueError(
-                f"max_panel_px={self.max_panel_px} is smaller than "
-                f"panel_width_px={self.panel_width_px}")
-        if self.font_scale < 1:
-            raise ValueError(f"font_scale must be positive, got {self.font_scale}")
+            raise ValueError("max_panel_px is smaller than panel_width_px")
+        if not math.isfinite(self.font_size_pt) or self.font_size_pt <= 0:
+            raise ValueError("font_size_pt must be finite and positive")
 
 
 @dataclass
 class HeatmapImage:
-    """What one written heat map contains, for reporting and for the gallery."""
-
     layer: str
     path: str
     index: int
@@ -567,176 +471,144 @@ class HeatmapImage:
     vmin: float
     vmax: float
     cells: int
-    direction_paths: dict[str, str] = field(default_factory=dict)
+    # Measured artist bounds, in top-down output pixels, for visual QA.
+    panel_boxes: tuple[tuple[int, int, int, int], ...] = ()
+    colourbar_box: tuple[int, int, int, int] = (0, 0, 0, 0)
 
 
 def _format(value: float) -> str:
-    """Compact label: four significant digits, no gratuitous exponent."""
-    text = f"{value:.4g}"
-    return text
-
-
-def _pixel_edges(edges: Sequence[float], scale: float) -> list[int]:
-    """Pixel boundaries for *edges*, rounded cumulatively.
-
-    Rounding every edge against the same origin keeps the frame the board's
-    size in both axes.  A cell narrower than one pixel can therefore end up with
-    no pixel of its own when the grid is finer than the panel: the picture is a
-    view, the CSV is the data, and stretching the panel to keep every cell
-    visible would misreport the board's proportions (ask for a wider
-    ``panel_width_px`` when every cell must be seen).
-    """
-    return [int(round((value - edges[0]) * scale)) for value in edges]
-
-
-def _z_label(series: LayerSeries) -> str:
-    return format_z(series.z_start_mm, series.z_end_mm, series.thickness_known)
+    return f"{value:.4g}"
 
 
 def format_z(z_start_mm: Optional[float], z_end_mm: Optional[float],
              thickness_known: bool) -> str:
-    """The absolute-Z sentence, labelled when the thickness is not trusted."""
+    """Absolute Z with an explicit indication of unknown thickness."""
     if z_start_mm is None or z_end_mm is None:
         return "z ?"
     text = f"z {_format(z_start_mm)}..{_format(z_end_mm)} mm"
-    if not thickness_known:
-        text += " ?"
-    return text
+    return text if thickness_known else text + " ?"
 
 
-def _column_source(pixels: Sequence[int]) -> array:
-    """For each output column, the cell-grid interval index it shows."""
-    source = array("i")
-    for index in range(len(pixels) - 1):
-        source.extend([index] * (pixels[index + 1] - pixels[index]))
-    return source
-
-
-def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
-                         data: MaterialMapData, bounds: tuple[float, float],
-                         path: str, *, index: int, count: int,
+def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
+                         bounds: tuple[float, float], path: str, *,
+                         index: int, count: int,
                          options: HeatmapOptions) -> HeatmapImage:
-    """Draw ``kx``/``ky``/``kz`` for one layer as a single PNG."""
-    columns = data.column_count
-    bands = data.row_band_count
-    width_mm = data.x_edges[-1] - data.x_edges[0]
-    height_mm = data.y_edges[-1] - data.y_edges[0]
-    scale = options.panel_width_px / width_mm
-    scale = min(scale, options.max_panel_px / max(width_mm, height_mm))
-    xs = _pixel_edges(data.x_edges, scale)
-    ys = _pixel_edges(data.y_edges, scale)
-    panel_w = xs[-1]
-    panel_h = ys[-1]
+    """Render physical CSV rectangles with Agg, without resampling the values.
 
-    palette = _palette()
-    channels = _channel_tables(palette)
-    column_source = _column_source(xs)
+    Layout is specified in inches, independently of PNG resolution. Axes keep
+    equal physical scaling; every direction uses the same normalisation. Only
+    cells actually present in the CSV are painted or outlined.
+    """
+    import textwrap
+    import numpy as np
+    from matplotlib import colormaps, font_manager
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.collections import PolyCollection
+    from matplotlib.colors import ListedColormap, Normalize
+    from matplotlib.figure import Figure
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import MaxNLocator, FuncFormatter
 
-    # Text must remain readable when the overview is scaled to a browser page.
-    font = max(options.font_scale, min(8, round(panel_w / 240)))
-    line_h = FONT_HEIGHT * font + 4 * font
-    bar_h = max(10, 5 * font)
-    margin = max(options.margin_px, 4 * font)
-    gap = max(options.gap_px, 10 * font)
-    low, high = (_format(value) for value in bounds)
-    tile_w = max(panel_w, text_width("kx   W/(m.K)", font),
-                 text_width(low + "    " + high, font))
-    header = [f"L{index}/{count}   n/a = no cell"]
-    # Wrap metadata too: a tall, narrow board must not clip its Z interval.
-    def wrap(text: str) -> list[str]:
-        capacity = max(1, (tile_w + font) // (FONT_ADVANCE * font))
-        return [text[start:start + capacity]
-                for start in range(0, len(text), capacity)]
+    x0, y0, x1, y1 = data.bounds_mm()
+    dpi = options.panel_width_px / 4.8
+    board_height = min(4.8 * (y1 - y0) / (x1 - x0), options.max_panel_px / dpi)
+    body_height = max(0.65, board_height)
+    slot, gap, left, right = 4.8, 0.65, 0.85, 0.35
+    width = left + 3 * slot + 2 * gap + right
+    title_lines = textwrap.wrap(f"Layer {index}/{count}  |  {series.name}", width=85)
+    header = 1.35 + 0.3 * (len(title_lines) - 1)
+    bottom = 1.65
+    height = header + body_height + bottom
+    figure = Figure(figsize=(width, height), dpi=dpi, facecolor="white")
+    renderer = FigureCanvasAgg(figure)
+    font = options.font_size_pt
+    family = "DejaVu Sans"
+    available = {item.name for item in font_manager.fontManager.ttflist}
+    for candidate in ("Microsoft YaHei", "Noto Sans CJK SC", "SimHei"):
+        if candidate in available:
+            family = candidate
+            break
+    text_style = dict(fontfamily=family, color="#263445")
+    figure.text(left / width, 1 - 0.14 / height, "\n".join(title_lines),
+                va="top", fontsize=font + 4, weight="bold", **text_style)
+    z = format_z(series.z_start_mm, series.z_end_mm, series.thickness_known)
+    z += f"   |   {series.layer_type}   |   {len(series):,} cells"
+    if not series.thickness_known:
+        z += "   |   thickness unknown"
+    figure.text(left / width, 1 - (0.6 + 0.3 * (len(title_lines) - 1)) / height, z,
+                va="top", fontsize=font - 1, **text_style)
 
-    header = wrap(header[0]) + wrap(_z_label(series))
-    header_h = (len(header) + 1) * line_h
-    title_h = line_h
-    bar_gap = 4 * font
-    bar_block = bar_gap + bar_h + 2 * font + line_h
+    cmap = colormaps["viridis"]
+    uniform = bounds[0] == bounds[1]
+    if uniform:
+        span = max(abs(bounds[0]) * 0.01, 1e-6)
+        norm = Normalize(bounds[0] - span, bounds[0] + span)
+        cmap = ListedColormap([cmap(0.5)])
+    else:
+        norm = Normalize(*bounds)
+    cells = np.asarray(series.rectangles, dtype=float)
+    vertices = np.stack((cells[:, [0, 1]], cells[:, [2, 1]],
+                         cells[:, [2, 3]], cells[:, [0, 3]]), axis=1)
+    absent = tuple(value / 255 for value in NO_DATA_COLOUR)
+    axes = []
+    for panel, (name, field) in enumerate(PANELS):
+        axis = figure.add_axes([(left + panel * (slot + gap)) / width,
+                                bottom / height, slot / width, body_height / height])
+        axis.set_facecolor(absent)
+        collection = PolyCollection(vertices, array=np.asarray(series.values(field)),
+                                    cmap=cmap, norm=norm,
+                                    edgecolors="#697787" if options.draw_grid else "none",
+                                    linewidths=0.35 if options.draw_grid else 0,
+                                    antialiaseds=False)
+        axis.add_collection(collection)
+        axis.set_xlim(x0, x1)
+        axis.set_ylim(y0, y1)
+        axis.set_aspect("equal", adjustable="box")
+        axis.set_title(name, fontsize=font + 2, fontfamily=family,
+                       color="#263445", weight="bold", pad=10)
+        axis.set_xlabel("X (mm)", fontsize=font - 1, fontfamily=family, labelpad=6)
+        if panel == 0:
+            axis.set_ylabel("Y (mm)", fontsize=font - 1, fontfamily=family, labelpad=6)
+        axis.xaxis.set_major_locator(MaxNLocator(nbins=4))
+        axis.yaxis.set_major_locator(MaxNLocator(nbins=4))
+        axis.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
+        axis.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
+        axis.tick_params(labelsize=font - 2, colors="#526071", length=3,
+                         labelleft=panel == 0)
+        for spine in axis.spines.values():
+            spine.set_color("#8995a3")
+            spine.set_linewidth(0.65)
+        axes.append(axis)
 
-    content_w = 3 * tile_w + 2 * gap
-    width = margin * 2 + content_w
-    height = margin * 2 + header_h + title_h + panel_h + bar_block
-    canvas = Canvas(width, height, options.background)
-
-    # Header: which layer of how many, and the absolute Z the cells belong to.
-    for line, label in enumerate(header):
-        draw_text(canvas, margin, margin + line * line_h, label,
-                  options.text_colour, font)
-
-    panel_y = margin + header_h + title_h
-    bar_y = panel_y + panel_h + bar_gap
-    # Positions, palette triples and gradient are shared by the three panels.
-    rectangles = [(round((xa-data.x_edges[0])*scale),
-                   panel_h-round((yb-data.y_edges[0])*scale),
-                   round((xb-data.x_edges[0])*scale),
-                   panel_h-round((ya-data.y_edges[0])*scale))
-                  for xa,ya,xb,yb in series.rectangles]
-    colours = [tuple(palette[3*level:3*level+3]) for level in range(_DATA_LEVELS+1)]
-    gradient = bytearray(3 * panel_w)
-    for column in range(panel_w):
-        t = 0.0 if panel_w < 2 else column / (panel_w - 1)
-        level = (_DATA_LEVELS // 2 if bounds[0] == bounds[1]
-                 else int(t * (_DATA_LEVELS - 1) + 0.5))
-        gradient[3 * column:3 * column + 3] = palette[3 * level:3 * level + 3]
-    gradient = bytes(gradient)
-    for panel, (title, field) in enumerate(PANELS):
-        tile_x = margin + panel * (tile_w + gap)
-        panel_x = tile_x + (tile_w - panel_w) // 2
-        draw_text(canvas, tile_x, margin + header_h, title,
-                  options.text_colour, font)
-        unit = "W/(m.K)"
-        draw_text(canvas, tile_x + tile_w - text_width(unit, font),
-                  margin + header_h, unit, options.text_colour, font)
-        canvas.rect(panel_x,panel_y,panel_x+panel_w,panel_y+panel_h,NO_DATA_COLOUR)
-        values = series.values(field)
-        for cell, (left,top,right,bottom) in enumerate(rectangles):
-            level = _quantise(values[cell], *bounds)
-            colour = colours[level]
-            canvas.rect(panel_x+left,panel_y+top,panel_x+right,panel_y+bottom,colour)
-            if options.draw_grid and right>left and bottom>top:
-                canvas.frame(panel_x+left,panel_y+top,panel_x+right,panel_y+bottom,
-                             options.grid_colour)
-        canvas.frame(panel_x, panel_y, panel_x + panel_w, panel_y + panel_h,
-                     options.frame_colour)
-
-        # Colour bar, labelled with the numeric ends of this scale.
-        for y in range(bar_y, bar_y + bar_h):
-            canvas.blit_row(y, panel_x, gradient)
-        canvas.frame(panel_x, bar_y, panel_x + panel_w, bar_y + bar_h,
-                     options.frame_colour)
-        label_y = bar_y + bar_h + 2 * font
-        draw_text(canvas, tile_x, label_y, low, options.text_colour, font)
-        if bounds[0] != bounds[1]:
-            draw_text(canvas, tile_x + tile_w - text_width(high, font),
-                      label_y, high, options.text_colour, font)
-            middle = _format((bounds[0] + bounds[1]) / 2)
-            if tile_w > text_width(low + middle + high + "        ", font):
-                draw_text(canvas, tile_x + (tile_w - text_width(middle, font)) // 2,
-                          label_y, middle, options.text_colour, font)
-
-    canvas.save(path)
-    # Copy the exact panel pixels, rather than render/aggregate the data again.
-    # Each direction keeps its own metadata, units and the same shared scale.
-    direction_dir = os.path.join(os.path.dirname(path), "directions")
-    os.makedirs(direction_dir, exist_ok=True)
-    direction_paths = {}
-    for panel, (title, _) in enumerate(PANELS):
-        single = Canvas(tile_w + 2 * margin, height, options.background)
-        tile_x = margin + panel * (tile_w + gap)
-        for y in range(margin + header_h, height):
-            start = (y * width + tile_x) * 3
-            single.blit_row(y, margin, canvas.pixels[start:start + tile_w * 3])
-        for line, label in enumerate(header):
-            draw_text(single, margin, margin + line * line_h, label,
-                      options.text_colour, font)
-        target = os.path.join(direction_dir,
-                              f"{os.path.splitext(os.path.basename(path))[0]}.{title}.png")
-        single.save(target)
-        direction_paths[title] = target
-    return HeatmapImage(layer=series.name, path=path, index=index, count=count,
-                        vmin=bounds[0], vmax=bounds[1], cells=len(series),
-                        direction_paths=direction_paths)
+    bar_axis = figure.add_axes([0.25, 0.62 / height, 0.5, 0.18 / height])
+    colourbar = figure.colorbar(ScalarMappable(norm=norm, cmap=cmap),
+                               cax=bar_axis, orientation="horizontal")
+    colourbar.set_label("Thermal conductivity  [W/(m·K)]" +
+                        ("  —  uniform" if uniform else ""),
+                        fontsize=font - 1, fontfamily=family, labelpad=6)
+    ticks = [bounds[0]] if uniform else np.linspace(*bounds, 5)
+    colourbar.set_ticks(ticks)
+    colourbar.set_ticklabels([_format(float(value)) for value in ticks])
+    colourbar.ax.tick_params(labelsize=font - 2, length=3, colors="#526071")
+    colourbar.outline.set_visible(False)
+    figure.legend(handles=[Patch(facecolor=absent, edgecolor="none",
+                                 label="No cell / outside layer domain")],
+                  loc="lower left", bbox_to_anchor=(left / width, 0.005),
+                  frameon=False, prop={"family": family, "size": font - 2})
+    renderer.draw()
+    rgba = np.asarray(renderer.buffer_rgba())
+    pixel_h, pixel_w = rgba.shape[:2]
+    def box(axis):
+        a, b, w, h = axis.get_window_extent().bounds
+        return (round(a), round(pixel_h - b - h), round(a + w), round(pixel_h - b))
+    panel_boxes = tuple(box(axis) for axis in axes)
+    bar_box = box(bar_axis)
+    write_rgb_png(path, pixel_w, pixel_h,
+                  (row[:, :3].tobytes() for row in rgba))
+    figure.clear()
+    return HeatmapImage(series.name, path, index, count, *bounds, len(series),
+                        panel_boxes=panel_boxes, colourbar_box=bar_box)
 
 
 @dataclass
@@ -780,10 +652,8 @@ def render_heatmaps(csv_path: str, out_dir: str, *,
     for position, (series, series_bounds) in enumerate(zip(selected, bounds), start=1):
         stem = unique_image_stem(series.name, used)
         path = os.path.join(out_dir, f"{stem}.png")
-        cols = array("i", (data.x_interval_of_column[i] for i in series.i))
-        rows = array("i", (data.y_interval_of_row[j] for j in series.j))
         images.append(render_layer_heatmap(
-            series, cols, rows, data, series_bounds, path,
+            series, data, series_bounds, path,
             index=position, count=len(selected), options=opts))
     return HeatmapReport(csv_path=csv_path, out_dir=out_dir, data=data,
                          images=images)
@@ -806,7 +676,6 @@ class GalleryEntry:
     cells: int = 0
     heatmap: Optional[str] = None
     mask: Optional[str] = None
-    directions: dict[str, str] = field(default_factory=dict)
 
 
 _GALLERY_STYLE = (
@@ -821,9 +690,7 @@ _GALLERY_STYLE = (
     "text-decoration:none}nav a:hover{text-decoration:underline}"
     "code{background:#eef2f8;padding:1px 4px;border-radius:3px}"
     "p.note{color:#465569}"
-    ".heatmaps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px}"
-    "figure{margin:0;min-width:0}figcaption{font-weight:600;margin:12px 0 6px}"
-    "figure a{display:block;color:#135baf}figure img{width:100%;box-sizing:border-box}"
+    ".heatmap-view{overflow-x:auto} .heatmap-view img{width:100%;min-width:1000px;max-width:none;box-sizing:border-box;image-rendering:auto}"
     ".mask img{max-height:360px;max-width:100%;width:auto}"
     "summary{cursor:pointer;color:#135baf;padding:10px 0}"
 )
@@ -843,7 +710,7 @@ def write_gallery_html(path: str, title: str, entries: Sequence[GalleryEntry],
         "<p class='note'>逐层展示材料掩膜（光栅化的黑/白结果，灰=该层在此无计算域）"
         "与该层的 kx/ky/kz 等效热导率热图。数值与单位以 MaterialMap.csv 与其 meta 为准，"
         "本页只便于人眼核对。</p>",
-        "<p class='note'>热图按方向独立展示，窄屏自动换行；点击图像可查看原始 PNG。"
+        "<p class='note'>三个方向始终在同一张热图中；窄屏可横向滚动，点击图像可查看原始 PNG。"
         "三个方向使用同一色标，灰色表示该层在此无单元。</p>",
     ]
     if note:
@@ -869,21 +736,11 @@ def write_gallery_html(path: str, title: str, entries: Sequence[GalleryEntry],
             lines.append("<details class='mask'><summary>材料掩膜（点击展开）</summary>")
             lines.append(f"<a href='{html.escape(entry.mask, quote=True)}'><img src='{html.escape(entry.mask, quote=True)}' "
                          f"alt='{html.escape(entry.name, quote=True)} material mask' loading='lazy'></a></details>")
-        if entry.directions:
-            lines.append("<div class='heatmaps'>")
-            for direction, _ in PANELS:
-                if direction not in entry.directions:
-                    continue
-                href = html.escape(entry.directions[direction], quote=True)
-                alt = html.escape(f"{entry.name} {direction} heat map", quote=True)
-                lines.append(f"<figure><figcaption>{direction} · W/(m·K)</figcaption>"
-                             f"<a href='{href}'><img src='{href}' alt='{alt}' loading='lazy'></a></figure>")
-            lines.append("</div>")
-        if entry.heatmap and entry.directions:
-            lines.append(f"<p><a href='{html.escape(entry.heatmap, quote=True)}'>打开三方向总览 PNG</a></p>")
-        elif entry.heatmap:
-            lines.append(f"<img src='{html.escape(entry.heatmap)}' "
-                         f"alt='{html.escape(entry.name)} kx ky kz heat maps'>")
+        if entry.heatmap:
+            href = html.escape(entry.heatmap, quote=True)
+            alt = html.escape(f"{entry.name} kx ky kz heat maps", quote=True)
+            lines.append(f"<div class='heatmap-view'><a href='{href}'>"
+                         f"<img src='{href}' alt='{alt}' loading='lazy'></a></div>")
         lines.append("</section>")
     lines.append("</body></html>")
     document = "\n".join(lines) + "\n"
@@ -925,7 +782,5 @@ def gallery_entries(report: HeatmapReport, *,
             cells=image.cells,
             heatmap=href,
             mask=None if not masks else masks.get(image.layer),
-            directions={direction: os.path.relpath(path, gallery_dir or report.out_dir).replace(os.sep, "/")
-                        for direction, path in image.direction_paths.items()},
         ))
     return entries
