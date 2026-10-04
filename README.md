@@ -117,6 +117,8 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 灰 = 该层在这里**没有计算域**（不是 FR4）。热图三面板共用一条色标，
 浅灰 `n/a` 表示该层在此单元没有值。命令、色标、内存与失败处理详见
 [可视化文档](docs/equivalence/02-visualization.md)。
+图例页按 `kx`、`ky`、`kz` 独立卡片自适应排列，点击可看原图；
+材料掩膜折叠展示，三方向总览保留链接。独立 PNG 位于 `heatmaps/directions/`。
 
 输出 `*.MaterialMap.csv`（逐层逐单元 `kx/ky/kz/density/specific_heat`，并带
 `cell_area_mm2`/`domain_area_mm2`/`domain_coverage` 明确计算域覆盖率）与同名
