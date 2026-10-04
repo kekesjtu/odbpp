@@ -134,6 +134,9 @@ wireframe 快捷按钮和实时毫米坐标读数。
 其中逐层 SVG 导出已复用整板视口，性能优化阶段 JSON/SVG/HTML 对四例样本与优化前逐字节一致。
 解析、几何规划、材料采样和图像生成的后续优化与完整产物对照见
 [2026-10-04 全流程性能报告](docs/reviews/06-pipeline-performance.md)。
+HTML 查看器后续采用按帧显示更新、减少 SVG 布局查询并缓存图层节点，交互行为对照见
+[2026-10-04 查看器性能报告](docs/reviews/07-viewer-performance.md)。仅更新内联 CSS/JS 时可运行
+`uv run --all-extras python tools/refresh_viewer_outputs.py`，保留现有板路径及页面数据。
 上述显示问题及 profile 输出精度问题已修复，见
 [修复与验证记录](docs/fixes/04-export-correctness-fixes.md)。
 

@@ -15,3 +15,4 @@
 | [04 修复复核](04-verification-review.md) | 独立复核第三轮修复 | — |
 | [05 导出性能审阅](05-export-performance-review.md) | 性能瓶颈、兼容性和三项显示问题 | [修复 04](../fixes/04-export-correctness-fixes.md) |
 | [06 全流程性能优化](06-pipeline-performance.md) | 解析、几何索引、采样和图像生成优化；四个真实样本的阶段耗时、内存和 192 个产物对照 | — |
+| [07 HTML 交互性能优化](07-viewer-performance.md) | 按帧更新、坐标转换与矩阵布局优化；159 个浏览器交互检查点和 18 个页面非代码内容对照 | — |

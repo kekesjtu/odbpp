@@ -1,0 +1,95 @@
+{
+  "viewers": [
+    {
+      "path": "designodb-rigidflex.tgz/CELLULAR_FLIP-PHONE.html",
+      "non_code_sha256": "3e5cceba1f033b0ccfcd3188031026f07cf525ead35af25996fbebc4f66bb98a",
+      "changed": true
+    },
+    {
+      "path": "kicad-kitchen-sink/PCB.html",
+      "non_code_sha256": "d1ca1f69c80aae21740c9e903de798f02dad1f67d916f87921fbaf47d5b46c12",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/clean/four-layer-drills-mm/PCB.html",
+      "non_code_sha256": "b245a809909165b67e1a5e8f70d963c5c2b1e3d098cabd7b165ac48daf444d4a",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/clean/outline-only-mm/PCB.html",
+      "non_code_sha256": "0f68f2c82b87d8a449ea2155d3cf33c7d0a56b6468cdeef74eb574378b5e864a",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/clean/pad-shapes-mm/PCB.html",
+      "non_code_sha256": "17a6cad544c2efbb69a92681c34bca4f0105c686f94914c88df42ad20e3cdf95",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/clean/through-hole-in/PCB.html",
+      "non_code_sha256": "56a8cd91b8c6be4ea5a9a258ea4bdbf23ea905cd6079b11a13073626901c71d4",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/clean/through-hole-mm/PCB.html",
+      "non_code_sha256": "6322b1674c16353479de9718ca97676b26f61ce3ca9e35ce3ed093dc0131d1f6",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/clean/tracks-arcs-mm/PCB.html",
+      "non_code_sha256": "69e28bd385eaab11b81b126223208a2ecfa1be8c17fdca1406aa5540867d6013",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/clean/zone-hole-rotation-mm/PCB.html",
+      "non_code_sha256": "4f44f1c288ff97ba1d0d3e0c93427aed2b96ee26299ed37231595ee15ef71815",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/native/four-layer-drills-mm/PCB.html",
+      "non_code_sha256": "5081dbfc1f04559d3ca69d71eea74bb7363f7caac664eb20ddef811a9c2573e6",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/native/outline-only-mm/PCB.html",
+      "non_code_sha256": "f13a3003c875cf07b5200de20a817aa34ead4e6003317105eb0b10216a53e834",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/native/pad-shapes-mm/PCB.html",
+      "non_code_sha256": "34418f65e9538ecb4d4d7a7bf0c755a5455e23fa3d65b8963f47051db88c237a",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/native/through-hole-in/PCB.html",
+      "non_code_sha256": "44b5865bc6a321bad1680cefb08ab474f58469798894db634d39ec406c3345b8",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/native/through-hole-mm/PCB.html",
+      "non_code_sha256": "ba37950f05f0586cc989b298e330d39103e59fbdc9c71058a8d285930e56f717",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/native/tracks-arcs-mm/PCB.html",
+      "non_code_sha256": "6dd925df49004b93953ac8e368d269b5e17e64d22bfebf35dd78426b725d54fe",
+      "changed": true
+    },
+    {
+      "path": "kicad-positive/native/zone-hole-rotation-mm/PCB.html",
+      "non_code_sha256": "8c9d3bccd8518fe9cdccbc962ab54ced0d9759ccc8c8569692820117ad1f2fa2",
+      "changed": true
+    },
+    {
+      "path": "kicad-video-odb.tgz/PCB.html",
+      "non_code_sha256": "cfa8b8c13d2a9b9ee2631c1e36995f1edab9d073fe623eef5a0205de3ba8bb2b",
+      "changed": true
+    },
+    {
+      "path": "minimal-test-odb/pcb.html",
+      "non_code_sha256": "b739b46a574090c1251ae4b9661c7e7fb0d0281b680eb5de4b7f5f5a27fd3978",
+      "changed": true
+    }
+  ],
+  "non_code_unchanged": true
+}

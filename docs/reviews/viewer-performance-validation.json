@@ -1,0 +1,557 @@
+{
+  "baseline_ref": "dbc45e7",
+  "browser": "Chrome headless",
+  "viewport": [
+    1280,
+    800
+  ],
+  "repetitions": 5,
+  "cases": [
+    {
+      "case": "minimal-test-odb",
+      "checkpoints": 39,
+      "max_transform_difference_mm": 1.1146068572998047e-05,
+      "screenshot_identical": true,
+      "burst_events": 400,
+      "event_handler_ms": {
+        "before": {
+          "hover": 9.899999998509884,
+          "drag": 12.799999997019768,
+          "wheel": 8.100000001490116
+        },
+        "after": {
+          "hover": 2,
+          "drag": 2.599999997764826,
+          "wheel": 2.399999998509884
+        }
+      },
+      "work": {
+        "before": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 400
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 400,
+            "position": 400
+          },
+          "wheel": {
+            "ctm": 1200,
+            "bounds": 1,
+            "transform": 800,
+            "position": 0
+          }
+        },
+        "after": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 1
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 1,
+            "position": 1
+          },
+          "wheel": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 1,
+            "position": 0
+          }
+        }
+      },
+      "cdp": {
+        "before": {
+          "hover": {
+            "LayoutCount": 400,
+            "RecalcStyleCount": 400,
+            "LayoutDuration": 0.006324,
+            "RecalcStyleDuration": 0.000578,
+            "ScriptDuration": 0.002049
+          },
+          "drag": {
+            "LayoutCount": 799,
+            "RecalcStyleCount": 801,
+            "LayoutDuration": 0.006674,
+            "RecalcStyleDuration": 0.001738,
+            "ScriptDuration": 0.003471
+          },
+          "wheel": {
+            "LayoutCount": 800,
+            "RecalcStyleCount": 800,
+            "LayoutDuration": 0.001915,
+            "RecalcStyleDuration": 0.001668,
+            "ScriptDuration": 0.003205
+          }
+        },
+        "after": {
+          "hover": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 0.000799,
+            "RecalcStyleDuration": 1.4e-05,
+            "ScriptDuration": 0.001042
+          },
+          "drag": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 2,
+            "LayoutDuration": 0.000667,
+            "RecalcStyleDuration": 0.000148,
+            "ScriptDuration": 0.001801
+          },
+          "wheel": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 2.8e-05,
+            "RecalcStyleDuration": 2.8e-05,
+            "ScriptDuration": 0.001312
+          }
+        }
+      },
+      "zoom_limits": {
+        "before": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.29863808392100427
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 1.52587890625e-05
+          }
+        ],
+        "after": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.29863808392100427
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 1.52587890625e-05
+          }
+        ]
+      },
+      "svg_sha256": "34caaa12b5cb3543292da36fb1b50e637a5432dd9534b2061f0cb62a6953b1e3"
+    },
+    {
+      "case": "kicad-kitchen-sink",
+      "checkpoints": 40,
+      "max_transform_difference_mm": 0,
+      "screenshot_identical": true,
+      "burst_events": 400,
+      "event_handler_ms": {
+        "before": {
+          "hover": 9.600000001490116,
+          "drag": 12.700000002980232,
+          "wheel": 8.700000002980232
+        },
+        "after": {
+          "hover": 2.100000001490116,
+          "drag": 2.5,
+          "wheel": 2.5
+        }
+      },
+      "work": {
+        "before": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 400
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 400,
+            "position": 400
+          },
+          "wheel": {
+            "ctm": 1200,
+            "bounds": 1,
+            "transform": 800,
+            "position": 0
+          }
+        },
+        "after": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 1
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 1,
+            "position": 1
+          },
+          "wheel": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 1,
+            "position": 0
+          }
+        }
+      },
+      "cdp": {
+        "before": {
+          "hover": {
+            "LayoutCount": 400,
+            "RecalcStyleCount": 400,
+            "LayoutDuration": 0.00609,
+            "RecalcStyleDuration": 0.000547,
+            "ScriptDuration": 0.001926
+          },
+          "drag": {
+            "LayoutCount": 799,
+            "RecalcStyleCount": 801,
+            "LayoutDuration": 0.006503,
+            "RecalcStyleDuration": 0.001852,
+            "ScriptDuration": 0.003506
+          },
+          "wheel": {
+            "LayoutCount": 800,
+            "RecalcStyleCount": 800,
+            "LayoutDuration": 0.002577,
+            "RecalcStyleDuration": 0.001659,
+            "ScriptDuration": 0.003228
+          }
+        },
+        "after": {
+          "hover": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 0.000769,
+            "RecalcStyleDuration": 1.4e-05,
+            "ScriptDuration": 0.001089
+          },
+          "drag": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 2,
+            "LayoutDuration": 0.00082,
+            "RecalcStyleDuration": 0.000322,
+            "ScriptDuration": 0.00169
+          },
+          "wheel": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 3.2e-05,
+            "RecalcStyleDuration": 3.5e-05,
+            "ScriptDuration": 0.00144
+          }
+        }
+      },
+      "zoom_limits": {
+        "before": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.5911743476696109
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 0
+          }
+        ],
+        "after": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.5911743476696109
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 0
+          }
+        ]
+      },
+      "svg_sha256": "109947935e2b7a082fc4280550455354015c17f8487c7c95e0fcb6da4dbabf36"
+    },
+    {
+      "case": "kicad-video-odb.tgz",
+      "checkpoints": 40,
+      "max_transform_difference_mm": 1.049041748046875e-05,
+      "screenshot_identical": true,
+      "burst_events": 400,
+      "event_handler_ms": {
+        "before": {
+          "hover": 10,
+          "drag": 12.900000002235174,
+          "wheel": 8.600000001490116
+        },
+        "after": {
+          "hover": 1.9000000022351742,
+          "drag": 2.5,
+          "wheel": 2.5
+        }
+      },
+      "work": {
+        "before": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 400
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 400,
+            "position": 400
+          },
+          "wheel": {
+            "ctm": 1200,
+            "bounds": 1,
+            "transform": 800,
+            "position": 0
+          }
+        },
+        "after": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 1
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 1,
+            "position": 1
+          },
+          "wheel": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 1,
+            "position": 0
+          }
+        }
+      },
+      "cdp": {
+        "before": {
+          "hover": {
+            "LayoutCount": 400,
+            "RecalcStyleCount": 400,
+            "LayoutDuration": 0.006399,
+            "RecalcStyleDuration": 0.000558,
+            "ScriptDuration": 0.002047
+          },
+          "drag": {
+            "LayoutCount": 799,
+            "RecalcStyleCount": 801,
+            "LayoutDuration": 0.006512,
+            "RecalcStyleDuration": 0.00192,
+            "ScriptDuration": 0.003596
+          },
+          "wheel": {
+            "LayoutCount": 800,
+            "RecalcStyleCount": 800,
+            "LayoutDuration": 0.002466,
+            "RecalcStyleDuration": 0.00169,
+            "ScriptDuration": 0.003236
+          }
+        },
+        "after": {
+          "hover": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 0.000846,
+            "RecalcStyleDuration": 1.8e-05,
+            "ScriptDuration": 0.001048
+          },
+          "drag": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 2,
+            "LayoutDuration": 0.000713,
+            "RecalcStyleDuration": 0.000326,
+            "ScriptDuration": 0.001736
+          },
+          "wheel": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 2.4e-05,
+            "RecalcStyleDuration": 2.9e-05,
+            "ScriptDuration": 0.001432
+          }
+        }
+      },
+      "zoom_limits": {
+        "before": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.766517365442318
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 0
+          }
+        ],
+        "after": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.766517365442318
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 0
+          }
+        ]
+      },
+      "svg_sha256": "18f20bb4753ea03897e0fb40a33125c5b918f25cfb2228ddd64114fef85ab4ac"
+    },
+    {
+      "case": "designodb-rigidflex.tgz",
+      "checkpoints": 40,
+      "max_transform_difference_mm": 1.1444091796875e-05,
+      "screenshot_identical": true,
+      "burst_events": 400,
+      "event_handler_ms": {
+        "before": {
+          "hover": 9.699999999254942,
+          "drag": 13.100000001490116,
+          "wheel": 9.699999999254942
+        },
+        "after": {
+          "hover": 2.2999999970197678,
+          "drag": 2.600000001490116,
+          "wheel": 2.5
+        }
+      },
+      "work": {
+        "before": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 400
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 400,
+            "position": 400
+          },
+          "wheel": {
+            "ctm": 1200,
+            "bounds": 1,
+            "transform": 800,
+            "position": 0
+          }
+        },
+        "after": {
+          "hover": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 0,
+            "position": 1
+          },
+          "drag": {
+            "ctm": 800,
+            "bounds": 1,
+            "transform": 1,
+            "position": 1
+          },
+          "wheel": {
+            "ctm": 400,
+            "bounds": 1,
+            "transform": 1,
+            "position": 0
+          }
+        }
+      },
+      "cdp": {
+        "before": {
+          "hover": {
+            "LayoutCount": 400,
+            "RecalcStyleCount": 400,
+            "LayoutDuration": 0.006159,
+            "RecalcStyleDuration": 0.000562,
+            "ScriptDuration": 0.001993
+          },
+          "drag": {
+            "LayoutCount": 799,
+            "RecalcStyleCount": 801,
+            "LayoutDuration": 0.006666,
+            "RecalcStyleDuration": 0.002052,
+            "ScriptDuration": 0.003631
+          },
+          "wheel": {
+            "LayoutCount": 800,
+            "RecalcStyleCount": 800,
+            "LayoutDuration": 0.003724,
+            "RecalcStyleDuration": 0.001646,
+            "ScriptDuration": 0.003182
+          }
+        },
+        "after": {
+          "hover": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 0.000786,
+            "RecalcStyleDuration": 1.9e-05,
+            "ScriptDuration": 0.001246
+          },
+          "drag": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 2,
+            "LayoutDuration": 0.000681,
+            "RecalcStyleDuration": 0.000433,
+            "ScriptDuration": 0.001637
+          },
+          "wheel": {
+            "LayoutCount": 1,
+            "RecalcStyleCount": 1,
+            "LayoutDuration": 2.3e-05,
+            "RecalcStyleDuration": 3.2e-05,
+            "ScriptDuration": 0.001393
+          }
+        }
+      },
+      "zoom_limits": {
+        "before": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.06279777765028702
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 0
+          }
+        ],
+        "after": [
+          {
+            "scale": 5000,
+            "expected": 5000,
+            "error_px": 0.06279777765028702
+          },
+          {
+            "scale": 0.020000001415610313,
+            "expected": 0.02,
+            "error_px": 0
+          }
+        ]
+      },
+      "svg_sha256": "794404b7bda4ff04d6ea73d8ffa9755367335185c50105c687d08bcdb072dd5d"
+    }
+  ],
+  "checks": "real DOM interactions, geometry hash, final screenshot",
+  "browser_version": "154.0.8037.98"
+}
