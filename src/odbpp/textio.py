@@ -37,6 +37,7 @@ __all__ = [
 ]
 
 _WS = re.compile(r"[ \t]+")
+_UNQUOTED_TOKEN = re.compile(r"[^ \t]+")
 
 #: A line that is just an identifier, e.g. a block keyword whose brace is on the
 #: following line (``BOOLEAN`` / ``{`` as used by ``misc/sysattr*``).
@@ -90,6 +91,10 @@ def tokenize(text: str, *, path: Optional[str] = None, line_no: Optional[int] = 
     ODB++ does not define an escape sequence for a quote inside a quoted string,
     so a quote simply ends the span.
     """
+    if "'" not in text:
+        return [Token(match.group(), False, match.start())
+                for match in _UNQUOTED_TOKEN.finditer(text)]
+
     tokens: list[Token] = []
     i = 0
     n = len(text)
@@ -145,6 +150,9 @@ def split_sections(line: str) -> list[str]:
     ``;<atr>=<value>,...;ID=<id>`` where some of the sub-fields are optional, so
     the split must be quote-aware: ``T ... 'a;b' 1`` is a single section.
     """
+    if "'" not in line:
+        return line.split(";")
+
     sections: list[str] = []
     buf: list[str] = []
     in_quote = False

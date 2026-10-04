@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
@@ -164,11 +165,21 @@ def _components(shape):
     return [] if shape.is_empty else ([shape] if shape.geom_type == "Polygon" else list(shape.geoms))
 
 
-def _topology(original, model):
+def _topology_source(original):
     from shapely.geometry import Polygon
-    sources, targets = _components(original), _components(model)
-    matches = [sum(s.covers(t.representative_point()) for t in targets) for s in sources]
+    sources = _components(original)
     holes = [Polygon(h) for s in sources for h in s.interiors]
+    cores = [(radius, _components(original.buffer(-radius)))
+             for radius in (0.03125, 0.1, 0.25, 0.5, 1.0)]
+    return sources, holes, cores
+
+
+def _topology(original, model, source=None):
+    from shapely.geometry import Polygon
+    sources, holes, eroded = source if source is not None else _topology_source(original)
+    targets = _components(model)
+    points = [t.representative_point() for t in targets]
+    matches = [sum(s.covers(point) for point in points) for s in sources]
     model_holes = [Polygon(h) for t in targets for h in t.interiors]
     hole_matches = [sum(m.covers(h) for m in model_holes) for h in holes]
     positive = all(len(_components(t.buffer(-1e-7))) == 1 for t in targets)
@@ -176,10 +187,9 @@ def _topology(original, model):
     # geometric core, including terminal branches within a single source island.
     # These scales are physical millimetres, entirely independent of sampling.
     core_checks = []
-    for radius in (0.03125, 0.1, 0.25, 0.5, 1.0):
-        cores = _components(original.buffer(-radius))
-        kept = [not c.intersection(model).is_empty and c.intersection(model).area > 1e-10
-                for c in cores]
+    for radius, cores in eroded:
+        overlaps = [c.intersection(model) for c in cores]
+        kept = [not overlap.is_empty and overlap.area > 1e-10 for overlap in overlaps]
         core_checks.append({"erosion_mm":radius,"cores":len(cores),"retained":sum(kept)})
     core_preserved = all(c["cores"] == c["retained"] for c in core_checks)
     return {"original_components": len(sources), "model_components": len(targets),
@@ -204,24 +214,43 @@ def _intersect_spans(a, b):
 
 
 def _crossings(rings, x):
-    ys = []
-    for ring in rings:
-        pts = tuple(ring.points)
-        for (x0,y0),(x1,y1) in zip(pts, pts[1:]+pts[:1]):
-            if (x0 <= x) != (x1 <= x):
-                ys.append(y0+(y1-y0)*(x-x0)/(x1-x0))
+    edges = [(x0,y0,x1,y1) for ring in rings
+             for (x0,y0),(x1,y1) in zip(ring.points,ring.points[1:]+ring.points[:1])]
+    return _edge_crossings(edges,x)
+
+
+def _edge_crossings(edges, x):
+    ys = [y0+(y1-y0)*(x-x0)/(x1-x0) for x0,y0,x1,y1 in edges
+          if (x0 <= x) != (x1 <= x)]
     ys.sort()
     return list(zip(ys[::2], ys[1::2]))
 
 
-def _envelope(region, a, b, pitch, origin, orthogonal):
+class _ProfileIndex:
+    """Immutable physical profile events; independent of any raster."""
+
+    def __init__(self, region):
+        self.vertices = sorted({x for ring in region.rings for x,y in ring.points})
+        self.edges = sorted(
+            [(min(x0,x1),max(x0,x1),(x0,y0,x1,y1)) for ring in region.rings
+             for (x0,y0),(x1,y1) in zip(ring.points,ring.points[1:]+ring.points[:1])
+             if x0 != x1], key=lambda edge:edge[0])
+        self.starts = [edge[0] for edge in self.edges]
+
+    def slab(self, a, b):
+        events = [a]+self.vertices[bisect_right(self.vertices,a):bisect_left(self.vertices,b)]+[b]
+        edges = [edge for low,high,edge in self.edges[:bisect_left(self.starts,b)] if high > a]
+        return events,edges
+
+
+def _envelope(region, a, b, pitch, origin, orthogonal, index=None):
     # Extrema at every vertex and both slab limits; edges are affine between
     # events. The common cross-section is conservative over the entire slab.
-    events = sorted({a,b} | {x for r in region.rings for x,y in r.points if a < x < b})
+    events,edges = (index or _ProfileIndex(region)).slab(a,b)
     spans = None
     for left,right in zip(events, events[1:]):
         for x in (left + (right-left)*1e-8, right - (right-left)*1e-8):
-            value = _crossings(region.rings,x)
+            value = _edge_crossings(edges,x)
             spans = value if spans is None else _intersect_spans(spans,value)
     out = []
     for low, high in spans or []:
@@ -243,7 +272,7 @@ def _pack(bands):
     return [Rect(a,l,b,h) for a,b,spans in merged for l,h in spans]
 
 
-def _coarsen(envelopes, original, allowed, step, origin):
+def _coarsen(envelopes, original, allowed, step, origin, topology_source=None):
     """Spend boundary-loss budget to reduce globally propagated axis lines.
 
     Every candidate is a subset of the already inscribed model. Narrow spans
@@ -251,6 +280,9 @@ def _coarsen(envelopes, original, allowed, step, origin):
     """
     from shapely.geometry import box
     from shapely.ops import unary_union
+
+    if topology_source is None:
+        topology_source = _topology_source(original)
 
     def packed(bands):
         rects = _pack(bands)
@@ -266,7 +298,7 @@ def _coarsen(envelopes, original, allowed, step, origin):
         _, model = packed(bands)
         return (original.area - model.area <= allowed + 1e-8
                 and model.difference(original).area <= 1e-8
-                and _topology(original, model)["preserved"])
+                and _topology(original, model, topology_source)["preserved"])
 
     before = score(envelopes)
     chosen = envelopes
@@ -360,6 +392,8 @@ def rectify_region(region, options=None, *, diagnostics=None):
         diags.error(RECTIFY_EMPTY_PROFILE,"empty profile")
         return RectifyResult([],step,0,0,0,0,0,False)
     original = profile_shape(region)
+    topology_source = _topology_source(original)
+    profile_index = _ProfileIndex(region)
     x0,y0,x1,y1 = original.bounds
     if opts.tolerance_mm is None:
         basis = opts.basis_mm or original.bounds
@@ -377,10 +411,10 @@ def rectify_region(region, options=None, *, diagnostics=None):
     allowed = max(opts.max_absolute_area_error_mm2,opts.max_relative_area_error*original.area)
     history = []
     for iteration in range(opts.max_refinement_rounds+1):
-        envelopes = [(a,b,_envelope(region,a,b,pitch,y0,orthogonal)) for a,b,pitch in bands]
+        envelopes = [(a,b,_envelope(region,a,b,pitch,y0,orthogonal,profile_index)) for a,b,pitch in bands]
         slab_rects = [Rect(a,l,b,h) for a,b,spans in envelopes for l,h in spans]
         model = unary_union([box(*r.bounds) for r in slab_rects])
-        topology = _topology(original,model)
+        topology = _topology(original,model,topology_source)
         lost = original.difference(model).area
         outside = model.difference(original).area
         history.append({"round":iteration,"band_count":len(bands),"lost_area_mm2":lost,
@@ -400,9 +434,9 @@ def rectify_region(region, options=None, *, diagnostics=None):
     coarsening = {}
     if topology["preserved"] and lost <= allowed and outside <= 1e-8:
         origin = (opts.basis_mm or original.bounds)[1]
-        envelopes, coarsening = _coarsen(envelopes, original, allowed, step, origin)
+        envelopes, coarsening = _coarsen(envelopes, original, allowed, step, origin, topology_source)
         model = unary_union([box(*r.bounds) for r in _pack(envelopes)])
-        topology = _topology(original,model)
+        topology = _topology(original,model,topology_source)
         lost = original.difference(model).area
         outside = model.difference(original).area
     rectangles = _pack(envelopes)

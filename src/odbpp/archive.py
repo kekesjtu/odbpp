@@ -77,6 +77,12 @@ class OdbArchive:
         self._dirs: set[str] = {""}
 
         self._open()
+        children: dict[str, set[str]] = {}
+        for member in self._files | self._dirs:
+            if member:
+                parent, name = posixpath.split(member)
+                children.setdefault(parent, set()).add(name)
+        self._children = {parent: tuple(sorted(names)) for parent, names in children.items()}
 
     # ------------------------------------------------------------- lifecycle
 
@@ -212,26 +218,7 @@ class OdbArchive:
     def list_dir(self, relpath: str = "") -> list[str]:
         """Immediate child names (files and directories) of *relpath*."""
         rel = _normalise(relpath)
-        prefix = rel + "/" if rel else ""
-        names: set[str] = set()
-
-        for member in self._files:
-            if not member.startswith(prefix):
-                continue
-            rest = member[len(prefix):]
-            if "/" in rest:
-                names.add(rest.split("/", 1)[0])
-            else:
-                names.add(rest)
-
-        for d in self._dirs:
-            if not d.startswith(prefix):
-                continue
-            rest = d[len(prefix):]
-            if rest and "/" not in rest:
-                names.add(rest)
-
-        return sorted(names)
+        return list(self._children.get(rel, ()))
 
     @property
     def files(self) -> list[str]:

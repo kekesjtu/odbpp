@@ -657,19 +657,28 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
 
     panel_y = margin + header_h + title_h
     bar_y = panel_y + panel_h + 10
+    # Positions, palette triples and gradient are shared by the three panels.
+    rectangles = [(round((xa-data.x_edges[0])*scale),
+                   panel_h-round((yb-data.y_edges[0])*scale),
+                   round((xb-data.x_edges[0])*scale),
+                   panel_h-round((ya-data.y_edges[0])*scale))
+                  for xa,ya,xb,yb in series.rectangles]
+    colours = [tuple(palette[3*level:3*level+3]) for level in range(_DATA_LEVELS+1)]
+    gradient = bytearray(3 * panel_w)
+    for column in range(panel_w):
+        t = 0.0 if panel_w < 2 else column / (panel_w - 1)
+        level = int(t * (_DATA_LEVELS - 1) + 0.5)
+        gradient[3 * column:3 * column + 3] = palette[3 * level:3 * level + 3]
+    gradient = bytes(gradient)
     for panel, (title, field) in enumerate(PANELS):
         panel_x = margin + panel * (panel_w + gap)
         draw_text(canvas, panel_x, margin + header_h, f"{title}  W/(m.K)",
                   options.text_colour, font)
         canvas.rect(panel_x,panel_y,panel_x+panel_w,panel_y+panel_h,NO_DATA_COLOUR)
         values = series.values(field)
-        for cell, (xa,ya,xb,yb) in enumerate(series.rectangles):
-            left = round((xa-data.x_edges[0])*scale)
-            right = round((xb-data.x_edges[0])*scale)
-            top = panel_h-round((yb-data.y_edges[0])*scale)
-            bottom = panel_h-round((ya-data.y_edges[0])*scale)
+        for cell, (left,top,right,bottom) in enumerate(rectangles):
             level = _quantise(values[cell], *bounds)
-            colour = tuple(palette[3*level:3*level+3])
+            colour = colours[level]
             canvas.rect(panel_x+left,panel_y+top,panel_x+right,panel_y+bottom,colour)
             if options.draw_grid and right>left and bottom>top:
                 canvas.frame(panel_x+left,panel_y+top,panel_x+right,panel_y+bottom,
@@ -678,13 +687,8 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
                      options.frame_colour)
 
         # Colour bar, labelled with the numeric ends of this scale.
-        gradient = bytearray(3 * panel_w)
-        for column in range(panel_w):
-            t = 0.0 if panel_w < 2 else column / (panel_w - 1)
-            level = int(t * (_DATA_LEVELS - 1) + 0.5)
-            gradient[3 * column:3 * column + 3] = palette[3 * level:3 * level + 3]
         for y in range(bar_y, bar_y + bar_h):
-            canvas.blit_row(y, panel_x, bytes(gradient))
+            canvas.blit_row(y, panel_x, gradient)
         canvas.frame(panel_x, bar_y, panel_x + panel_w, bar_y + bar_h,
                      options.frame_colour)
         low = _format(bounds[0])

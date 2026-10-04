@@ -205,31 +205,21 @@ class LayerMask:
                 f"image size must be positive, got {width}x{height}")
         px, py = self.px, self.py
         pixels = self.pixels
-        # (source column, how many output columns it fills), in order.
-        runs: list[tuple[int, int]] = []
-        for index in range(width):
-            source = (index * px) // width
-            if runs and runs[-1][0] == source:
-                runs[-1] = (source, runs[-1][1] + 1)
-            else:
-                runs.append((source, 1))
-        cache: dict[int, bytes] = {}
+        import numpy as np
+        # Keep the exact integer nearest-neighbour rule. NumPy gathers bytes
+        # without a Python slice assignment for every output pixel.
+        columns = (np.fromiter(((index * px) // width for index in range(width)),
+                              dtype=np.intp, count=width) if width != px else None)
+        source_pixels = np.frombuffer(pixels, dtype=np.uint8).reshape(py, px)
+        cached_source = -1
+        line = b""
         for row in range(height):
             source = (row * py) // height
-            line = cache.get(source)
-            if line is None:
-                start = (py - 1 - source) * px
-                source_line = pixels[start:start + px]
-                if width == px:
-                    line = bytes(source_line)
-                else:
-                    out = bytearray(width)
-                    offset = 0
-                    for column, run in runs:
-                        out[offset:offset + run] = source_line[column:column + 1] * run
-                        offset += run
-                    line = bytes(out)
-                cache[source] = line
+            if source != cached_source:
+                source_line = source_pixels[py - 1 - source]
+                line = (source_line if columns is None else source_line[columns]).tobytes()
+                # Source rows are monotonic; only the last one can recur.
+                cached_source = source
             yield line
 
     def tone_counts(self) -> dict[str, int]:

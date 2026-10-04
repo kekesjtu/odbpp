@@ -464,34 +464,29 @@ class _Scanline:
     """
 
     def __init__(self, edges: Sequence[tuple[float, float, float, float]]) -> None:
-        self._edges = edges
-        self._order = sorted(
-            range(len(edges)),
-            key=lambda i: min(edges[i][1], edges[i][3]),
-        )
+        # Horizontal edges never cross. Precompute bounds and deltas once,
+        # retaining the original interpolation arithmetic (no slope rounding).
+        self._edges = sorted(
+            ((min(y1, y2), max(y1, y2), x1, y1, x2-x1, y2-y1)
+             for x1, y1, x2, y2 in edges if y1 != y2), key=lambda e: e[0])
         self._cursor = 0
-        self._active: list[int] = []
+        self._active: list[tuple] = []
 
     def spans_at(self, y: float) -> list[tuple[float, float]]:
         edges = self._edges
-        order = self._order
-        while self._cursor < len(order):
-            index = order[self._cursor]
-            if min(edges[index][1], edges[index][3]) <= y:
-                self._active.append(index)
+        while self._cursor < len(edges):
+            edge = edges[self._cursor]
+            if edge[0] <= y:
+                self._active.append(edge)
                 self._cursor += 1
             else:
                 break
-        active = [i for i in self._active
-                  if max(edges[i][1], edges[i][3]) > y]
+        active = [edge for edge in self._active if edge[1] > y]
         self._active = active
         crossings: list[float] = []
-        for index in active:
-            x1, y1, x2, y2 = edges[index]
-            if (y1 <= y) == (y2 <= y):
-                continue
-            t = (y - y1) / (y2 - y1)
-            crossings.append(x1 + (x2 - x1) * t)
+        for low, high, x1, y1, dx, dy in active:
+            t = (y - y1) / dy
+            crossings.append(x1 + dx * t)
         if len(crossings) < 2:
             return []
         crossings.sort()
@@ -515,7 +510,8 @@ def _merge_spans(spans):
 
 def _evaluate_layer(name, type_name, domain, black, drill_names, z_start, z_end,
                     thickness_known, materials, grid, x_axis, y_axis, diagnostics,
-                    emit, *, warn_partial, mask=None, step_domain=None):
+                    emit, *, warn_partial, mask=None, step_domain=None,
+                    sampling_plan=None):
     """Independent full-board scanlines; integrate complete Cartesian cells."""
     import numpy as np
     from .rectify import _intersect_spans
@@ -538,19 +534,18 @@ def _evaluate_layer(name, type_name, domain, black, drill_names, z_start, z_end,
     emitted=no_pixel=0
     minimum_samples=(grid.mesh_configuration or {}).get("minimum_samples_per_axis",1)
     # Row-prefix integration avoids rescanning wide regions for each global cell.
-    bands={}
-    for cell in grid.cells: bands.setdefault(cell.j,[]).append(cell)
-    for band_cells in bands.values():
-        b0,b1=y_axis.range_for(band_cells[0].rect.y0,band_cells[0].rect.y1)
-        band=pixels[b0:b1]
+    if sampling_plan is None:
+        sampling_plan = _sampling_plan(grid, x_axis, y_axis)
+    for b0, b1, samples, xlo, xhi in sampling_plan:
+        band=pixels[b0:b1,xlo:xhi]
         ink=band == LayerMask.BLACK
-        prefix=np.zeros((b1-b0,x_axis.count+1),dtype=np.uint32)
+        prefix=np.zeros((b1-b0,xhi-xlo+1),dtype=np.uint32)
         np.cumsum(ink,axis=1,dtype=np.uint32,out=prefix[:,1:])
         col_counts=ink.sum(axis=0,dtype=np.uint32)
         outside=(band == LayerMask.OUTSIDE).any(axis=0)
-        for cell in band_cells:
-            a0,a1=x_axis.range_for(cell.rect.x0,cell.rect.x1)
+        for cell, a0, a1 in samples:
             cols,rows=a1-a0,b1-b0
+            a0, a1 = a0-xlo, a1-xlo
             if min(cols,rows)<minimum_samples or outside[a0:a1].any():
                 no_pixel+=1
                 if no_pixel<=20:
@@ -574,6 +569,24 @@ def _evaluate_layer(name, type_name, domain, black, drill_names, z_start, z_end,
     if no_pixel>20:
         diagnostics.error(GRID_CELL_WITHOUT_PIXEL,f"layer {name!r}: {no_pixel} cells have insufficient sampling; first 20 locations reported")
     return emitted,0,no_pixel
+
+
+def _sampling_plan(grid, x_axis, y_axis):
+    """Reuse only pixel indices for a fixed domain grid and fixed raster."""
+    bands = {}
+    x_ranges = {}
+    for cell in grid.cells:
+        if cell.i not in x_ranges:
+            x_ranges[cell.i] = x_axis.range_for(cell.rect.x0, cell.rect.x1)
+        a0, a1 = x_ranges[cell.i]
+        bands.setdefault(cell.j, []).append((cell, a0, a1))
+    plan = []
+    for samples in bands.values():
+        first = samples[0][0]
+        b0, b1 = y_axis.range_for(first.rect.y0, first.rect.y1)
+        plan.append((b0, b1, samples, min(s[1] for s in samples),
+                     max(s[2] for s in samples)))
+    return plan
 
 
 def plan_geometry(step, options, diagnostics):
@@ -648,8 +661,8 @@ def plan_geometry(step, options, diagnostics):
     rectangles=sorted(rectangles,key=lambda r:r.bounds)
     membership={key:[] for key in models}
     for rid,r in enumerate(rectangles):
+        shape=box(*r.bounds)
         for key,model in models.items():
-            shape=box(*r.bounds)
             if model.covers(shape): membership[key].append(rid)
             elif model.intersection(shape).area > 1e-8:
                 diagnostics.error("equiv.domain_partition",f"domain {key!r} partially covers region {rid} {r.bounds}")
@@ -755,6 +768,9 @@ def equivalence_from_document(
     }
     layer_materials: dict[str, ResolvedMaterials] = {}
     cell_without_pixel = 0
+    step_domain = _region_from_polygons(domains["step_profile"].get("polygons"))
+    domain_regions = {}
+    domain_sampling = {}
 
     for row in step.get("stackup") or ():
         name = row.get("name", "?")
@@ -806,7 +822,9 @@ def equivalence_from_document(
                         f"substituting its copper polygons")
             continue
 
-        domain = _region_from_polygons(domain_doc.get("polygons"))
+        if domain_id not in domain_regions:
+            domain_regions[domain_id] = _region_from_polygons(domain_doc.get("polygons"))
+        domain = domain_regions[domain_id]
         if not domain:
             report.status = "failed"
             report.reason = "computational domain is empty"
@@ -872,15 +890,21 @@ def equivalence_from_document(
             )
         report.drill_overlays = [d.name for d in covering]
         black = [pattern] + [d.region for d in covering]
+        if domain_id not in domain_sampling:
+            members = set(membership.get(domain_id, []))
+            domain_grid = replace(grid, cells=[c for c in grid.cells if c.region_id in members])
+            domain_sampling[domain_id] = (domain_grid, _sampling_plan(domain_grid, x_axis, y_axis))
+        domain_grid, sampling_plan = domain_sampling[domain_id]
         mask = LayerMask(px, py) if mask_sink is not None else None
         cell_count, partial, no_pixel = _evaluate_layer(
             name, type_name, domain, black, report.drill_overlays,
             z_start, z_end, thickness_known, materials,
-            replace(grid, cells=[c for c in grid.cells if c.region_id in membership.get(domain_id,[])]),
+            domain_grid,
             x_axis, y_axis, diags, emit,
             warn_partial=options.warn_partial_domains,
             mask=mask,
-            step_domain=_region_from_polygons(domains["step_profile"].get("polygons")),
+            step_domain=step_domain,
+            sampling_plan=sampling_plan,
         )
         report.status = "equivalent"
         report.cell_count = cell_count

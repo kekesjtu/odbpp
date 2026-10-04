@@ -225,6 +225,8 @@ class Expander:
         self._stackups: dict[str, Stackup] = {}
         self._drill_regions: dict[tuple[str, str], Optional[Region]] = {}
         self._warned: set[str] = set()
+        # Only live during a polarity run; public symbol geometries are mutable.
+        self._pad_regions: Optional[dict[int, tuple[SurfaceGeometry, Region]]] = None
 
     # ------------------------------------------------------------- stackup
 
@@ -386,12 +388,20 @@ class Expander:
                     f"{record.resize_mm:g} mm (spec p.170 prose and its own example "
                     f"disagree by 1000x, and no case in cases/ exercises it)",
                 )
+        cache = self._pad_regions
+        entry = cache.get(id(geometry)) if cache is not None else None
+        if entry is None:
             region = region_from_geometry(geometry, self.options.tessellation)
-            region = self._offset(region, record.resize_mm / 2.0)
+            if cache is not None:
+                cache[id(geometry)] = (geometry, region)
         else:
-            region = region_from_geometry(geometry, self.options.tessellation)
+            region = entry[1]
+        if record.resize_mm:
+            region = self._offset(region, record.resize_mm / 2.0)
 
-        return self._place(region, origin, record.orientation)
+        placed = self._place(region, origin, record.orientation)
+        # _place's identity fast path must not expose the run's cached list.
+        return Region(list(placed.rings)) if cache is not None and placed is region else placed
 
     # ------------------------------------------------------------ sweeps
 
@@ -502,6 +512,15 @@ class Expander:
         polarity, so the union is commutative and the batch order is
         unobservable.
         """
+        previous = self._pad_regions
+        self._pad_regions = {}
+        try:
+            return self._run_region(records, features, depth=depth)
+        finally:
+            self._pad_regions = previous
+
+    def _run_region(self, records: Sequence[Feature], features: FeatureFile, *,
+                    depth: int) -> Region:
         parts: list[Region] = []
         strokes: dict[tuple, _StrokeBatch] = {}
 
