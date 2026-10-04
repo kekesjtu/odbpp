@@ -532,7 +532,7 @@ class TestHeatmapRendering:
 
     def test_one_image_per_layer_with_three_directions(self, tmp_path):
         report = self._report(tmp_path, document([
-            {"name": "CU", "polygons": [rect(0, 0, 10, 10)]},
+            {"name": "CU", "polygons": [rect(0, 5, 10, 10)]},
             {"name": "FR", "type": "DIELECTRIC", "polygons": []},
         ]))
         assert [image.layer for image in report.images] == ["CU", "FR"]
@@ -546,6 +546,17 @@ class TestHeatmapRendering:
         for _, bar in boxes:
             assert near(sample(bar, 0.0, 0.5, rows), RAMP_LOW)
             assert near(sample(bar, 1.0, 0.5, rows), RAMP_HIGH)
+        # The standalone images must contain the exact overview data, including
+        # its orientation and scale, with no second sampling or interpolation.
+        for direction, (body, bar) in zip(("kx", "ky", "kz"), boxes):
+            standalone = decode_png(report.images[0].direction_paths[direction])[3]
+            columns, lines = frames(standalone, HeatmapOptions().frame_colour)
+            assert len(columns) == 1
+            x0, x1 = columns[0]
+            top, bottom = max(lines, key=lambda run: run[1] - run[0])
+            single_body = (x0 + 1, top + 1, x1 - 1, bottom - 1)
+            for u, v in ((0.25, 0.25), (0.5, 0.99), (0.75, 0.01)):
+                assert sample(single_body, u, v, standalone) == sample(body, u, v, rows)
 
     def test_values_map_to_the_ramp_in_board_order(self, tmp_path):
         # Copper on the top half: the top row of cells is the ramp maximum, the
@@ -564,9 +575,10 @@ class TestHeatmapRendering:
         image = report.images[0]
         assert image.vmin == image.vmax == pytest.approx(385.0)
         rows = decode_png(image.path)[3]
-        for body, _ in panels(rows, HeatmapOptions().frame_colour):
+        for body, bar in panels(rows, HeatmapOptions().frame_colour):
             assert not near(sample(body, 0.5, 0.5, rows), RAMP_LOW)
             assert not near(sample(body, 0.5, 0.5, rows), RAMP_HIGH)
+            assert sample(bar, 0.0, 0.5, rows) == sample(bar, 1.0, 0.5, rows)
 
     def test_cells_the_layer_does_not_cover_are_left_blank(self, tmp_path):
         # The panel spans the grid of the file, so a cell that *some* layer
@@ -668,6 +680,11 @@ class TestGallery:
         assert "masks/CU.png" in text
         assert "drill_model=solid_copper" in text
         assert "z " in text
+        assert "class='heatmaps'" in text
+        assert "auto-fit" in text
+        for direction in ("kx", "ky", "kz"):
+            assert f"heatmaps/directions/CU.{direction}.png" in text
+        assert "<details class='mask'>" in text
 
 
 # ---------------------------------------------------------------------------

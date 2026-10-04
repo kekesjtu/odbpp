@@ -41,6 +41,7 @@ from typing import Mapping, Optional, Sequence
 from .errors import OdbError
 from .png import (
     Canvas,
+    FONT_ADVANCE,
     FONT_HEIGHT,
     Rgb,
     draw_text,
@@ -566,6 +567,7 @@ class HeatmapImage:
     vmin: float
     vmax: float
     cells: int
+    direction_paths: dict[str, str] = field(default_factory=dict)
 
 
 def _format(value: float) -> str:
@@ -630,33 +632,40 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
     channels = _channel_tables(palette)
     column_source = _column_source(xs)
 
-    font = options.font_scale
-    line_h = FONT_HEIGHT * font + 6
-    bar_h = max(10, 4 * font)
-    header_h = 2 * line_h
-    title_h = line_h
-    bar_block = 10 + bar_h + 4 + line_h
-    margin = options.margin_px
-    gap = options.gap_px
+    # Text must remain readable when the overview is scaled to a browser page.
+    font = max(options.font_scale, min(8, round(panel_w / 240)))
+    line_h = FONT_HEIGHT * font + 4 * font
+    bar_h = max(10, 5 * font)
+    margin = max(options.margin_px, 4 * font)
+    gap = max(options.gap_px, 10 * font)
+    low, high = (_format(value) for value in bounds)
+    tile_w = max(panel_w, text_width("kx   W/(m.K)", font),
+                 text_width(low + "    " + high, font))
+    header = [f"L{index}/{count}   n/a = no cell"]
+    # Wrap metadata too: a tall, narrow board must not clip its Z interval.
+    def wrap(text: str) -> list[str]:
+        capacity = max(1, (tile_w + font) // (FONT_ADVANCE * font))
+        return [text[start:start + capacity]
+                for start in range(0, len(text), capacity)]
 
-    content_w = 3 * panel_w + 2 * gap
+    header = wrap(header[0]) + wrap(_z_label(series))
+    header_h = (len(header) + 1) * line_h
+    title_h = line_h
+    bar_gap = 4 * font
+    bar_block = bar_gap + bar_h + 2 * font + line_h
+
+    content_w = 3 * tile_w + 2 * gap
     width = margin * 2 + content_w
     height = margin * 2 + header_h + title_h + panel_h + bar_block
     canvas = Canvas(width, height, options.background)
 
     # Header: which layer of how many, and the absolute Z the cells belong to.
-    cursor = margin
-    draw_text(canvas, cursor, margin, f"L{index}/{count}", options.text_colour, font)
-    cursor += text_width(f"L{index}/{count}", font) + 16
-    swatch = FONT_HEIGHT * font - 2
-    canvas.rect(cursor, margin, cursor + swatch, margin + swatch, NO_DATA_COLOUR)
-    canvas.frame(cursor, margin, cursor + swatch, margin + swatch, options.frame_colour)
-    draw_text(canvas, cursor + swatch + 6, margin, "n/a", options.text_colour, font)
-    draw_text(canvas, margin, margin + line_h, _z_label(series),
-              options.text_colour, font)
+    for line, label in enumerate(header):
+        draw_text(canvas, margin, margin + line * line_h, label,
+                  options.text_colour, font)
 
     panel_y = margin + header_h + title_h
-    bar_y = panel_y + panel_h + 10
+    bar_y = panel_y + panel_h + bar_gap
     # Positions, palette triples and gradient are shared by the three panels.
     rectangles = [(round((xa-data.x_edges[0])*scale),
                    panel_h-round((yb-data.y_edges[0])*scale),
@@ -667,13 +676,18 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
     gradient = bytearray(3 * panel_w)
     for column in range(panel_w):
         t = 0.0 if panel_w < 2 else column / (panel_w - 1)
-        level = int(t * (_DATA_LEVELS - 1) + 0.5)
+        level = (_DATA_LEVELS // 2 if bounds[0] == bounds[1]
+                 else int(t * (_DATA_LEVELS - 1) + 0.5))
         gradient[3 * column:3 * column + 3] = palette[3 * level:3 * level + 3]
     gradient = bytes(gradient)
     for panel, (title, field) in enumerate(PANELS):
-        panel_x = margin + panel * (panel_w + gap)
-        draw_text(canvas, panel_x, margin + header_h, f"{title}  W/(m.K)",
+        tile_x = margin + panel * (tile_w + gap)
+        panel_x = tile_x + (tile_w - panel_w) // 2
+        draw_text(canvas, tile_x, margin + header_h, title,
                   options.text_colour, font)
+        unit = "W/(m.K)"
+        draw_text(canvas, tile_x + tile_w - text_width(unit, font),
+                  margin + header_h, unit, options.text_colour, font)
         canvas.rect(panel_x,panel_y,panel_x+panel_w,panel_y+panel_h,NO_DATA_COLOUR)
         values = series.values(field)
         for cell, (left,top,right,bottom) in enumerate(rectangles):
@@ -691,15 +705,38 @@ def render_layer_heatmap(series: LayerSeries, cols: array, rows: array,
             canvas.blit_row(y, panel_x, gradient)
         canvas.frame(panel_x, bar_y, panel_x + panel_w, bar_y + bar_h,
                      options.frame_colour)
-        low = _format(bounds[0])
-        high = _format(bounds[1])
-        draw_text(canvas, panel_x, bar_y + bar_h + 4, low, options.text_colour, font)
-        draw_text(canvas, panel_x + panel_w - text_width(high, font),
-                  bar_y + bar_h + 4, high, options.text_colour, font)
+        label_y = bar_y + bar_h + 2 * font
+        draw_text(canvas, tile_x, label_y, low, options.text_colour, font)
+        if bounds[0] != bounds[1]:
+            draw_text(canvas, tile_x + tile_w - text_width(high, font),
+                      label_y, high, options.text_colour, font)
+            middle = _format((bounds[0] + bounds[1]) / 2)
+            if tile_w > text_width(low + middle + high + "        ", font):
+                draw_text(canvas, tile_x + (tile_w - text_width(middle, font)) // 2,
+                          label_y, middle, options.text_colour, font)
 
     canvas.save(path)
+    # Copy the exact panel pixels, rather than render/aggregate the data again.
+    # Each direction keeps its own metadata, units and the same shared scale.
+    direction_dir = os.path.join(os.path.dirname(path), "directions")
+    os.makedirs(direction_dir, exist_ok=True)
+    direction_paths = {}
+    for panel, (title, _) in enumerate(PANELS):
+        single = Canvas(tile_w + 2 * margin, height, options.background)
+        tile_x = margin + panel * (tile_w + gap)
+        for y in range(margin + header_h, height):
+            start = (y * width + tile_x) * 3
+            single.blit_row(y, margin, canvas.pixels[start:start + tile_w * 3])
+        for line, label in enumerate(header):
+            draw_text(single, margin, margin + line * line_h, label,
+                      options.text_colour, font)
+        target = os.path.join(direction_dir,
+                              f"{os.path.splitext(os.path.basename(path))[0]}.{title}.png")
+        single.save(target)
+        direction_paths[title] = target
     return HeatmapImage(layer=series.name, path=path, index=index, count=count,
-                        vmin=bounds[0], vmax=bounds[1], cells=len(series))
+                        vmin=bounds[0], vmax=bounds[1], cells=len(series),
+                        direction_paths=direction_paths)
 
 
 @dataclass
@@ -769,10 +806,11 @@ class GalleryEntry:
     cells: int = 0
     heatmap: Optional[str] = None
     mask: Optional[str] = None
+    directions: dict[str, str] = field(default_factory=dict)
 
 
 _GALLERY_STYLE = (
-    "body{max-width:1100px;margin:40px auto;padding:0 20px;"
+    "body{max-width:1600px;margin:32px auto;padding:0 24px;"
     "font:15px/1.6 system-ui,sans-serif;color:#17253b;background:#f7f9fc}"
     "h1{font-size:24px;margin:0 0 8px}h2{font-size:17px;margin:26px 0 4px}"
     ".meta{color:#465569;font-size:13px;margin:0 0 8px}"
@@ -783,6 +821,11 @@ _GALLERY_STYLE = (
     "text-decoration:none}nav a:hover{text-decoration:underline}"
     "code{background:#eef2f8;padding:1px 4px;border-radius:3px}"
     "p.note{color:#465569}"
+    ".heatmaps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px}"
+    "figure{margin:0;min-width:0}figcaption{font-weight:600;margin:12px 0 6px}"
+    "figure a{display:block;color:#135baf}figure img{width:100%;box-sizing:border-box}"
+    ".mask img{max-height:360px;max-width:100%;width:auto}"
+    "summary{cursor:pointer;color:#135baf;padding:10px 0}"
 )
 
 
@@ -797,9 +840,11 @@ def write_gallery_html(path: str, title: str, entries: Sequence[GalleryEntry],
         f"<title>{html.escape(title)}</title>",
         f"<style>{_GALLERY_STYLE}</style>",
         f"<h1>{html.escape(title)}</h1>",
-        "<p class='note'>每层一张图：材料掩膜（光栅化的黑/白结果，灰=该层在此无计算域）"
+        "<p class='note'>逐层展示材料掩膜（光栅化的黑/白结果，灰=该层在此无计算域）"
         "与该层的 kx/ky/kz 等效热导率热图。数值与单位以 MaterialMap.csv 与其 meta 为准，"
         "本页只便于人眼核对。</p>",
+        "<p class='note'>热图按方向独立展示，窄屏自动换行；点击图像可查看原始 PNG。"
+        "三个方向使用同一色标，灰色表示该层在此无单元。</p>",
     ]
     if note:
         lines.append(f"<p class='note'>{html.escape(note)}</p>")
@@ -821,9 +866,22 @@ def write_gallery_html(path: str, title: str, entries: Sequence[GalleryEntry],
         meta.append(f"{entry.cells} cell(s)")
         lines.append("<p class='meta'>" + " &middot; ".join(meta) + "</p>")
         if entry.mask:
-            lines.append(f"<img src='{html.escape(entry.mask)}' "
-                         f"alt='{html.escape(entry.name)} material mask'>")
-        if entry.heatmap:
+            lines.append("<details class='mask'><summary>材料掩膜（点击展开）</summary>")
+            lines.append(f"<a href='{html.escape(entry.mask, quote=True)}'><img src='{html.escape(entry.mask, quote=True)}' "
+                         f"alt='{html.escape(entry.name, quote=True)} material mask' loading='lazy'></a></details>")
+        if entry.directions:
+            lines.append("<div class='heatmaps'>")
+            for direction, _ in PANELS:
+                if direction not in entry.directions:
+                    continue
+                href = html.escape(entry.directions[direction], quote=True)
+                alt = html.escape(f"{entry.name} {direction} heat map", quote=True)
+                lines.append(f"<figure><figcaption>{direction} · W/(m·K)</figcaption>"
+                             f"<a href='{href}'><img src='{href}' alt='{alt}' loading='lazy'></a></figure>")
+            lines.append("</div>")
+        if entry.heatmap and entry.directions:
+            lines.append(f"<p><a href='{html.escape(entry.heatmap, quote=True)}'>打开三方向总览 PNG</a></p>")
+        elif entry.heatmap:
             lines.append(f"<img src='{html.escape(entry.heatmap)}' "
                          f"alt='{html.escape(entry.name)} kx ky kz heat maps'>")
         lines.append("</section>")
@@ -867,5 +925,7 @@ def gallery_entries(report: HeatmapReport, *,
             cells=image.cells,
             heatmap=href,
             mask=None if not masks else masks.get(image.layer),
+            directions={direction: os.path.relpath(path, gallery_dir or report.out_dir).replace(os.sep, "/")
+                        for direction, path in image.direction_paths.items()},
         ))
     return entries

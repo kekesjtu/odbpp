@@ -119,6 +119,14 @@ def existing_equivalence(directory: Path, preview: Path, *,
                            or (folder / name).stat().st_size == 0
                            for name in names)):
                 return None
+        directions = directory / "heatmaps" / "directions"
+        expected_directions = {f"{Path(name).stem}.{axis}.png"
+                               for name in names for axis in ("kx", "ky", "kz")}
+        if (directions.is_symlink() or not directions.is_dir()
+                or {p.name for p in directions.glob("*.png")} != expected_directions
+                or any((directions / name).stat().st_size == 0
+                       for name in expected_directions)):
+            return None
         return data
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
@@ -138,6 +146,16 @@ def prune_stale_images(directory: Path, layers: list[str]) -> None:
             if path.name not in expected:
                 print(f"prune  {path.relative_to(ROOT)}", flush=True)
                 path.unlink()
+    folder = directory / "heatmaps" / "directions"
+    if folder.is_symlink() or not folder.resolve().is_relative_to(root):
+        raise RuntimeError(f"refusing to clean images outside out/: {folder}")
+    expected_directions = {f"{Path(name).stem}.{axis}.png"
+                           for name in expected for axis in ("kx", "ky", "kz")}
+    for path in folder.glob("*.png"):
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            raise RuntimeError(f"refusing to clean image outside out/: {path}")
+        if path.name not in expected_directions:
+            path.unlink()
 
 
 def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
