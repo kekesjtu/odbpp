@@ -46,6 +46,23 @@ def peak_memory_bytes():
     return peak if sys.platform == "darwin" else peak * 1024
 
 
+def snapshot_source(ref, directory):
+    """Read a Git revision into scratch without switching the working tree."""
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "--verify", "--end-of-options", ref+"^{commit}"],
+        cwd=ROOT, text=True).strip()
+    names = subprocess.check_output(
+        ["git", "ls-tree", "-r", "--name-only", revision, "--", "src/odbpp"],
+        cwd=ROOT, text=True).splitlines()
+    if not names:
+        raise RuntimeError(f"no odbpp source in {ref}")
+    for name in names:
+        path = directory/name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(subprocess.check_output(["git", "show", revision+":"+name], cwd=ROOT))
+    return str((directory/"src").resolve())
+
+
 def worker(args):
     if args.source_root:
         sys.path.insert(0, str(Path(args.source_root).resolve()))
@@ -57,6 +74,7 @@ def worker(args):
     output = Path(args.output) / args.case[0]
     output.mkdir(parents=True, exist_ok=True)
     durations = {}
+    artefacts = []
 
     def timed(label, call):
         start = time.perf_counter()
@@ -69,6 +87,7 @@ def worker(args):
         job = timed("load", lambda: load_job(str(Path("cases") / case)))
         preview = timed("compose", lambda: build_step_preview(job))
         paths = timed("export", lambda: write_outputs(preview, job, str(output), per_layer_svg=True))
+        artefacts.extend(Path(p) for p in paths.all_paths())
         source = Path(paths.json)
     else:
         source = next(p for p in (ROOT / "out" / case).glob("*.json")
@@ -83,8 +102,9 @@ def worker(args):
         def sink(name, mask, pitch):
             nonlocal mask_time
             start = time.perf_counter()
-            write_layer_mask(mask, str(output / "masks" / (unique_image_stem(name, used) + ".png")),
-                             pixel_step_mm=pitch)
+            path = output / "masks" / (unique_image_stem(name, used) + ".png")
+            write_layer_mask(mask, str(path), pixel_step_mm=pitch)
+            artefacts.append(path)
             mask_time += time.perf_counter() - start
 
         result = timed("equivalent_and_masks", lambda: equivalence_from_document(
@@ -98,15 +118,17 @@ def worker(args):
         # These two fields identify implementation/output location, not PCB behaviour.
         metadata.pop("pipeline_fingerprint", None)
         metadata.get("source", {}).pop("path", None)
-        (output / (source.stem + ".MaterialMap.meta.json")).write_text(
+        meta = output / (source.stem + ".MaterialMap.meta.json")
+        meta.write_text(
             json.dumps(metadata, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-        timed("heatmaps", lambda: render_heatmaps(str(csv), str(output / "heatmaps")))
+        images = timed("heatmaps", lambda: render_heatmaps(str(csv), str(output / "heatmaps")))
+        artefacts.extend([csv, meta] + [Path(image.path) for image in images.images])
         record.update(fatal=result.fatal, regions=len(result.rectification.rectangles),
                       cells=result.cell_count, raster=[result.raster_px, result.raster_py])
     record["peak_memory_bytes"] = peak_memory_bytes()
     record["files"] = {p.relative_to(output).as_posix(): {
         "bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
-        for p in sorted(output.rglob("*")) if p.is_file() and p.suffix != ".prof"}
+        for p in sorted(artefacts)}
     return record
 
 
@@ -117,12 +139,15 @@ def main():
     parser.add_argument("--mode", choices=("all", "preview", "equivalent"), default="all")
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--source-root")
+    parser.add_argument("--source-ref", help="save and benchmark src/ from this Git revision")
     parser.add_argument("--compare")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be positive")
+    if args.source_ref and args.source_root:
+        parser.error("--source-ref and --source-root are mutually exclusive")
     if args.worker:
         if args.profile:
             profiler = cProfile.Profile()
@@ -134,6 +159,8 @@ def main():
         return
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
+    if args.source_ref:
+        args.source_root = snapshot_source(args.source_ref, output/"source")
     baseline = json.loads(Path(args.compare).read_text(encoding="utf-8")) if args.compare else None
     report = {"mode": args.mode, "profiled": args.profile, "cases": {}}
     for case in args.case or CASES:

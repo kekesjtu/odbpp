@@ -28,6 +28,7 @@ by any layer, so eagerly expanding the library is 13x wasted work.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from dataclasses import dataclass
 from typing import Iterable, Optional, Union
 
@@ -243,6 +244,7 @@ def _strip_unit_markers(name: str) -> tuple[str, Optional[UnitSystem]]:
     return " ".join(tokens), unit
 
 
+@lru_cache(maxsize=4096)
 def parse_standard_symbol(
     name: str,
     unit: UnitSystem = UnitSystem.MM,

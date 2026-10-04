@@ -101,3 +101,70 @@ def test_pad_cache_ends_with_run_and_returned_regions_are_independent(monkeypatc
     a.rings.clear()
     assert expander.record_region(pad,features).area == 1
     assert len(calls) == 4
+
+
+def test_profile_probe_rounding_at_large_coordinates_keeps_endpoint_edges():
+    from odbpp.clipper import Region, Ring
+    source = Region([Ring(((1e6,0),(1e6+.01,1),(1e6+.02,0)),False)])
+    a,b = 1e6+.005,1e6+.01
+    left = _crossings(source.rings,a+(b-a)*1e-8)
+    right = _crossings(source.rings,b-(b-a)*1e-8)
+    expected = [(round(lo,9),round(hi,9)) for lo,hi in _intersect_spans(left,right)]
+    assert expected
+    assert _envelope(source,a,b,.5,0,True,_ProfileIndex(source)) == expected
+
+
+def test_standard_symbol_cache_separates_units_and_parameter_views():
+    from odbpp.symbols import parse_standard_symbol
+    from odbpp.units import UnitSystem
+    metric = parse_standard_symbol("rect1000x500",UnitSystem.MM)
+    inch = parse_standard_symbol("rect1000x500",UnitSystem.INCH)
+    assert metric.sizes_mm == (1,.5)
+    assert inch.sizes_mm == (25.4,12.7)
+    parameters = metric.params
+    parameters["w"] = 99
+    assert parse_standard_symbol("rect1000x500",UnitSystem.MM).params["w"] == 1000
+    assert parse_standard_symbol("rect1000x500 M",UnitSystem.INCH).sizes_mm == (1,.5)
+    assert parse_standard_symbol("special_0.670x0.950_nt2520") is None
+
+
+def test_direct_polygon_flattening_matches_segment_model_reference():
+    from odbpp.clipper import region_from_geometry, region_from_rings, polygon_points_of
+    from odbpp.geometry import geometry_points
+    from odbpp.model import SurfaceGeometry, Polygon, ContourPart
+    source = SurfaceGeometry(polygons=[Polygon(is_island=True,start=(2,0),parts=[
+        ContourPart(kind="arc",end=(0,2),center=(0,0),clockwise=False),
+        ContourPart(kind="segment",end=(0,0)),
+        ContourPart(kind="segment",end=(2,0)),
+        ContourPart(kind="segment",end=(2,0))]),
+        Polygon(is_island=False,start=(.2,.2),parts=[
+            ContourPart(kind="segment",end=(.4,.2)),
+            ContourPart(kind="segment",end=(.4,.4)),
+            ContourPart(kind="segment",end=(.2,.2))])])
+    expected = region_from_rings([(polygon_points_of(p),p.is_island is False)
+                                 for p in geometry_points(source)])
+    assert region_from_geometry(source).rings == expected.rings
+
+
+def test_archive_children_index_matches_member_scan_and_returns_fresh_lists(tmp_path):
+    import zipfile
+    from odbpp.archive import OdbArchive
+    source = tmp_path/"members.zip"
+    with zipfile.ZipFile(source,"w") as archive:
+        for name in ("root/misc/info","root/steps/PCB/profile",
+                     "root/steps/PCB/layers/F.CU/features", "root/.features.sum",
+                     "root/empty/", "UPPER/file"):
+            archive.writestr(name,b"" if name.endswith("/") else b"data")
+    with OdbArchive.open(str(source)) as archive:
+        for parent in ("","root","root/misc","root/steps/PCB", "root/empty", "missing", "upper", "UPPER"):
+            prefix = parent+"/" if parent else ""
+            expected = set()
+            for member in archive.files+archive.dirs:
+                if member.startswith(prefix):
+                    suffix = member[len(prefix):]
+                    if suffix:
+                        expected.add(suffix.split("/",1)[0])
+            children = archive.list_dir(parent)
+            assert children == sorted(expected)
+            children.clear()
+            assert archive.list_dir(parent) == sorted(expected)

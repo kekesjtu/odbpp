@@ -210,11 +210,18 @@ def region_from_geometry(geometry: SurfaceGeometry,
     tessellation tolerance is therefore the last point at which curve fidelity
     can be chosen.
     """
-    from .geometry import geometry_points
+    from .geometry import polygon_points
 
+    opts = options or TessellationOptions()
+    # Flatten all polygons first, preserving validation/exception ordering,
+    # but do not construct and immediately discard segment model objects.
+    flattened = [(polygon_points(polygon, opts), polygon.is_island is False)
+                 for polygon in geometry.polygons]
     rings: list[Ring] = []
-    for polygon in geometry_points(geometry, options):
-        ring = _make_ring(polygon_points_of(polygon), polygon.is_island is False)
+    for points, is_hole in flattened:
+        while len(points) > 1 and points[0] == points[-1]:
+            points.pop()
+        ring = _make_ring(points, is_hole)
         if ring is not None:
             rings.append(ring)
     return Region(rings)

@@ -239,7 +239,9 @@ class _ProfileIndex:
 
     def slab(self, a, b):
         events = [a]+self.vertices[bisect_right(self.vertices,a):bisect_left(self.vertices,b)]+[b]
-        edges = [edge for low,high,edge in self.edges[:bisect_left(self.starts,b)] if high > a]
+        # Include endpoints: the tiny inward probes can round to a slab end
+        # at large absolute coordinates. _edge_crossings applies the exact rule.
+        edges = [edge for low,high,edge in self.edges[:bisect_right(self.starts,b)] if high >= a]
         return events,edges
 
 
@@ -458,5 +460,4 @@ def rectify_region(region, options=None, *, diagnostics=None):
                                 "initial_scale_rule":"max(0.5 mm, shorter board side / 32)",
                                 "coarsening":coarsening,
                                 "topology":topology,"local_refinement":history})
-
 
