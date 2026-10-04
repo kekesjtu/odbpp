@@ -112,4 +112,9 @@ uv run --all-extras python tools/validate_performance_sampling.py --baseline-ref
 选择源码。`--compare` 只统计本次 API 返回的实际产物，旧目录中的遗留文件不能掩盖输出缺失。
 要单独分析热点，增加 `--profile --repeat 1`，使用另一个输出目录；不要把 profiler 数字当作正式基准。
 
-正式 `out/<case>/` 保留同步后的最终版本；任务产生的重复基准产物和临时源码在验证后清理。
+正式 `out/<case>/` 保留同步后的最终版本；其中四个大样本实际采用的 78 个常规产物
+（预览、CSV、掩膜、热图，不含 metadata 和可选逐层 SVG）再次通过基线指纹对照。
+
+清理限制：执行策略拒绝了临时目录的递归清理和三个已知临时脚本的逐文件删除，
+仅返回 `blocked by policy`，未提供具体原因。重复基准产物、源码快照及脚本仍保留在
+Git 忽略的 `build/performance-*` 与 `build/` 中；报告和正式案例输出均已独立保存。

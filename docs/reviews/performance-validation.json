@@ -1414,6 +1414,7 @@
     "sampling_cases": 2,
     "resolutions_per_case": 3,
     "source_ref_replay_exact_match": true,
-    "final_out_artefacts_exact_match": 78
+    "final_out_artefacts_exact_match": 78,
+    "scratch_cleanup": "blocked by execution policy; recursive and explicit file deletion rejected; no further reason supplied"
   }
 }
