@@ -14,3 +14,4 @@
 | [03 输出一致性审阅](03-output-consistency-review.md) | 三项输出一致性和 Z 标记问题 | [修复 03](../fixes/03-output-consistency-fixes.md) |
 | [04 修复复核](04-verification-review.md) | 独立复核第三轮修复 | — |
 | [05 导出性能审阅](05-export-performance-review.md) | 性能瓶颈、兼容性和三项显示问题 | [修复 04](../fixes/04-export-correctness-fixes.md) |
+| [06 全流程性能优化](06-pipeline-performance.md) | 解析、几何索引、采样和图像生成优化；四个真实样本的阶段耗时、内存和 192 个产物对照 | — |

@@ -132,6 +132,8 @@ wireframe 快捷按钮和实时毫米坐标读数。
 导出性能测量、兼容性验证和当时发现的显示问题见
 [2026-09-22 审阅报告](docs/reviews/05-export-performance-review.md)。
 其中逐层 SVG 导出已复用整板视口，性能优化阶段 JSON/SVG/HTML 对四例样本与优化前逐字节一致。
+解析、几何规划、材料采样和图像生成的后续优化与完整产物对照见
+[2026-10-04 全流程性能报告](docs/reviews/06-pipeline-performance.md)。
 上述显示问题及 profile 输出精度问题已修复，见
 [修复与验证记录](docs/fixes/04-export-correctness-fixes.md)。
 

@@ -4,6 +4,8 @@
 
 | 脚本 | 用途 |
 |---|---|
+| `benchmark_pipeline.py` | 逐案例、独立进程测量 load / compose / export / equivalent / masks / CSV / heatmaps 与峰值工作集；默认重复三次并取中位数；`--source-ref` 保存 Git 基线源码而不切换工作区，`--compare` 对本次实际生成的产物做逐字节 SHA-256 对照；`--profile` 单独定位热点 |
+| `validate_performance_sampling.py` | 从 Git 保存性能基线，在刚挠板和 kitchen-sink 的默认、加倍及不足光栅下精确对照原始浮点物性、掩膜、诊断和几何，记录采样差异与耗时；`--baseline-ref` 可替换基线，`--output` 指定报告 |
 | `validate_architecture.py` | 重放基线与新版真实案例，验证完整单元、坐标独立性、采样收敛、耗时和进程峰值内存；输出 architecture-validation.json；`--presets-only` 补充三档测量，`--audit-out` 核查全部最终 CSV 并输出 output-validation.json |
 | `validate_coarse_regions.py` | 对照指定 Git 基线的 region/全局轴线/网格、独立进程耗时与内存，检查三档与默认/加倍光栅的坐标独立性和物性差异 |
 | `sync_out.py` | 按 `cases/` 同步预览、MaterialMap CSV、逐层掩膜 PNG、逐层 kx/ky/kz 热图与总索引；默认标准自适应档位与密集光栅；`--px/--py` 成对覆盖分辨率，`--grid-level` 选择粗/标准/细，`--min-cell-mm/--max-cell-mm` 进入专家尺寸模式，`--heatmap-grid` 画网格边界；`--force-equivalent` 只重算等效结果，`--force` 全部重建 |
