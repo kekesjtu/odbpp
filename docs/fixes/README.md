@@ -19,4 +19,4 @@
 
 | [09 全局网格与内接架构](09-inscribed-architecture.md) | 新决策与全案例核查 | 竖条阶梯、全局笛卡尔栅、档位/专家模式、密集采样、完整体积及性能/收敛证据 |
 | [10 粗 region 与 Viewer 交互](10-coarse-regions-and-viewer.md) | 用户反馈及实机参考 | 5% 内接预算、Y 截面统一、受拓扑保护的合并、矩阵与图元查询 |
-| [12 Heatmap 阅读布局](12-heatmap-layout.md) | 用户反馈及逐层 PNG 核对 | 自适应方向卡片、独立图、字体留白及 81 层更新 |
+| [12 Heatmap 阅读布局](12-heatmap-layout.md) | 用户要求整体重写及逐层 PNG 核对 | Matplotlib 三方向单图、公共色条、毫米坐标及 81 层更新 |
