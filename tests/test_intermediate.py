@@ -128,3 +128,28 @@ def test_nonboard_copper_is_not_a_physical_layer():
     result = run(document)
     assert result.layers[0].status == "skipped"
     assert not result.cells
+
+
+def test_missing_outline_still_roundtrips_for_parser_diagnostics(tmp_path):
+    document = copper_document()
+    step = document["steps"][0]
+    step.update(profile_domain_id=None, domains=[])
+    step["layers"][0]["domain_id"] = None
+    model = BoardDocument.model_validate(document)
+    path = tmp_path / "no-outline.json"
+    write_document(model, path)
+    assert read_document(path) == model
+    with pytest.raises(EquivalenceError, match="board outline"):
+        run(read_document(path))
+
+
+def test_drill_span_cannot_reference_nonexistent_copper_planes():
+    document = copper_document()
+    layer = document["steps"][0]["layers"][0]
+    layer["copper_index"] = 0
+    document["steps"][0]["layers"].append({
+        "name": "DRILL", "type": "DRILL", "polygons": [], "copper_span": [0, 99],
+        "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": False},
+    })
+    with pytest.raises(EquivalenceError, match="DRILL.*copper_span"):
+        run(document)

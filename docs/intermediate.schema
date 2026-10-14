@@ -296,11 +296,16 @@
         "points": {
           "description": "毫米坐标；首点不在末尾重复；至少三个点。",
           "items": {
-            "items": {
-              "type": "number"
-            },
             "maxItems": 2,
             "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
             "type": "array"
           },
           "minItems": 3,
@@ -390,6 +395,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "整板 step profile 在 domains 中的引用；不能以铜图案替代。",
           "title": "Profile Domain Id"
         },
@@ -411,7 +417,6 @@
       },
       "required": [
         "name",
-        "profile_domain_id",
         "domains",
         "layers"
       ],

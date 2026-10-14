@@ -45,7 +45,7 @@ from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
 from .model import Job, Layer, Step
 from .stackup import Stackup, describe_span
-from .intermediate import BoardDocument
+from .intermediate import BoardDocument, LayerModel
 
 
 __all__ = [
@@ -617,7 +617,9 @@ def step_to_document(job: Job, preview: StepPreview, *,
         data["domain_id"] = info.get("id")
         if info.get("error") and data.get("geometry_error") is None:
             data["geometry_error"] = info["error"]
-        layers.append(data)
+        # Validate one layer at a time so the complete untyped coordinate tree
+        # does not coexist with a second full Pydantic coordinate tree.
+        layers.append(LayerModel.model_validate(data))
     return BoardDocument.model_validate({
         "units": "mm", "resolution_mm": 10 ** -digits,
         "source": {"path": job.source_path, "job_root": job.root,

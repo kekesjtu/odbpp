@@ -11,7 +11,9 @@ from typing import Annotated, Literal, Mapping, Any
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, StrictInt, model_validator
 
 Number = FiniteFloat
-Point = Annotated[list[Number], Field(min_length=2, max_length=2)]
+# A compact coordinate pair, not a separate Pydantic object per vertex. Both
+# Python pairs and JSON arrays are accepted; strict finite elements remain.
+Point = Annotated[tuple[Number, Number], Field(strict=False)]
 Index = Annotated[StrictInt, Field(ge=0)]
 
 
@@ -110,7 +112,7 @@ class LayerModel(ContractModel):
 
 class StepModel(ContractModel):
     name: str = Field(min_length=1)
-    profile_domain_id: str | None = Field(description="整板 step profile 在 domains 中的引用；不能以铜图案替代。")
+    profile_domain_id: str | None = Field(default=None, description="整板 step profile 在 domains 中的引用；不能以铜图案替代。")
     domains: list[DomainModel]
     layers: list[LayerModel] = Field(description="唯一层目录；包含失败及未导出层，按 matrix row 排列。")
 
@@ -123,12 +125,20 @@ class StepModel(ContractModel):
         if len(names) != len(set(names)):
             raise ValueError("duplicate layer name")
         domains = {d.id: d for d in self.domains}
+        indexed = [l for l in self.layers if l.copper_index is not None]
+        copper = {l.copper_index for l in indexed}
+        if len(copper) != len(indexed):
+            raise ValueError("duplicate copper_index")
+        if any(l.type not in ("SIGNAL", "POWER_GROUND", "MIXED") or l.context != "BOARD" for l in indexed):
+            raise ValueError("copper_index must belong to a BOARD copper layer")
         if self.profile_domain_id is not None:
             if self.profile_domain_id not in domains or domains[self.profile_domain_id].source != "step_profile":
                 raise ValueError("profile_domain_id must reference a step_profile domain")
         for layer in self.layers:
             if layer.domain_id is not None and layer.domain_id not in domains:
                 raise ValueError(f"layer {layer.name!r}: unknown domain_id {layer.domain_id!r}")
+            if layer.copper_span is not None and any(i not in copper for i in layer.copper_span):
+                raise ValueError(f"layer {layer.name!r}: copper_span endpoints must reference existing copper_index values")
         return self
 
 
