@@ -68,7 +68,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 
 | 值 | 色调 | 含义 |
 |---|---|---|
-| 0 | 黑 | 铜 / 钻孔投影（材料 1，`black`） |
+| 0 | 黑 | 铜图案 / 仅介质内钻孔投影（材料 1，`black`） |
 | 255 | 白 | 计算域内的基底（材料 2，`white`） |
 | 160 | 灰 | 该层在此**没有计算域**：板外或空洞 |
 

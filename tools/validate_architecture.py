@@ -127,6 +127,8 @@ def audit_outputs():
         meta=json.loads(path.read_text(encoding="utf-8"))
         assert meta["schema"]==METADATA_SCHEMA
         assert meta["pipeline_fingerprint"]==pipeline_fingerprint()
+        assert meta["drill_model"] == "solid_copper" and meta["drill_scope"] == "dielectric_only"
+        assert all(not l["drill_overlays"] for l in meta["layers"] if l["type"] != "DIELECTRIC")
         assert meta["grid"]["layout"]=="global-cartesian"
         assert not any(d["level"]=="error" for d in meta["diagnostics"])
         document=json.loads(path.with_name(path.name.replace(".MaterialMap.meta.json",".json")).read_text(encoding="utf-8"))
@@ -174,7 +176,8 @@ def audit_outputs():
                         "raster":[meta["raster"]["px"],meta["raster"]["py"]],
                         "minimum_samples_per_axis":minimum,
                         "area_loss_mm2":meta["rectification"]["lost_area_mm2"],
-                        "layer_count":len(layer_reports),"all_checks_passed":True})
+                        "layer_count":len(layer_reports),"drill_scope":meta["drill_scope"],
+                        "copper_drill_overlays_ignored":True,"all_checks_passed":True})
         print(records[-1],flush=True)
     return records
 

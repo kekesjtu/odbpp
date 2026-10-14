@@ -109,3 +109,25 @@ def test_drawing_cutouts_do_not_mutate_json_or_copper(tmp_path, filtered):
         step_to_json(job, drawn)
     with pytest.raises(ValueError, match="drawing-only"):
         layer_to_json(drawn.layer("DIELECTRIC_A"))
+
+
+def test_filtered_drill_failure_is_visible_and_does_not_abort_other_layers(monkeypatch):
+    import odbpp.drawing as module
+    _, raw = preview(filtered=True)
+    def failed(*args, **kwargs):
+        raise ValueError("unreadable custom drill")
+    monkeypatch.setattr(module, "expand_layer", failed)
+    drawn = dielectric_drill_cutouts(raw)
+    assert drawn.layer("SIGNAL_1") is raw.layer("SIGNAL_1")
+    assert drawn.layer("DIELECTRIC_A").area_mm2 == 100
+    assert "drawing.drill_failed" in raw.diagnostics.codes()
+
+
+def test_copper_only_render_never_expands_omitted_drills(monkeypatch):
+    import odbpp.drawing as module
+    _, raw = preview(filtered=True)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("copper does not need DRILL")
+    monkeypatch.setattr(module, "expand_layer", forbidden)
+    svg = render_svg(raw, layers=[raw.layer("SIGNAL_1")])
+    assert path_of(layer_groups(parse(svg))[0]).count("M") == 2

@@ -21,3 +21,4 @@
 | [10 粗 region 与 Viewer 交互](10-coarse-regions-and-viewer.md) | 用户反馈及实机参考 | 5% 内接预算、Y 截面统一、受拓扑保护的合并、矩阵与图元查询 |
 | [12 Heatmap 阅读布局](12-heatmap-layout.md) | 用户要求整体重写及逐层 PNG 核对 | Matplotlib 三方向单图、公共色条、毫米坐标及 81 层更新 |
 | [13 中间 JSON 与 Pydantic](13-intermediate-json.md) | 用户确认的接口精简 | 唯一层目录与域引用、无版本协商、Pydantic IO 边界、真实案例输出与性能对照 |
+| [14 介质 DRILL 处理后移](14-dielectric-drill-policy.md) | 用户明确更改材料规则 | JSON 保留未扣孔介质、仅绘图副本扣孔、铜层忽略 DRILL、真实案例与全量输出核查 |

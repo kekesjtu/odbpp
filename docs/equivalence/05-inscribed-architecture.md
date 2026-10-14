@@ -100,7 +100,7 @@ outside_step_area、effective_domain、有效域的模型损失，避免把层�
 介质层 `black = step_domain AND layer_domain AND drills`。
 
 介质初始 copper 为空，仅介质内钻孔覆盖为 solid_copper，且不生成独立厚度层。
-每个输入 Region 使用其已规整的岛孔语义；不同铜/钻孔 Region 之间作 OR，
+每个输入 Region 使用其已规整的岛孔语义；同层多个 DRILL Region 之间作 OR；铜层只使用自身铜 Region，
 防止 even-odd 把材料重叠抵消。材料分支不对复杂多边形重复 union、
 intersection 或 difference。简单 profile 的几何检查是独立的必要操作。
 
