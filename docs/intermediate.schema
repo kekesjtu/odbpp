@@ -215,17 +215,6 @@
           "default": null,
           "description": "自顶向下的两个铜层索引；不重复存储端点名称。",
           "title": "Copper Span"
-        },
-        "parse_info": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ParseInfoModel"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
         }
       },
       "required": [
@@ -234,42 +223,6 @@
         "polygons"
       ],
       "title": "LayerModel",
-      "type": "object"
-    },
-    "ParseInfoModel": {
-      "additionalProperties": false,
-      "description": "Optional audit information; never used to reinterpret material polarity.",
-      "properties": {
-        "polarity": {
-          "enum": [
-            "P",
-            "N"
-          ],
-          "title": "Polarity",
-          "type": "string"
-        },
-        "base_from_profile": {
-          "title": "Base From Profile",
-          "type": "boolean"
-        },
-        "feature_records": {
-          "minimum": 0,
-          "title": "Feature Records",
-          "type": "integer"
-        },
-        "polarity_runs": {
-          "minimum": 0,
-          "title": "Polarity Runs",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "polarity",
-        "base_from_profile",
-        "feature_records",
-        "polarity_runs"
-      ],
-      "title": "ParseInfoModel",
       "type": "object"
     },
     "PolygonModel": {

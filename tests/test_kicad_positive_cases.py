@@ -73,7 +73,8 @@ def test_approved_native_and_clean_archives(case: str):
         assert (min(x for x, _ in points), min(y for _, y in points),
                 max(x for x, _ in points), max(y for _, y in points)) == BOARD_BOUNDS
         for layer in doc["steps"][0]["layers"]:
-            assert layer["parse_info"]["polarity"] == "P"
+            assert "parse_info" not in layer
+            assert preview.layer(layer["name"]).layer.ref.polarity.value == "P"
             if bool(layer["polygons"]) and layer["context"] == "BOARD":
                 assert layer["z_mm"] is not None
                 assert layer["z_mm"]["end_mm"] >= layer["z_mm"]["start_mm"]

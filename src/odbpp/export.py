@@ -570,17 +570,11 @@ def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> di
 
 def _layer_data(preview: LayerPreview, digits: int) -> dict:
     rings, _area, _bounds = _serialised_rings(preview, digits)
-    geometry = preview.geometry
     return {
         **_layer_metadata(preview.layer, preview.stackup, digits),
         "geometry_status": "ready", "domain_id": None,
         "polygons": [{"island": not ring.is_hole, "points": _points_json(ring, digits)}
                      for ring in rings],
-        "parse_info": {
-            "polarity": preview.layer.ref.polarity.value,
-            "base_from_profile": geometry.used_base,
-            "feature_records": geometry.records, "polarity_runs": geometry.polarity_runs,
-        },
     }
 
 

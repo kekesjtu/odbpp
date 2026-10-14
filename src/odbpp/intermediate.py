@@ -71,14 +71,6 @@ class ThicknessModel(ContractModel):
         return self
 
 
-class ParseInfoModel(ContractModel):
-    """Optional audit information; never used to reinterpret material polarity."""
-    polarity: Literal["P", "N"]
-    base_from_profile: bool
-    feature_records: Index
-    polarity_runs: Index
-
-
 class LayerModel(ContractModel):
     name: str = Field(min_length=1)
     type: str = Field(min_length=1, description="ODB++ 层类型；等效器明确报告不支持的材料类型。")
@@ -95,7 +87,6 @@ class LayerModel(ContractModel):
     copper_index: Index | None = None
     copper_span: list[Index] | None = Field(default=None, min_length=2, max_length=2,
                                           description="自顶向下的两个铜层索引；不重复存储端点名称。")
-    parse_info: ParseInfoModel | None = None
 
     @model_validator(mode="after")
     def consistent(self):

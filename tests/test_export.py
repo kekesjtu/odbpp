@@ -260,10 +260,11 @@ class TestLayerJson:
         data = {layer["name"]: layer for layer in
                 step_to_json(_job, preview)["steps"][0]["layers"]}
         gnd = data["GND"]
-        assert gnd["parse_info"]["polarity"] == "N"
+        assert "parse_info" not in gnd
+        assert preview.layer("GND").layer.ref.polarity.value == "N"
         assert gnd["context"] == "BOARD"
         assert gnd["type"] == "POWER_GROUND"
-        assert gnd["parse_info"]["base_from_profile"] is True
+        assert preview.layer("GND").geometry.used_base is True
 
     def test_form_travels_with_its_provenance(self):
         # is_flex is always a real boolean because spec p.66 supplies a default;
@@ -534,8 +535,7 @@ class TestStackupJson:
         dielectric = layers["DIELECTRIC_1"]
         drill = next(l for l in layers.values() if l["type"] == "DRILL")
 
-        assert "drills_subtracted" not in dielectric["parse_info"]
-        assert "drill_cut_mm2" not in dielectric["parse_info"]
+        assert "parse_info" not in dielectric
 
         def region(layer):
             return clipper.region_from_rings(
