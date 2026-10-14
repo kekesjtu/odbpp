@@ -5,6 +5,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [08-parser-interface-guide.md](08-parser-interface-guide.md) | 面向 ODB++ 几何解析器开发人员：接口职责、导出约束、完整 JSON 示例与中文注释版 intermediate.py |
 | [drill-policy-validation.json](drill-policy-validation.json) | 未扣孔介质 JSON、仅介质 DRILL 采样的真实案例前后对照，铜层无 DRILL 参考与几何不变检查 |
 | [06-drill-rasterization.md](06-drill-rasterization.md) | 通孔/盲孔/埋孔、二维孔形、跨度判定、扫描线逻辑及 NPTH/空心孔/背钻的当前简化 |
 | [05-inscribed-architecture.md](05-inscribed-architecture.md) | 当前 v5：竖条内接阶梯、独立密集光栅、全局笛卡尔栅、自适应档位、完整体积物性、内部预算与限制 |
