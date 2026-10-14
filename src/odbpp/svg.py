@@ -1073,7 +1073,6 @@ def write_outputs(
     ``preview_options``/``svg_options`` precision overrides it, and a mismatch
     between the two is honoured rather than hidden.
     """
-    import json as _json
     import os
 
     from .export import step_to_document

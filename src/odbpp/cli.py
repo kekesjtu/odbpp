@@ -512,19 +512,23 @@ def _run_export(job: Job, args: argparse.Namespace,
                   f"{len(layer.rings)} rings", file=sys.stderr)
         return 2
 
-    outputs = write_outputs(
-        preview, job, out_dir,
-        svg_options=svg_options,
-        preview_options=preview_options,
-        want_json=True,
-        want_svg=not args.only_json,
-        want_html=not args.only_json,
-        per_layer_svg=args.per_layer_svg,
-        stem=step.name,
-        # The flag has to reach the serialiser, not just the terminal report:
-        # omitting the array from the file is what the option promises.
-        include_diagnostics=not args.no_diagnostics,
-    )
+    try:
+        outputs = write_outputs(
+            preview, job, out_dir,
+            svg_options=svg_options,
+            preview_options=preview_options,
+            want_json=True,
+            want_svg=not args.only_json,
+            want_html=not args.only_json,
+            per_layer_svg=args.per_layer_svg,
+            stem=step.name,
+            # The flag has to reach the serialiser, not just the terminal report:
+            # omitting the array from the file is what the option promises.
+            include_diagnostics=not args.no_diagnostics,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"error: cannot export intermediate JSON: {exc}", file=sys.stderr)
+        return 2
 
     print(f"step {step.name!r}: {len(preview.non_empty())} of {len(preview.layers)} "
           f"layers with geometry, {preview.total_polygons} rings, "
@@ -612,7 +616,11 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
             options=PreviewOptions(round_digits=args.digits),
             diagnostics=diagnostics,
         )
-        document = step_to_document(job, preview, round_digits=args.digits)
+        try:
+            document = step_to_document(job, preview, round_digits=args.digits)
+        except ValueError as exc:
+            print(f"error: invalid intermediate JSON: {exc}", file=sys.stderr)
+            return 2
         source_path = job.source_path
         step_name = step.name
 

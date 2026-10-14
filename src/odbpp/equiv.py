@@ -403,6 +403,14 @@ def _collect_drills(step: Mapping[str, Any],
             )
             fatal = True
             continue
+        if _copper_span(row) is None and not extent.get("thickness_known", False):
+            diagnostics.error(
+                EQUIV_DRILL_SPAN_UNKNOWN,
+                f"drill layer {name!r} has neither a resolved copper_span nor a "
+                "known absolute Z interval; best-effort Z cannot establish its projection",
+            )
+            fatal = True
+            continue
         layer = layers.get(name)
         if layer is None or layer.get("geometry_status", "ready") != "ready":
             diagnostics.error(
@@ -592,7 +600,6 @@ def plan_geometry(step, options, diagnostics):
     rectification=rectify_step_outline(step,0,0,options.rectify,diagnostics=diagnostics)
     domains=_domain_index(step)
     profile_id=step.get("profile_domain_id")
-    layers=_layer_index(step)
     ids={row.get("domain_id") for row in step.get("layers",[])
          if row.get("context", "BOARD")=="BOARD" and
          (row.get("type") in COPPER_TYPES or row.get("type")==DIELECTRIC_TYPE)}

@@ -2,6 +2,22 @@
   "schema": "odbpp/output-validation-5",
   "cases": [
     {
+      "case": "designodb-rigidflex",
+      "region_count": 45,
+      "nx": 145,
+      "ny": 56,
+      "grid_cells": 4262,
+      "material_rows": 66274,
+      "raster": [
+        4096,
+        1089
+      ],
+      "minimum_samples_per_axis": 16,
+      "area_loss_mm2": 202.1117130350002,
+      "layer_count": 19,
+      "all_checks_passed": true
+    },
+    {
       "case": "designodb-rigidflex.tgz",
       "region_count": 45,
       "nx": 145,

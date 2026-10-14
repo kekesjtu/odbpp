@@ -1,0 +1,777 @@
+{
+  "baseline_ref": "bbc77fa",
+  "repeat": 1,
+  "measurement": "isolated processes; sequential baseline/current; no heatmap rendering",
+  "cases": {
+    "minimal-test-odb": {
+      "baseline": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 0.0030027000002519344,
+              "compose": 0.00414100000034523,
+              "json_export": 0.0030844000002616667,
+              "json_import": 0.008303499999783526,
+              "equivalent": 0.3654153999996197,
+              "csv": 0.05901369999992312
+            },
+            "peak_memory_mib": 69.01953125,
+            "json_bytes": 46855,
+            "geometry_sha256": "68e1f34e2f5d4c57713b53a5d13b1963cbf361869d376278cc3b241050a1b31e",
+            "grid_sha256": "3074bc40e11c19047aea0361967b643d33f445b4be7de55e67f6c6870d874652",
+            "properties_sha256": "608fbc9625d400d14f8ab45b9f4862162acdf372939d1bcad2348d3a6d17080b",
+            "csv_sha256": "aa1d7edf132022e1d1a2ab9ce5ec7d861450a3ec5e27a47f9a00db3a78bb5fe5",
+            "masks": {
+              "top": {
+                "sha256": "e52964e1db2a88eebcc526e09f8db60ab6f630c960896306ca1fcef997173ab8",
+                "pitch_mm": [
+                  0.0244140625,
+                  0.024412572474824534
+                ]
+              },
+              "bottom": {
+                "sha256": "a03e035f9f57bc385e97703c56fa42b2e72b21a2765e36aeb50510aa7f4174a4",
+                "pitch_mm": [
+                  0.0244140625,
+                  0.024412572474824534
+                ]
+              }
+            },
+            "regions": 1,
+            "cells": 8352,
+            "raster": [
+              4096,
+              3277
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 0.0030027000002519344,
+          "compose": 0.00414100000034523,
+          "json_export": 0.0030844000002616667,
+          "json_import": 0.008303499999783526,
+          "equivalent": 0.3654153999996197,
+          "csv": 0.05901369999992312
+        }
+      },
+      "current": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 0.0025429999996049446,
+              "compose": 0.004189100000075996,
+              "json_export": 0.0015181999997366802,
+              "json_import": 0.007582900000670634,
+              "equivalent": 0.32822940000005474,
+              "csv": 0.059850399999959336
+            },
+            "peak_memory_mib": 76.671875,
+            "json_bytes": 44579,
+            "geometry_sha256": "68e1f34e2f5d4c57713b53a5d13b1963cbf361869d376278cc3b241050a1b31e",
+            "grid_sha256": "3074bc40e11c19047aea0361967b643d33f445b4be7de55e67f6c6870d874652",
+            "properties_sha256": "608fbc9625d400d14f8ab45b9f4862162acdf372939d1bcad2348d3a6d17080b",
+            "csv_sha256": "aa1d7edf132022e1d1a2ab9ce5ec7d861450a3ec5e27a47f9a00db3a78bb5fe5",
+            "masks": {
+              "top": {
+                "sha256": "e52964e1db2a88eebcc526e09f8db60ab6f630c960896306ca1fcef997173ab8",
+                "pitch_mm": [
+                  0.0244140625,
+                  0.024412572474824534
+                ]
+              },
+              "bottom": {
+                "sha256": "a03e035f9f57bc385e97703c56fa42b2e72b21a2765e36aeb50510aa7f4174a4",
+                "pitch_mm": [
+                  0.0244140625,
+                  0.024412572474824534
+                ]
+              }
+            },
+            "regions": 1,
+            "cells": 8352,
+            "raster": [
+              4096,
+              3277
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 0.0025429999996049446,
+          "compose": 0.004189100000075996,
+          "json_export": 0.0015181999997366802,
+          "json_import": 0.007582900000670634,
+          "equivalent": 0.32822940000005474,
+          "csv": 0.059850399999959336
+        }
+      },
+      "checks": {
+        "geometry_sha256": true,
+        "grid_sha256": true,
+        "properties_sha256": true,
+        "csv_sha256": true,
+        "masks": true,
+        "regions": true,
+        "cells": true,
+        "raster": true
+      }
+    },
+    "kicad-kitchen-sink": {
+      "baseline": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 0.06618720000005851,
+              "compose": 0.10686559999976453,
+              "json_export": 0.03865549999954965,
+              "json_import": 0.010554600000432401,
+              "equivalent": 0.5547409000000698,
+              "csv": 0.09702370000013616
+            },
+            "peak_memory_mib": 70.23046875,
+            "json_bytes": 741160,
+            "geometry_sha256": "788459827ba9b9cdff15b32e39b78c34c55ede8d459404aef84986280e5b8397",
+            "grid_sha256": "f713e5e0affe17825170664fa25dc77c33b1cbe9da85fb5d36776124851d4d3e",
+            "properties_sha256": "7bdd6de22f8776baf712bafd5f12963eb8f162f916adb3bb823f5fa2dcf9afe8",
+            "csv_sha256": "2293f484e152592e5d61216fe0847b1789483ae609ece830b5ddb55509c1b6fe",
+            "masks": {
+              "F.CU": {
+                "sha256": "0af4132b0152de19c3921177825ff21b87a49fc80d678c9d22cc2e0af53dfe45",
+                "pitch_mm": [
+                  0.0544677734375,
+                  0.054450867052023115
+                ]
+              },
+              "DIELECTRIC_1": {
+                "sha256": "500f9ddbc2aeb9f26d68d2efbbd12ff56bb69638af50ff4c4fb230198969f8f7",
+                "pitch_mm": [
+                  0.0544677734375,
+                  0.054450867052023115
+                ]
+              },
+              "B.CU": {
+                "sha256": "876aaafbbdef956df4702141c18aa54e57c5914315ed7c0a4f2dc700cc2f61db",
+                "pitch_mm": [
+                  0.0544677734375,
+                  0.054450867052023115
+                ]
+              }
+            },
+            "regions": 78,
+            "cells": 12651,
+            "raster": [
+              4096,
+              2595
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 0.06618720000005851,
+          "compose": 0.10686559999976453,
+          "json_export": 0.03865549999954965,
+          "json_import": 0.010554600000432401,
+          "equivalent": 0.5547409000000698,
+          "csv": 0.09702370000013616
+        }
+      },
+      "current": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 0.061654299999645445,
+              "compose": 0.10545439999987138,
+              "json_export": 0.016867000000274857,
+              "json_import": 0.01371839999956137,
+              "equivalent": 0.5419509999992442,
+              "csv": 0.11009139999987383
+            },
+            "peak_memory_mib": 79.90234375,
+            "json_bytes": 710203,
+            "geometry_sha256": "788459827ba9b9cdff15b32e39b78c34c55ede8d459404aef84986280e5b8397",
+            "grid_sha256": "f713e5e0affe17825170664fa25dc77c33b1cbe9da85fb5d36776124851d4d3e",
+            "properties_sha256": "7bdd6de22f8776baf712bafd5f12963eb8f162f916adb3bb823f5fa2dcf9afe8",
+            "csv_sha256": "2293f484e152592e5d61216fe0847b1789483ae609ece830b5ddb55509c1b6fe",
+            "masks": {
+              "F.CU": {
+                "sha256": "0af4132b0152de19c3921177825ff21b87a49fc80d678c9d22cc2e0af53dfe45",
+                "pitch_mm": [
+                  0.0544677734375,
+                  0.054450867052023115
+                ]
+              },
+              "DIELECTRIC_1": {
+                "sha256": "500f9ddbc2aeb9f26d68d2efbbd12ff56bb69638af50ff4c4fb230198969f8f7",
+                "pitch_mm": [
+                  0.0544677734375,
+                  0.054450867052023115
+                ]
+              },
+              "B.CU": {
+                "sha256": "876aaafbbdef956df4702141c18aa54e57c5914315ed7c0a4f2dc700cc2f61db",
+                "pitch_mm": [
+                  0.0544677734375,
+                  0.054450867052023115
+                ]
+              }
+            },
+            "regions": 78,
+            "cells": 12651,
+            "raster": [
+              4096,
+              2595
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 0.061654299999645445,
+          "compose": 0.10545439999987138,
+          "json_export": 0.016867000000274857,
+          "json_import": 0.01371839999956137,
+          "equivalent": 0.5419509999992442,
+          "csv": 0.11009139999987383
+        }
+      },
+      "checks": {
+        "geometry_sha256": true,
+        "grid_sha256": true,
+        "properties_sha256": true,
+        "csv_sha256": true,
+        "masks": true,
+        "regions": true,
+        "cells": true,
+        "raster": true
+      }
+    },
+    "kicad-video-odb.tgz": {
+      "baseline": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 1.045473399999537,
+              "compose": 12.46045999999933,
+              "json_export": 3.5565601999996943,
+              "json_import": 0.3881919999994352,
+              "equivalent": 3.5853988999997455,
+              "csv": 0.3854449000000386
+            },
+            "peak_memory_mib": 284.03515625,
+            "json_bytes": 38102143,
+            "geometry_sha256": "f81b4ed8e3fbdc1249e7bd3b7de59419d737a661076c58024b1fd5131e356e0f",
+            "grid_sha256": "341d4faf1cebbcc3c0a409fec67eb2bef99dad660099d754d086600c153e2ab7",
+            "properties_sha256": "133ee8065935fb3f311a8818030728db42308f26f933b562b7fa698ff0d29bee",
+            "csv_sha256": "2442913ed995c4bd593ac934f4c287de475dce083da3d0c0ac3361a9efa8af39",
+            "masks": {
+              "TOP_COPPER": {
+                "sha256": "7d0c263a5a993fa3384abba37620f9c4e7472910509f8d02af61092478a0de2c",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "DIELECTRIC_1": {
+                "sha256": "d116b7d13b91ec1bd80843d045c6db523fdb3876356e6d7e317f310232a53bef",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "IN1.CU": {
+                "sha256": "5fddd09cd52a9bceb079e417ac4978355f868972cf52e667d5ff13d71a14669a",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "DIELECTRIC_2": {
+                "sha256": "d116b7d13b91ec1bd80843d045c6db523fdb3876356e6d7e317f310232a53bef",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "IN2.CU": {
+                "sha256": "91cbadc582a29ed817ba4e78ec9ca04d0f825c003080ffb688af98b1971264af",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "DIELECTRIC_3": {
+                "sha256": "d116b7d13b91ec1bd80843d045c6db523fdb3876356e6d7e317f310232a53bef",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "B.CU": {
+                "sha256": "7fd49e854cdaa5ef7c7ca9a202e766de5906578a76f7d78dd25067073b1e334e",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              }
+            },
+            "regions": 6,
+            "cells": 24087,
+            "raster": [
+              4096,
+              1401
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 1.045473399999537,
+          "compose": 12.46045999999933,
+          "json_export": 3.5565601999996943,
+          "json_import": 0.3881919999994352,
+          "equivalent": 3.5853988999997455,
+          "csv": 0.3854449000000386
+        }
+      },
+      "current": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 1.0659087999993062,
+              "compose": 12.055800599999202,
+              "json_export": 1.4291583000003811,
+              "json_import": 0.5621299000004001,
+              "equivalent": 3.3674897000000783,
+              "csv": 0.3579444000006333
+            },
+            "peak_memory_mib": 399.15234375,
+            "json_bytes": 38082349,
+            "geometry_sha256": "f81b4ed8e3fbdc1249e7bd3b7de59419d737a661076c58024b1fd5131e356e0f",
+            "grid_sha256": "341d4faf1cebbcc3c0a409fec67eb2bef99dad660099d754d086600c153e2ab7",
+            "properties_sha256": "133ee8065935fb3f311a8818030728db42308f26f933b562b7fa698ff0d29bee",
+            "csv_sha256": "2442913ed995c4bd593ac934f4c287de475dce083da3d0c0ac3361a9efa8af39",
+            "masks": {
+              "TOP_COPPER": {
+                "sha256": "7d0c263a5a993fa3384abba37620f9c4e7472910509f8d02af61092478a0de2c",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "DIELECTRIC_1": {
+                "sha256": "d116b7d13b91ec1bd80843d045c6db523fdb3876356e6d7e317f310232a53bef",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "IN1.CU": {
+                "sha256": "5fddd09cd52a9bceb079e417ac4978355f868972cf52e667d5ff13d71a14669a",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "DIELECTRIC_2": {
+                "sha256": "d116b7d13b91ec1bd80843d045c6db523fdb3876356e6d7e317f310232a53bef",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "IN2.CU": {
+                "sha256": "91cbadc582a29ed817ba4e78ec9ca04d0f825c003080ffb688af98b1971264af",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "DIELECTRIC_3": {
+                "sha256": "d116b7d13b91ec1bd80843d045c6db523fdb3876356e6d7e317f310232a53bef",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              },
+              "B.CU": {
+                "sha256": "7fd49e854cdaa5ef7c7ca9a202e766de5906578a76f7d78dd25067073b1e334e",
+                "pitch_mm": [
+                  0.076181396484375,
+                  0.07614561027837259
+                ]
+              }
+            },
+            "regions": 6,
+            "cells": 24087,
+            "raster": [
+              4096,
+              1401
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 1.0659087999993062,
+          "compose": 12.055800599999202,
+          "json_export": 1.4291583000003811,
+          "json_import": 0.5621299000004001,
+          "equivalent": 3.3674897000000783,
+          "csv": 0.3579444000006333
+        }
+      },
+      "checks": {
+        "geometry_sha256": true,
+        "grid_sha256": true,
+        "properties_sha256": true,
+        "csv_sha256": true,
+        "masks": true,
+        "regions": true,
+        "cells": true,
+        "raster": true
+      }
+    },
+    "designodb-rigidflex.tgz": {
+      "baseline": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 13.107382999999572,
+              "compose": 71.7937622999998,
+              "json_export": 11.875650100000712,
+              "json_import": 1.0013301999997566,
+              "equivalent": 7.208377500000097,
+              "csv": 1.0767526999998154
+            },
+            "peak_memory_mib": 1590.296875,
+            "json_bytes": 95643809,
+            "geometry_sha256": "8791983f5072e76354da2a74cc9c1887b8ce848fceb27f28872b1dd914749934",
+            "grid_sha256": "bcc2e4c3b5577360df6cca21f8455a2b44ca8c7317260d8828d93273bdd7acf0",
+            "properties_sha256": "bbf325aa69575a10313f7db9264138db5c9f9f3e7fc5809796f7afc00447797f",
+            "csv_sha256": "3e6b4f117570cb5c0b783dac8ae1806296b6fe3fc1380276b097669fb349e4af",
+            "masks": {
+              "SIGNAL_1": {
+                "sha256": "3907fa54f9da132500b22952193e7530d4205b0f80cb16bd2c9ee9bc9d7bad58",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_3": {
+                "sha256": "b2a10e21732ced85bc96e2e436e8a0b95ba6e5dd5e29247e85f6d39274b92849",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_2": {
+                "sha256": "d73fd1e5893dead177c6ac490244d22d7c8b3d5f4dcea5052d6306b96dc7c530",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_5": {
+                "sha256": "b084fc7bb2482bb1545732e8d3572c47208325f984b2443c4b64e9bbdebd391f",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_3": {
+                "sha256": "1b8c8b7dcfc15642e7f394e996e3a8078cc3644fe376830c3bb8ed836874b874",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_7": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "PLANE_4": {
+                "sha256": "3712a9876408b31aae7032561cb4ec91f9b49f9889d7d3553e86da0417199b0b",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_9": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "FLEX_5": {
+                "sha256": "a74d4d432d3d0c1545b1bbfea8421b827daef65793cb669cbbb261abc06dc5be",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "POLYIMIDE_BASE_11": {
+                "sha256": "99c7da911a32e64732cf2df258888feb85efa7ac43de9e3fbda9889412970ac1",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "FLEX_6": {
+                "sha256": "9526cbccdb9d5625c601a7f1b464c47e2c27f07fb90e98ff158b7d89778b7911",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_13": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_7": {
+                "sha256": "083d2476781a4fee8d0408aa6cdafeec57eabed851895b1b056751b7cdb623bc",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_15": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_8": {
+                "sha256": "af1e1f53b60c060ba2119b8971e59d64228a588102c56dae3aa360b880e28da5",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_17": {
+                "sha256": "395afc3141c39c04f068c23b71cb0c0f4acafc31f768de479551fcbd713d8e93",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_9": {
+                "sha256": "87338a6e3681f214c0960cbc8047f22cab79677bd886d130289eefa43d0f7ae7",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_19": {
+                "sha256": "bef8312f56a13c910be63c826473c604b564b80b1641fd685546077edaa5cf13",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_10": {
+                "sha256": "ef86607927fb7587891ca1a3836ea49673d0bb172f246e6eb8f8e9776964666b",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              }
+            },
+            "regions": 45,
+            "cells": 66274,
+            "raster": [
+              4096,
+              1089
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 13.107382999999572,
+          "compose": 71.7937622999998,
+          "json_export": 11.875650100000712,
+          "json_import": 1.0013301999997566,
+          "equivalent": 7.208377500000097,
+          "csv": 1.0767526999998154
+        }
+      },
+      "current": {
+        "runs": [
+          {
+            "durations_s": {
+              "load": 12.811731799999507,
+              "compose": 78.58111279999957,
+              "json_export": 6.355254300000524,
+              "json_import": 2.045257699999638,
+              "equivalent": 7.752367899999626,
+              "csv": 1.0785510999994585
+            },
+            "peak_memory_mib": 1594.5546875,
+            "json_bytes": 95563137,
+            "geometry_sha256": "8791983f5072e76354da2a74cc9c1887b8ce848fceb27f28872b1dd914749934",
+            "grid_sha256": "bcc2e4c3b5577360df6cca21f8455a2b44ca8c7317260d8828d93273bdd7acf0",
+            "properties_sha256": "bbf325aa69575a10313f7db9264138db5c9f9f3e7fc5809796f7afc00447797f",
+            "csv_sha256": "3e6b4f117570cb5c0b783dac8ae1806296b6fe3fc1380276b097669fb349e4af",
+            "masks": {
+              "SIGNAL_1": {
+                "sha256": "3907fa54f9da132500b22952193e7530d4205b0f80cb16bd2c9ee9bc9d7bad58",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_3": {
+                "sha256": "b2a10e21732ced85bc96e2e436e8a0b95ba6e5dd5e29247e85f6d39274b92849",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_2": {
+                "sha256": "d73fd1e5893dead177c6ac490244d22d7c8b3d5f4dcea5052d6306b96dc7c530",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_5": {
+                "sha256": "b084fc7bb2482bb1545732e8d3572c47208325f984b2443c4b64e9bbdebd391f",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_3": {
+                "sha256": "1b8c8b7dcfc15642e7f394e996e3a8078cc3644fe376830c3bb8ed836874b874",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_7": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "PLANE_4": {
+                "sha256": "3712a9876408b31aae7032561cb4ec91f9b49f9889d7d3553e86da0417199b0b",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_9": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "FLEX_5": {
+                "sha256": "a74d4d432d3d0c1545b1bbfea8421b827daef65793cb669cbbb261abc06dc5be",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "POLYIMIDE_BASE_11": {
+                "sha256": "99c7da911a32e64732cf2df258888feb85efa7ac43de9e3fbda9889412970ac1",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "FLEX_6": {
+                "sha256": "9526cbccdb9d5625c601a7f1b464c47e2c27f07fb90e98ff158b7d89778b7911",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_13": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_7": {
+                "sha256": "083d2476781a4fee8d0408aa6cdafeec57eabed851895b1b056751b7cdb623bc",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_15": {
+                "sha256": "768aba4507352e6b121f617c6542be213a3bc28658812cf8cafa4e6b14c9cb9c",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_8": {
+                "sha256": "af1e1f53b60c060ba2119b8971e59d64228a588102c56dae3aa360b880e28da5",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_17": {
+                "sha256": "395afc3141c39c04f068c23b71cb0c0f4acafc31f768de479551fcbd713d8e93",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_9": {
+                "sha256": "87338a6e3681f214c0960cbc8047f22cab79677bd886d130289eefa43d0f7ae7",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "DIELECTRIC_19": {
+                "sha256": "bef8312f56a13c910be63c826473c604b564b80b1641fd685546077edaa5cf13",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              },
+              "SIGNAL_10": {
+                "sha256": "ef86607927fb7587891ca1a3836ea49673d0bb172f246e6eb8f8e9776964666b",
+                "pitch_mm": [
+                  0.039880371093750006,
+                  0.03985252525252525
+                ]
+              }
+            },
+            "regions": 45,
+            "cells": 66274,
+            "raster": [
+              4096,
+              1089
+            ]
+          }
+        ],
+        "median_s": {
+          "load": 12.811731799999507,
+          "compose": 78.58111279999957,
+          "json_export": 6.355254300000524,
+          "json_import": 2.045257699999638,
+          "equivalent": 7.752367899999626,
+          "csv": 1.0785510999994585
+        }
+      },
+      "checks": {
+        "geometry_sha256": true,
+        "grid_sha256": true,
+        "properties_sha256": true,
+        "csv_sha256": true,
+        "masks": true,
+        "regions": true,
+        "cells": true,
+        "raster": true
+      }
+    }
+  }
+}

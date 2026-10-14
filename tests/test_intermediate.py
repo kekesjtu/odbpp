@@ -153,3 +153,28 @@ def test_drill_span_cannot_reference_nonexistent_copper_planes():
     })
     with pytest.raises(EquivalenceError, match="DRILL.*copper_span"):
         run(document)
+
+
+def test_best_effort_drill_z_cannot_replace_an_unknown_topological_span():
+    document = copper_document()
+    document["steps"][0]["layers"].append({
+        "name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)],
+        "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": False},
+    })
+    result = run(document)
+    assert result.fatal
+    assert "equiv.drill_span_unknown" in result.diagnostics.codes()
+
+
+@pytest.mark.parametrize("command", ["export", "equivalent"])
+def test_invalid_export_data_is_a_cli_diagnostic_not_a_traceback(command, tmp_path, capsys, monkeypatch):
+    from conftest import case_path
+    from odbpp.job import load_job
+    from odbpp.cli import main
+    job = load_job(str(case_path("minimal-test-odb")))
+    job.single_step.layers[0].attributes[".copper_weight"] = "nan"
+    monkeypatch.setattr("odbpp.cli.load_job", lambda *args, **kwargs: job)
+    assert main([command, "unused-input", "-o", str(tmp_path)]) == 2
+    assert "finite" in capsys.readouterr().err
+    assert not list(tmp_path.rglob("*.json"))
+    assert not list(tmp_path.rglob("*.csv"))
