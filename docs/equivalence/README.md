@@ -21,3 +21,6 @@
 
 参考输出（仅用于对比「需要表达什么」，未照抄）：
 [`../Flotherm_reference_MaterialMap.csv`](../Flotherm_reference_MaterialMap.csv)。
+
+当前中间格式：[07 中间 JSON 与 Pydantic 边界](07-intermediate-json.md)，
+文本定义：[intermediate.schema](../intermediate.schema)。

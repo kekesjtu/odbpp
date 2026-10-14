@@ -871,7 +871,7 @@ def _matrix_panel(layers: Sequence[Mapping]) -> str:
 
 
 def _inspection_panels(ordered: Sequence[LayerPreview]) -> str:
-    """Inspection metadata stays in the viewer; preview-2 geometry is unchanged."""
+    """Inspection metadata stays in the viewer; intermediate geometry is unchanged."""
     layers, histograms = [], []
     for layer in sorted(ordered, key=lambda l: l.layer.ref.row):
         ref, extent = layer.layer.ref, layer.z_extent()
@@ -1076,7 +1076,7 @@ def write_outputs(
     import json as _json
     import os
 
-    from .export import step_to_json
+    from .export import step_to_document
 
     # JSON follows the preview's resolution unless the caller asks otherwise; the
     # drawing follows the JSON unless the caller asks otherwise.
@@ -1101,12 +1101,9 @@ def write_outputs(
 
     if want_json:
         path = os.path.join(out_dir, f"{stem}.json")
-        with open(path, "w", encoding="utf-8", newline="\n") as handle:
-            _json.dump(step_to_json(job, json_view,
-                                    round_digits=json_digits,
-                                    include_diagnostics=include_diagnostics),
-                       handle, ensure_ascii=False, indent=1)
-            handle.write("\n")
+        from .intermediate import write_document
+        write_document(step_to_document(job, json_view, round_digits=json_digits,
+                                        include_diagnostics=include_diagnostics), path)
         outputs.json = path
 
     # The standalone SVG and the viewer contain exactly the same drawing.

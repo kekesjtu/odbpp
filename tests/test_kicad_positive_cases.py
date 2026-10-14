@@ -31,6 +31,11 @@ def load(case: str, group: str = "clean"):
     return job, build_step_preview(job)
 
 
+def json_region(layer):
+    from odbpp.clipper import region_from_rings
+    return region_from_rings([(p["points"], not p["island"]) for p in layer["polygons"]])
+
+
 def by_name(document: dict) -> dict[str, dict]:
     return {layer["name"]: layer for layer in document["steps"][0]["layers"]}
 
@@ -62,14 +67,14 @@ def test_approved_native_and_clean_archives(case: str):
         assert not job.diagnostics.errors
         doc = step_to_json(job, preview)
         assert doc["units"] == "mm"
-        profile = doc["steps"][0]["profile"]["polygons"]
+        profile = doc["steps"][0]["domains"][0]["polygons"]
         assert len(profile) == 1 and profile[0]["island"]
         points = profile[0]["points"]
         assert (min(x for x, _ in points), min(y for _, y in points),
                 max(x for x, _ in points), max(y for _, y in points)) == BOARD_BOUNDS
         for layer in doc["steps"][0]["layers"]:
-            assert layer["polarity"] == "P"
-            if layer["area_mm2"] > 0 and layer["context"] == "BOARD":
+            assert layer["parse_info"]["polarity"] == "P"
+            if bool(layer["polygons"]) and layer["context"] == "BOARD":
                 assert layer["z_mm"] is not None
                 assert layer["z_mm"]["end_mm"] >= layer["z_mm"]["start_mm"]
                 assert isinstance(layer["z_mm"]["thickness_known"], bool)
@@ -124,17 +129,17 @@ def test_same_source_through_via_converts_both_unit_systems():
         documents[unit] = by_name(step_to_json(job, preview))
     for name in ("F.CU", "B.CU", "DIELECTRIC_1", "DRILL_PLATED_F.CU-B.CU"):
         mm, inch = documents["mm"][name], documents["in"][name]
-        assert mm["bounds_mm"] == pytest.approx(inch["bounds_mm"], abs=.0001)
-        assert mm["area_mm2"] == pytest.approx(inch["area_mm2"], abs=.001)
-    metric_weight = documents["mm"]["F.CU"]["copper_weight"]
-    imperial_weight = documents["in"]["F.CU"]["copper_weight"]
+        assert json_region(mm).bounds == pytest.approx(json_region(inch).bounds, abs=.0001)
+        assert json_region(mm).area == pytest.approx(json_region(inch).area, abs=.001)
+    metric_weight = documents["mm"]["F.CU"]["thickness"]
+    imperial_weight = documents["in"]["F.CU"]["thickness"]
     assert (metric_weight["kind"], metric_weight["unit"]) == ("thickness_um", "um")
-    assert metric_weight["thickness_mm"] == pytest.approx(.001)
+    assert (documents["mm"]["F.CU"]["z_mm"]["end_mm"] - documents["mm"]["F.CU"]["z_mm"]["start_mm"]) == pytest.approx(.001)
     assert (imperial_weight["kind"], imperial_weight["unit"]) == (
         "areal_density_oz_ft2", "oz/ft2")
     assert imperial_weight["thickness_source"] == "assumed_density"
     assert imperial_weight["assumed_density_g_cm3"] == 8.96
-    assert imperial_weight["thickness_mm"] == pytest.approx(.0340571, abs=.000001)
+    assert (documents["in"]["F.CU"]["z_mm"]["end_mm"] - documents["in"]["F.CU"]["z_mm"]["start_mm"]) == pytest.approx(.0340571, abs=.000001)
 
 
 def test_filled_zone_closed_hole_and_rotated_pad():

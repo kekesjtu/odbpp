@@ -1,0 +1,616 @@
+{
+  "$defs": {
+    "DiagnosticModel": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "warning",
+            "error"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        }
+      },
+      "required": [
+        "level",
+        "code",
+        "message"
+      ],
+      "title": "DiagnosticModel",
+      "type": "object"
+    },
+    "DomainModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "step_profile",
+            "layer_profile"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "polygons": {
+          "items": {
+            "$ref": "#/$defs/PolygonModel"
+          },
+          "title": "Polygons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "polygons"
+      ],
+      "title": "DomainModel",
+      "type": "object"
+    },
+    "LayerModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "description": "ODB++ 层类型；等效器明确报告不支持的材料类型。",
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        },
+        "context": {
+          "default": "BOARD",
+          "enum": [
+            "BOARD",
+            "MISC"
+          ],
+          "title": "Context",
+          "type": "string"
+        },
+        "row": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Row",
+          "type": "integer"
+        },
+        "form": {
+          "default": "RIGID",
+          "enum": [
+            "RIGID",
+            "FLEX"
+          ],
+          "title": "Form",
+          "type": "string"
+        },
+        "form_source": {
+          "default": "DEFAULT",
+          "enum": [
+            "DECLARED",
+            "FLEX_SUBTYPE",
+            "DEFAULT"
+          ],
+          "title": "Form Source",
+          "type": "string"
+        },
+        "geometry_status": {
+          "default": "ready",
+          "enum": [
+            "ready",
+            "failed",
+            "omitted"
+          ],
+          "title": "Geometry Status",
+          "type": "string"
+        },
+        "geometry_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Error"
+        },
+        "domain_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Domain Id"
+        },
+        "polygons": {
+          "items": {
+            "$ref": "#/$defs/PolygonModel"
+          },
+          "title": "Polygons",
+          "type": "array"
+        },
+        "z_mm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ZExtentModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "thickness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThicknessModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "copper_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Copper Index"
+        },
+        "copper_span": {
+          "anyOf": [
+            {
+              "items": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "自顶向下的两个铜层索引；不重复存储端点名称。",
+          "title": "Copper Span"
+        },
+        "parse_info": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParseInfoModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "polygons"
+      ],
+      "title": "LayerModel",
+      "type": "object"
+    },
+    "ParseInfoModel": {
+      "additionalProperties": false,
+      "description": "Optional audit information; never used to reinterpret material polarity.",
+      "properties": {
+        "polarity": {
+          "enum": [
+            "P",
+            "N"
+          ],
+          "title": "Polarity",
+          "type": "string"
+        },
+        "base_from_profile": {
+          "title": "Base From Profile",
+          "type": "boolean"
+        },
+        "feature_records": {
+          "minimum": 0,
+          "title": "Feature Records",
+          "type": "integer"
+        },
+        "polarity_runs": {
+          "minimum": 0,
+          "title": "Polarity Runs",
+          "type": "integer"
+        },
+        "drills_subtracted": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Drills Subtracted",
+          "type": "array"
+        },
+        "drill_cut_mm2": {
+          "minimum": 0,
+          "title": "Drill Cut Mm2",
+          "type": "number"
+        }
+      },
+      "required": [
+        "polarity",
+        "base_from_profile",
+        "feature_records",
+        "polarity_runs",
+        "drills_subtracted",
+        "drill_cut_mm2"
+      ],
+      "title": "ParseInfoModel",
+      "type": "object"
+    },
+    "PolygonModel": {
+      "additionalProperties": false,
+      "description": "A regularised positive boundary; island=False explicitly denotes a hole.",
+      "properties": {
+        "island": {
+          "title": "Island",
+          "type": "boolean"
+        },
+        "points": {
+          "description": "毫米坐标；首点不在末尾重复；至少三个点。",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "island",
+        "points"
+      ],
+      "title": "PolygonModel",
+      "type": "object"
+    },
+    "ProductModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "odb_version": {
+          "title": "Odb Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "odb_version"
+      ],
+      "title": "ProductModel",
+      "type": "object"
+    },
+    "SourceModel": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "job_root": {
+          "title": "Job Root",
+          "type": "string"
+        },
+        "input_units": {
+          "enum": [
+            "MM",
+            "INCH"
+          ],
+          "title": "Input Units",
+          "type": "string"
+        },
+        "product": {
+          "$ref": "#/$defs/ProductModel"
+        }
+      },
+      "required": [
+        "path",
+        "job_root",
+        "input_units",
+        "product"
+      ],
+      "title": "SourceModel",
+      "type": "object"
+    },
+    "StepModel": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "profile_domain_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "整板 step profile 在 domains 中的引用；不能以铜图案替代。",
+          "title": "Profile Domain Id"
+        },
+        "domains": {
+          "items": {
+            "$ref": "#/$defs/DomainModel"
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "layers": {
+          "description": "唯一层目录；包含失败及未导出层，按 matrix row 排列。",
+          "items": {
+            "$ref": "#/$defs/LayerModel"
+          },
+          "title": "Layers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "profile_domain_id",
+        "domains",
+        "layers"
+      ],
+      "title": "StepModel",
+      "type": "object"
+    },
+    "ThicknessModel": {
+      "additionalProperties": false,
+      "properties": {
+        "known": {
+          "description": "仅本层厚度是否有有效来源，不受上方未知厚度影响。",
+          "title": "Known",
+          "type": "boolean"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "input_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Value"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "thickness",
+                "thickness_um",
+                "areal_density_oz_ft2"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "enum": [
+                "mm",
+                "inch",
+                "um",
+                "oz/ft2"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "thickness_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "attribute",
+                "assumed_density"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thickness Source"
+        },
+        "assumed_density_g_cm3": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assumed Density G Cm3"
+        },
+        "spec_deviation": {
+          "default": false,
+          "title": "Spec Deviation",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "known",
+        "source"
+      ],
+      "title": "ThicknessModel",
+      "type": "object"
+    },
+    "ZExtentModel": {
+      "additionalProperties": false,
+      "properties": {
+        "start_mm": {
+          "minimum": 0,
+          "title": "Start Mm",
+          "type": "number"
+        },
+        "end_mm": {
+          "minimum": 0,
+          "title": "End Mm",
+          "type": "number"
+        },
+        "thickness_known": {
+          "description": "本层厚度与累计绝对 Z 联合可信；未知时仍输出 best-effort Z。",
+          "title": "Thickness Known",
+          "type": "boolean"
+        },
+        "source": {
+          "default": "unknown",
+          "description": "绝对 Z 的来源；钻孔为跨层跨度，不代表独立厚度层。",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_mm",
+        "end_mm",
+        "thickness_known"
+      ],
+      "title": "ZExtentModel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One physical step, positive polygons, mm XY and absolute downward Z.",
+  "properties": {
+    "units": {
+      "const": "mm",
+      "title": "Units",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SourceModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "resolution_mm": {
+      "default": 0.0001,
+      "description": "规整后坐标网格间距，单位 mm；非材料采样光栅。",
+      "exclusiveMinimum": 0,
+      "title": "Resolution Mm",
+      "type": "number"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/StepModel"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "diagnostics": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/DiagnosticModel"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Diagnostics"
+    }
+  },
+  "required": [
+    "units",
+    "steps"
+  ],
+  "title": "BoardDocument",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

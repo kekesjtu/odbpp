@@ -18,7 +18,7 @@ ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**�
 [ 2. 中间格式 (.json) ]                [ 3. 分层矢量预览 (.svg/.html) ]
   已实现  build_step_preview()            已实现  render_svg() / render_html()
           step_to_json()                          write_outputs()
-   schema = odbpp/preview-2（含逐层计算域）
+   Pydantic 当前接口（含逐层计算域，无版本协商）
         │
         ▼
 [ 4. PCB 物性等效器 ]  ← 已实现  equivalence_from_document()
@@ -87,7 +87,7 @@ region 和网格坐标不随光栅变化。算法与预算见
 uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
     --grid-level standard -o build/ks-eq
 
-# 或从已有 preview-2 JSON 起（推荐先 export --only-json，再多次试算）
+# 或从当前中间 JSON 起（推荐先 export --only-json，再多次试算）
 uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
     --px 9600 --py 7200 --min-cell-mm 0.1 --max-cell-mm 5 -o build/ks-eq
 ```
@@ -198,7 +198,8 @@ for layer in step.layers:
 | **`clipper.py`** | **平面布尔运算 + Minkowski 扫掠**：整数量化（1e-6 mm）、环方向归一、并/差/交、`stroke_paths`（圆符号精确带宽）、`sweep_paths`（方符号精确拖拽） |
 | **`expand.py`** | **图元 → 实心区域**：符号解析与放置、`L`/`A` 扫掠、极性与基底合成、按极性段与 stroke 定义批处理；介质层扣除相交钻孔投影 |
 | **`stackup.py`** | **层叠模型**：铜层序号、介质/钻孔的 Z 区间（半开）、相交判定，以及 `.layer_dielectric`/`.copper_weight` 的单位规范化 |
-| **`export.py`** | **中间格式（数据流 2）**：逐层流式合成 `StepPreview`，输出公制 JSON（`odbpp/preview-2`，含逐层计算域） |
+| **`export.py`** | **中间格式（数据流 2）**：逐层流式合成 `StepPreview`，构造 Pydantic 接口并导出公制 JSON，含逐层计算域 |
+| **`intermediate.py`** | **唯一 JSON 接口定义**：Pydantic 导出/导入与文本 `.schema`，计算内核仍为 dataclass/数组 |
 | **`svg.py`** | **渲染（数据流 3）**：SVG 与自包含 HTML 查看器 |
 | **`rectify.py`** | **矩形化**：step profile → 轴对齐阶梯 region，记录面积/形状误差并逐岛逐孔校验 |
 | **`grid.py`** | **整板网格**：region 边界强制格线，按单元尺寸上下限独立细分各强制区间 |
@@ -231,15 +232,15 @@ for layer in step.layers:
 9. **孔/岛是显式数据，不是推断出来的朝向。** 所有输出的环都按规范 p.39
    缠绕，但 JSON 里同时带 `island` 布尔字段——消费者不必知道约定就能正确读取。
 10. **降级只降一层。** 某一层不可用（如约束 3 的 profile 失败）只让**该层**
-    缺席预览，其余各层照常输出，并在诊断里区分 `empty_layers`（合成为空）
-    与 `failed_layers`（无法合成）。
+    缺席预览，其余各层照常输出，中间 JSON 在完整层目录中区分 `geometry_status=ready` 的空图案、
+    `failed`（无法合成）和 `omitted`（未导出）。
 11. **Z 区间缺失就报错，不猜。** 钻孔的 `START_NAME`/`END_NAME` 解析不出来，
     就不扣除并记 `stackup.drill_span_unknown`；把未知跨度当成“整板贯穿”
     会在输出里造出与真实通孔无法区分的假孔。
 12. **写出的坐标就是验证过的坐标。** 序列化前先把几何量化到输出网格并
-    重新 union/Simplify，`area_mm2`、`bounds_mm` 均由最终坐标重算；
+    重新 union/Simplify；面积与包围盒需要时从最终坐标计算，不写重复缓存；
     在目标分辨率下无面积的环被丢弃并记 `export.degenerate_ring`。
-13. **板外区域不是 FR4。** 等效器只接受 `odbpp/preview-2`；某层在某网格单元内
+13. **板外区域不是 FR4。** 等效器按共用 Pydantic 定义校验当前格式；某层在某网格单元内
     是否存在，由其**逐层计算域**决定，绝不用铜图案反推。
 14. **矩形化误差是显式数据。** 阶梯边界丢失/填平的面积、精度、以及每个岛/孔的
     存亡都写进 meta；超过精度允许的上界报 `rectify.area_error`，不静默近似。
@@ -267,12 +268,12 @@ for layer in step.layers:
 
 ## 中间 JSON 携带的层叠与属性语义
 
-`steps[].layers[]` 除多边形外还给出：`attribute_units`（该层 attrlist 的单位作用域）、
-`thickness_mm` 与 `thickness{raw,value_mm,source}`（`.layer_dielectric` 的规范化厚度）、
-`copper_weight{value,kind,unit}`（`MM` 为 µm 铜厚、`INCH` 为 oz/ft² 面密度）、
-`copper_index`/`z_span`/`start_layer`/`end_layer`（层叠位置），以及
-`drills_subtracted`/`drill_cut_mm2`（约束 3 实际扣除的钻孔与面积）。
-`steps[].stackup[]` 按行序汇总整叠层。
+解析器导出、等效器导入共用 Pydantic 定义，内部图元、几何和数值计算继续使用 dataclass/数组。
+不进行 schema/generator 版本校验或兼容迁移。轮廓仅保存在 `domains`，step 和各层引用；
+完整层目录只保留 `layers`，通过状态区分成功、失败与未导出。
+数值厚度由绝对 Z 起止推导；`thickness` 集中记录来源、原始物理量及英制铜密度假设。
+字段、坐标约定和错误处理见 [中间 JSON 说明](docs/equivalence/07-intermediate-json.md)，
+文本格式定义见 [intermediate.schema](docs/intermediate.schema)。
 
 ## 测试
 

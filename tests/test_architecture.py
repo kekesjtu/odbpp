@@ -14,8 +14,8 @@ def coordinates(result):
 
 
 def test_resolution_does_not_change_region_or_cell_coordinates():
-    d=build_document(domains=[{"id":"step_profile","polygons":[
-        {"island":True,"points":[(0,0),(30,0),(30,20),(10,20)]}]}],
+    d=build_document(domains=[{"id":"step_profile","source":"step_profile","polygons":[
+        {"island":True,"points":[[0,0],[30,0],[30,20],[10,20]]}]}],
         layers=[{"name":"CU","type":"SIGNAL","polygons":[rect(5,1,6,18)]}])
     results=[equivalence_from_document(d,EquivalenceOptions(GridOptions(p,p)))
              for p in (2,200,400)]
@@ -33,8 +33,8 @@ def test_region_boundary_propagates_into_global_cartesian_axes():
 
 
 def test_rigidflex_cells_are_complete_in_each_layer_and_share_region_ids():
-    domains=[{"id":"step_profile","polygons":[rect(0,0,10,10)]},
-             {"id":"left","polygons":[rect(0,0,5,10)]}]
+    domains=[{"id":"step_profile","source":"step_profile","polygons":[rect(0,0,10,10)]},
+             {"id":"left","source":"layer_profile","polygons":[rect(0,0,5,10)]}]
     d=build_document(domains=domains,layers=[
        {"name":"ALL","type":"SIGNAL","polygons":[]},
        {"name":"LEFT","type":"DIELECTRIC","domain_id":"left","polygons":[]}])

@@ -113,9 +113,8 @@ def hole(x0: float, y0: float, x1: float, y1: float) -> dict:
 def document(layers, *, profile=None, domains=None) -> dict:
     profile = profile if profile is not None else rect(0, 0, 10, 10)
     domain_list = domains or [{"id": "step_profile", "source": "step_profile",
-                               "layer": None, "polygons": [profile]}]
+                               "polygons": [profile]}]
     layer_docs = []
-    stackup = []
     for spec in layers:
         extent = spec.get("z_mm") or {
             "start_mm": 0.0, "end_mm": 0.035, "thickness_known": True}
@@ -124,11 +123,9 @@ def document(layers, *, profile=None, domains=None) -> dict:
                            "polygons": spec.get("polygons", []),
                            "domain_id": spec.get("domain_id", "step_profile"),
                            "z_mm": extent})
-        stackup.append({"name": spec["name"], "type": spec.get("type", "SIGNAL"),
-                        "z_mm": extent})
-    return {"schema": "odbpp/preview-2", "units": "mm",
+    return {"units": "mm",
             "steps": [{"name": "pcb", "domains": domain_list,
-                       "layers": layer_docs, "stackup": stackup}]}
+                       "layers": layer_docs, "profile_domain_id": "step_profile"}]}
 
 
 def run(document_dict, *, px=4, py=4, max_cell_mm=None, mask_sink=None):
@@ -297,10 +294,8 @@ class TestMaskFromEquivalence:
 
     def test_board_outside_the_domain_stays_grey_not_white(self):
         domains = [
-            {"id": "step_profile", "source": "step_profile", "layer": None,
-             "polygons": [rect(0, 0, 10, 10)]},
-            {"id": "left", "source": "layer_profile", "layer": "CU",
-             "polygons": [rect(0, 0, 5, 10)]},
+            {"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "left", "source": "layer_profile", "polygons": [rect(0, 0, 5, 10)]},
         ]
         captured: list[LayerMask] = []
         run(document([{"name": "CU", "polygons": [rect(0, 0, 10, 10)],
@@ -475,8 +470,8 @@ class TestHeatmapRendering:
 
     def test_grid_outlines_csv_cells_and_leaves_missing_domains_blank(self, tmp_path):
         domains = [
-            {"id": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
-            {"id": "left", "polygons": [rect(0, 0, 5, 10)]},
+            {"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "left", "source": "layer_profile", "polygons": [rect(0, 0, 5, 10)]},
         ]
         report = self._report(tmp_path, document([
             {"name": "CU", "domain_id": "left", "polygons": []},
@@ -582,10 +577,8 @@ class TestHeatmapRendering:
         # covers but this one does not is drawn as "no data" rather than
         # squeezed away or painted as base laminate.
         domains = [
-            {"id": "step_profile", "source": "step_profile", "layer": None,
-             "polygons": [rect(0, 0, 10, 10)]},
-            {"id": "left", "source": "layer_profile", "layer": "CU",
-             "polygons": [rect(0, 0, 5, 10)]},
+            {"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "left", "source": "layer_profile", "polygons": [rect(0, 0, 5, 10)]},
         ]
         report = self._report(
             tmp_path,
@@ -775,7 +768,6 @@ class TestCommandLine:
         # is untrustworthy, so nothing at all may be written -- including the
         # masks, which are produced while the layers are being walked.
         domains = [{"id": "step_profile", "source": "step_profile",
-                    "layer": None,
                     "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)]}]
         preview = tmp_path / "board.json"
         preview.write_text(json.dumps(document(

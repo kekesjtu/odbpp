@@ -45,10 +45,11 @@ from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
 from .model import Job, Layer, Step
 from .stackup import Stackup, describe_span
+from .intermediate import BoardDocument
 
 
 __all__ = [
-    "SCHEMA",
+    "step_to_document",
     "PreviewOptions",
     "LayerPreview",
     "StepPreview",
@@ -60,23 +61,6 @@ __all__ = [
     "layer_summary_lines",
     "write_json",
 ]
-
-#: Identifies the JSON layout, so a consumer can reject a newer file rather than
-#: misread it.
-#:
-#: ``preview-2`` adds the per-step ``domains`` array and the per-layer
-#: ``domain_id``/``domain_source`` fields.  A material-equivalence consumer needs
-#: each physical layer's two-dimensional *computational domain* on its own: the
-#: copper polygons are a pattern, not a domain, and the region outside the board
-#: must never be read as base laminate (AGENTS constraint 7).  ``preview-1`` had
-#: no such field, so a consumer that needs it must reject the old schema rather
-#: than guess.
-SCHEMA = "odbpp/preview-2"
-
-#: Schemas this module still knows how to *read*.  Writing always uses
-#: :data:`SCHEMA`; reading a newer value is an error in the consumer, not here.
-KNOWN_SCHEMAS = ("odbpp/preview-1", "odbpp/preview-2")
-
 
 @dataclass(frozen=True)
 class PreviewOptions:
@@ -537,223 +521,121 @@ def _serialised_rings(preview, digits: int) -> tuple[list[Ring], float, Optional
     return region.rings, region.area, region.bounds
 
 
-def layer_to_json(preview: LayerPreview, *, round_digits: Optional[int] = None) -> dict:
-    """One layer as JSON-ready data.
-
-    Rings are emitted as flat point lists with an explicit ``island`` flag rather
-    than as path strings, so a consumer can do geometry with them.  Nesting is
-    *stated* by the flag and not inferred from winding, even though the winding
-    is also correct.
-
-    Everything an attribute-derived number means is spelled out next to it: the
-    unit scope of the ``attrlist`` it came from (``attribute_units``), the
-    millimetre thickness (``thickness_mm``) with its provenance
-    (``thickness``), the copper weight *as its own physical quantity*
-    (``copper_weight``), and the layer's place in the stack (``copper_index``,
-    ``z_span``, ``start_layer``/``end_layer``).  A consumer must be able to
-    rebuild the stackup from this document alone -- it must not have to know
-    that an imperial file's dielectric value is inches.
-
-    ``z_mm`` is the layer's absolute extent on the board Z axis, in millimetres
-    from the top of the stack (see :meth:`StepPreview.z_axis`).  It is ``null``
-    for layers that are not part of the board.
-    """
-    digits = _preview_digits(preview, round_digits)
-    geometry = preview.geometry
-    rings, area, bounds = _serialised_rings(preview, digits)
-    extent = preview.z_extent()
-    thickness = preview.thickness()
-    weight = preview.copper_weight()
-    stackup = preview.stackup
-    ref = preview.layer.ref
-
+def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> dict:
+    """One authoritative layer record; numerical thickness is derived from Z."""
+    ref = layer.ref
+    extent = None if stackup is None else stackup.z_extent(layer)
+    span = None if stackup is None else stackup.span_of(layer)
+    thickness = None
+    if stackup is not None and layer.type is not None and (
+            layer.is_copper or layer.type.is_non_copper_material):
+        _value, known, source = stackup._material_thickness(layer)
+        thickness = {"known": known, "source": source}
+        weight = stackup.weight(layer) if layer.is_copper else None
+        stated = stackup.thickness(layer) if weight is None else None
+        if weight is not None:
+            thickness.update(input_value=weight.raw, kind=weight.kind.value,
+                             unit="um" if not weight.is_thickness_derived else "oz/ft2",
+                             thickness_source="assumed_density" if weight.is_thickness_derived else "attribute")
+            if weight.is_thickness_derived:
+                thickness["assumed_density_g_cm3"] = weight.density_g_cm3
+        elif stated is not None:
+            thickness.update(input_value=stated.raw, kind="thickness",
+                             unit="mm" if stated.unit_system == "MM" else "inch",
+                             thickness_source="attribute", spec_deviation=stated.spec_deviation)
     return {
-        "name": preview.name,
-        "type": preview.type_name,
-        "context": ref.context.value,
-        "polarity": ref.polarity.value,
-        "form": ref.form.value,
-        # How firm that answer is. Spec p.66 defaults FORM to RIGID, so is_flex is
-        # always a real boolean; form_source says whether the exporter declared
-        # it, a FLEX subtype implied it, or the RIGID default supplied it.
-        "form_source": ref.form_source.value,
-        "is_flex": ref.is_flex,
-        "is_copper": preview.is_copper,
-        "row": ref.row,
-        "attributes": preview.layer_attributes(),
-        "attribute_units": preview.attribute_units(),
-        "thickness_mm": None if thickness is None
-        else _round(thickness.thickness_mm, digits + 3),
-        "thickness": None if thickness is None else thickness.as_dict(),
-        "copper_weight": None if weight is None else weight.as_dict(),
-        # Drill/stiffener span endpoints as authored, then resolved.
-        "start_layer": ref.start_name or None,
-        "end_layer": ref.end_name or None,
-        "copper_index": None if stackup is None
-        else stackup.copper_index(preview.name),
-        "z_span": preview.z_span(),
+        "name": layer.name,
+        "type": layer.type.value if layer.type is not None else "UNKNOWN",
+        "context": ref.context.value, "row": ref.row,
+        "form": ref.form.value, "form_source": ref.form_source.value,
+        "thickness": thickness,
+        "copper_index": None if stackup is None else stackup.copper_index(layer.name),
+        "copper_span": None if span is None else span.as_dict(),
         "z_mm": None if extent is None else {
             "start_mm": _round(extent.start_mm, digits + 3),
             "end_mm": _round(extent.end_mm, digits + 3),
-            "thickness_mm": _round(extent.thickness_mm, digits + 3),
-            "thickness_known": extent.thickness_known,
-            "source": extent.source,
+            "thickness_known": extent.thickness_known, "source": extent.source,
         },
-        "base_from_profile": geometry.used_base,
-        # Which step/domain this layer's equivalence computation is confined to.
-        # Filled in by :func:`step_to_json` (which has the step), left ``None``
-        # for a bare :func:`layer_to_json` call so the key always exists.
-        "domain_id": None,
-        "domain_source": None,
-        "domain_error": None,
-        "feature_records": geometry.records,
-        "polarity_runs": geometry.polarity_runs,
-        # AGENTS constraint 3: the dielectric's own Z interval decided which
-        # drills were projected out of it, and how much area that removed.
-        "drills_subtracted": list(geometry.drills_subtracted),
-        "drill_cut_mm2": _round(geometry.drill_cut_mm2, digits + 2),
-        "area_mm2": _round(area, digits + 2),
-        "bounds_mm": None if bounds is None
-        else [_round(b, digits) for b in bounds],
-        "polygons": [
-            {
-                "island": not ring.is_hole,
-                "points": _points_json(ring, digits),
-            }
-            for ring in rings
-        ],
     }
+
+
+def _layer_data(preview: LayerPreview, digits: int) -> dict:
+    rings, _area, _bounds = _serialised_rings(preview, digits)
+    geometry = preview.geometry
+    return {
+        **_layer_metadata(preview.layer, preview.stackup, digits),
+        "geometry_status": "ready", "domain_id": None,
+        "polygons": [{"island": not ring.is_hole, "points": _points_json(ring, digits)}
+                     for ring in rings],
+        "parse_info": {
+            "polarity": preview.layer.ref.polarity.value,
+            "base_from_profile": geometry.used_base,
+            "feature_records": geometry.records, "polarity_runs": geometry.polarity_runs,
+            "drills_subtracted": list(geometry.drills_subtracted),
+            "drill_cut_mm2": _round(geometry.drill_cut_mm2, digits + 2),
+        },
+    }
+
+
+def layer_to_json(preview: LayerPreview, *, round_digits: Optional[int] = None) -> dict:
+    """Serialise a single layer through the shared Pydantic IO contract."""
+    from .intermediate import LayerModel
+    return LayerModel.model_validate(_layer_data(preview, _preview_digits(preview, round_digits))).model_dump(
+        mode="json", exclude_none=True)
+
+
+def step_to_document(job: Job, preview: StepPreview, *,
+                     round_digits: Optional[int] = None,
+                     include_diagnostics: bool = True) -> BoardDocument:
+    """Build the current Pydantic contract once at the export boundary.
+
+    Layer geometry may be filtered for a preview, but the entire layer catalog
+    remains visible. Failed and intentionally omitted geometry are explicit.
+    """
+    digits = _preview_digits(preview, round_digits)
+    view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
+    domains, domain_of_layer = _domains_json(view, digits)
+    composed = {l.name.casefold(): l for l in view.layers}
+    failed = {name.casefold() for name in view.failed_layers}
+    catalog = {l.name.casefold(): l for l in view.step.layers}
+    catalog.update({l.name.casefold(): l.layer for l in view.layers})
+    layers = []
+    for layer in sorted(catalog.values(), key=lambda l: l.ref.row):
+        ready = composed.get(layer.name.casefold())
+        if ready is not None:
+            data = _layer_data(ready, digits)
+        else:
+            is_failed = layer.name.casefold() in failed or layer.profile_error is not None
+            data = {**_layer_metadata(layer, view.stackup, digits),
+                    "geometry_status": "failed" if is_failed else "omitted",
+                    "polygons": []}
+            if is_failed:
+                messages = [d.message for d in view.diagnostics
+                            if d.level == "error" and layer.name in d.message]
+                data["geometry_error"] = layer.profile_error or (messages[-1] if messages else "layer geometry could not be composed")
+        info = domain_of_layer.get(layer.name, {})
+        data["domain_id"] = info.get("id")
+        if info.get("error") and data.get("geometry_error") is None:
+            data["geometry_error"] = info["error"]
+        layers.append(data)
+    return BoardDocument.model_validate({
+        "units": "mm", "resolution_mm": 10 ** -digits,
+        "source": {"path": job.source_path, "job_root": job.root,
+                   "input_units": preview.units_in,
+                   "product": {"name": job.info.job_name or None, "odb_version": job.info.version}},
+        "steps": [{"name": preview.step.name,
+                   "profile_domain_id": "step_profile" if preview.step.profile is not None else None,
+                   "domains": domains, "layers": layers}],
+        "diagnostics": [_diagnostic_json(d) for d in preview.diagnostics] if include_diagnostics else None,
+    })
 
 
 def step_to_json(job: Job, preview: StepPreview, *,
                  round_digits: Optional[int] = None,
                  include_diagnostics: bool = True) -> dict:
-    """The whole intermediate document (data-flow step 2).
-
-    ``round_digits`` defaults to the resolution the preview was composed at, so
-    the document describes the geometry that was validated.  Passing a different
-    value re-regularises every layer at that resolution *once*, and the step
-    bounds and summary are derived from the layers that were actually written --
-    a summary that counted rings the layer array no longer holds would send a
-    consumer looking for geometry that is not there.
-    """
-    from . import __version__
-
-    digits = _preview_digits(preview, round_digits)
-    view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
-    layers = [layer_to_json(l, round_digits=digits) for l in view.layers]
-    domains, domain_of_layer = _domains_json(view, digits)
-    for layer_json in layers:
-        info = domain_of_layer.get(layer_json["name"], {})
-        layer_json["domain_id"] = info.get("id")
-        layer_json["domain_source"] = info.get("source")
-        layer_json["domain_error"] = info.get("error")
-    # Derived from the written layers, not from the pre-regularisation model, so
-    # the summary, the step bounds and the layer array cannot disagree.
-    boxes = [l["bounds_mm"] for l in layers if l["bounds_mm"] is not None]
-    bounds = None if not boxes else (
-        min(b[0] for b in boxes), min(b[1] for b in boxes),
-        max(b[2] for b in boxes), max(b[3] for b in boxes),
-    )
-    document = {
-        "schema": SCHEMA,
-        "generator": {"name": "odbpp", "version": __version__},
-        "units": "mm",
-        "source": {
-            "path": job.source_path,
-            "job_root": job.root,
-            "input_units": preview.units_in,
-            "product": {
-                "name": job.info.job_name or None,
-                "version": job.info.version,
-                "odb_version": job.info.version,
-            },
-        },
-        "coordinate_system": {
-            "origin": "as authored in the ODB++ step (no recentring)",
-            "y_axis": "up",
-            "winding": "islands clockwise, holes counter-clockwise (spec p.39)",
-            "resolution_mm": 10 ** -digits,
-            # Z is an axis of its own: a board stack measured downward from the
-            # top surface, not a direction in the X/Y drawing.
-            "z_axis": preview.z_axis(),
-        },
-        "steps": [{
-            "name": preview.step.name,
-            "bounds_mm": None if bounds is None
-            else [_round(b, digits) for b in bounds],
-            "profile": _profile_json(preview.step, digits, preview.diagnostics),
-            "domains": domains,
-            "stackup": _stackup_json(view, digits),
-            "layers": layers,
-        }],
-        "summary": {
-            "layer_count": len(layers),
-            "polygon_count": sum(len(l["polygons"]) for l in layers),
-            "empty_layers": [l["name"] for l in layers if not l["polygons"]],
-            "failed_layers": list(preview.failed_layers),
-        },
-    }
-
-    if include_diagnostics:
-        document["diagnostics"] = [_diagnostic_json(d) for d in preview.diagnostics]
-
-    return document
-
-
-def _stackup_json(preview: StepPreview, round_digits: int) -> Optional[list[dict]]:
-    """The ordered board stack: position, span and thickness per layer.
-
-    This is what makes the document rebuildable without re-deriving the matrix:
-    copper planes are indexed top-down, a dielectric or drill states the two
-    planes it spans, and every thickness is already in millimetres with the unit
-    scope it was converted from.  ``z_mm`` gives the same stack absolute
-    millimetres.  ``None`` when the preview has no stack model.
-    """
-    stackup = preview.stackup
-    if stackup is None:
-        return None
-
-    out: list[dict] = []
-    for layer in stackup.board_layers:
-        thickness = stackup.thickness(layer)
-        extent = stackup.z_extent(layer)
-        out.append({
-            "row": layer.ref.row,
-            "name": layer.name,
-            "type": layer.type.value if layer.type is not None else "UNKNOWN",
-            "copper_index": stackup.copper_index(layer.name),
-            "thickness_mm": None if thickness is None
-            else _round(thickness.thickness_mm, round_digits + 3),
-            "z_span": describe_span(stackup, stackup.span_of(layer)),
-            "z_mm": None if extent is None else {
-                "start_mm": _round(extent.start_mm, round_digits + 3),
-                "end_mm": _round(extent.end_mm, round_digits + 3),
-                "thickness_mm": _round(extent.thickness_mm, round_digits + 3),
-                "thickness_known": extent.thickness_known,
-                "source": extent.source,
-            },
-            "start_layer": layer.ref.start_name or None,
-            "end_layer": layer.ref.end_name or None,
-        })
-    return out
-
-
-def _profile_json(step: Step, round_digits: int,
-                  diagnostics: Optional[Diagnostics] = None) -> Optional[dict]:
-    if step.profile is None:
-        return None
-    # Profile boundaries need the same topology-safe quantisation as layers:
-    # rounding alone can collapse slivers or close a narrow gap between islands.
-    region, collapsed = snap_to_grid(region_from_geometry(step.profile), round_digits)
-    if collapsed and diagnostics is not None:
-        diagnostics.warn(
-            EXPORT_DEGENERATE_RING,
-            f"step {step.name!r} profile: {collapsed} ring(s) had no area left at "
-            f"the {round_digits}-decimal output grid and were dropped; "
-            f"the remaining geometry was re-regularised at that resolution",
-        )
-    return {"polygons": _region_polygons_json(region, round_digits)}
+    """Convenience mapping API; file writers use step_to_document directly."""
+    return step_to_document(job, preview, round_digits=round_digits,
+                            include_diagnostics=include_diagnostics).model_dump(mode="json", exclude_none=True)
 
 
 def _region_polygons_json(region, round_digits: int) -> list[dict]:
@@ -779,7 +661,7 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
     * a valid layer profile wins (``source: layer_profile``);
     * otherwise the step profile applies (``source: step_profile``);
     * a layer profile that exists but cannot be parsed is *not* silently
-      replaced by the step profile: it sets ``domain_error`` and leaves
+      replaced by the step profile: it sets ``geometry_error`` and leaves
       ``domain_id`` null.
 
     The step profile is emitted once and shared by every layer that falls back to
@@ -798,14 +680,20 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
     step_domain_id: Optional[str] = None
     if step.profile is not None:
         step_domain_id = "step_profile"
-        region, _collapsed = snap_to_grid(
+        region, collapsed = snap_to_grid(
             region_from_geometry(step.profile), round_digits
         )
-        domains.append(_domain_json(step_domain_id, "step_profile", None,
+        if collapsed:
+            preview.diagnostics.warn(
+                EXPORT_DEGENERATE_RING,
+                f"step {step.name!r} profile: {collapsed} ring(s) had no area left at "
+                f"the {round_digits}-decimal output grid and were dropped; "
+                f"the remaining geometry was re-regularised at that resolution",
+            )
+        domains.append(_domain_json(step_domain_id, "step_profile",
                                     region, round_digits))
 
-    for layer_preview in preview.layers:
-        layer = layer_preview.layer
+    for layer in preview.step.layers:
         if layer.profile_error is not None:
             mapping[layer.name] = {
                 "id": None,
@@ -823,8 +711,7 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
                 region, _collapsed = snap_to_grid(
                     region_from_geometry(layer.profile), round_digits
                 )
-                domains.append(_domain_json(domain_id, "layer_profile",
-                                            layer.name, region, round_digits))
+                domains.append(_domain_json(domain_id, "layer_profile", region, round_digits))
                 seen[key] = domain_id
             mapping[layer.name] = {"id": domain_id, "source": "layer_profile",
                                    "error": None}
@@ -842,18 +729,9 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
     return domains, mapping
 
 
-def _domain_json(domain_id: str, source: str, layer_name: Optional[str],
-                 region, round_digits: int) -> dict:
-    bounds = region.bounds
-    return {
-        "id": domain_id,
-        "source": source,
-        "layer": layer_name,
-        "area_mm2": _round(region.area, round_digits + 2),
-        "bounds_mm": None if bounds is None
-        else [_round(b, round_digits) for b in bounds],
-        "polygons": _region_polygons_json(region, round_digits),
-    }
+def _domain_json(domain_id: str, source: str, region, round_digits: int) -> dict:
+    return {"id": domain_id, "source": source,
+            "polygons": _region_polygons_json(region, round_digits)}
 
 
 def _diagnostic_json(diagnostic: Diagnostic) -> dict:
@@ -866,12 +744,9 @@ def _diagnostic_json(diagnostic: Diagnostic) -> dict:
 
 
 def write_json(document: dict, path: str) -> None:
-    """Write the document with stable formatting."""
-    import json
-
-    with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(document, handle, ensure_ascii=False, indent=1, sort_keys=False)
-        handle.write("\n")
+    """Validate and write through the single current contract."""
+    from .intermediate import validate_document, write_document
+    write_document(validate_document(document), path)
 
 
 def layer_summary_lines(preview: StepPreview) -> str:

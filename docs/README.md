@@ -70,3 +70,8 @@ python tools/fetch_spec.py --verify   # 只校验现有文件
 文档与代码中引用规范时，一律使用 `p.<PDF 页码>`，例如
 「单位双轨制见 p.36 / p.166」。这些页码可通过
 `python tools/extract_spec_text.py --page 36 36` 直接复核。
+
+## 当前中间 JSON
+
+[intermediate.schema](intermediate.schema) 从共用 Pydantic 模型生成，
+[接口说明](equivalence/07-intermediate-json.md) 记录字段和物理语义。项目保持唯一当前格式，不做版本协商。

@@ -543,7 +543,7 @@ class TestWriteOutputs:
 
         with open(outputs.json, encoding="utf-8") as handle:
             document = json.load(handle)
-        assert document["schema"]
+        assert "schema" not in document
 
 
 # ---------------------------------------------------------------------------
@@ -622,7 +622,7 @@ class TestOutputPrecisionConsistency:
         document = json.loads(Path(outputs.json).read_text(encoding="utf-8"))
         layer = document["steps"][0]["layers"][0]
         assert layer["polygons"] == []
-        assert document["summary"]["empty_layers"] == [name]
+        assert layer["geometry_status"] == "ready" and layer["polygons"] == []
         root = parse(Path(outputs.svg).read_text(encoding="utf-8"))
         group = next(g for g in layer_groups(root) if g.get("data-name") == name)
         assert path_of(group) == ""

@@ -1,7 +1,7 @@
 # MaterialMap 当前接口与物性模型
 
 当前实现以 [内接架构说明](05-inscribed-architecture.md) 为准。
-解析器输出一个物理 step 的 odbpp/preview-2 JSON；等效器输出
+解析器输出一个物理 step 的[当前中间 JSON](07-intermediate-json.md)；等效器输出
 odbpp/materialmap-5 CSV/meta。JSON 是两个模块之间唯一的数据接口。
 
 ## 完整实体单元

@@ -19,6 +19,7 @@ import sys
 from odbpp.visualize import unique_image_stem
 from odbpp.grid import GridOptions
 from odbpp.equiv import pipeline_fingerprint
+from odbpp.intermediate import read_document
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,13 +49,12 @@ def existing_preview(directory: Path, source: Path) -> tuple[Path, dict] | None:
     if len(json_files) != 1:
         return None
     try:
-        data = json.loads(json_files[0].read_text(encoding="utf-8"))
+        data = read_document(json_files[0]).model_dump(mode="json", exclude_none=True)
         authored_source = str(source.relative_to(ROOT)).replace("\\", "/")
         output_source = data["source"]["path"].replace("\\", "/")
         steps = data["steps"]
         stem = json_files[0].stem
-        if (data["schema"] != "odbpp/preview-2"
-                or data["units"] != "mm"
+        if (data["units"] != "mm"
                 or output_source != authored_source or len(steps) != 1
                 or not (directory / f"{stem}.svg").is_file()
                 or not (directory / f"{stem}.html").is_file()):
@@ -95,9 +95,7 @@ def existing_equivalence(directory: Path, preview: Path, *,
             return None
         if (config.get("raster") or {}).get("mode") != ("automatic" if px is None else "explicit"):
             return None
-        if (data["schema"] != "odbpp/materialmap-5"
-                or data.get("pipeline_fingerprint") != pipeline_fingerprint()
-                or data["source"]["preview_schema"] != "odbpp/preview-2"
+        if (data.get("pipeline_fingerprint") != pipeline_fingerprint()
                 or actual_source != expected_source
                 or (px is not None and (data["raster"]["px"] != px or data["raster"]["py"] != py))
                 or (not grid_level and data["grid"]["size_constraints_mm"] != {

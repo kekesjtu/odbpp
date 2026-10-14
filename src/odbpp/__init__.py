@@ -86,7 +86,9 @@ from .export import (
     layer_to_json,
     regularise_preview,
     step_to_json,
+    step_to_document,
 )
+from .intermediate import BoardDocument, read_document, write_document
 from .job import LoadOptions, load_job
 from .stackup import Stackup, ZExtent, ZSpan
 from .model import (
@@ -156,6 +158,10 @@ __all__ = [
     "build_step_preview",
     "regularise_preview",
     "step_to_json",
+    "step_to_document",
+    "BoardDocument",
+    "read_document",
+    "write_document",
     "layer_to_json",
     # stackup (layer order, dielectric/drill Z spans, thicknesses)
     "Stackup",

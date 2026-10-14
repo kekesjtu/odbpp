@@ -184,7 +184,7 @@ class TestExport:
             "-o", str(tmp_path))
         document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
         assert document["units"] == "mm"
-        assert document["schema"].startswith("odbpp/")
+        assert "schema" not in document and "generator" not in document
         for layer in document["steps"][0]["layers"]:
             for polygon in layer["polygons"]:
                 assert isinstance(polygon["island"], bool)
@@ -206,7 +206,7 @@ class TestExport:
                                str(sample_path("minimal-test-odb")),
                                "-o", str(tmp_path), "--layer", "top", "--only-json")
         document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
-        assert [l["name"] for l in document["steps"][0]["layers"]] == ["top"]
+        assert [l["name"] for l in document["steps"][0]["layers"] if l["geometry_status"] == "ready"] == ["top"]
         assert "1 of 1 layers" in out
 
     def test_a_misspelled_layer_exits_nonzero_without_writing(self, capsys, tmp_path):
@@ -229,14 +229,14 @@ class TestExport:
         document = json.loads((tmp_path / "BOARD.json").read_text(encoding="utf-8"))
         names = [l["name"] for l in document["steps"][0]["layers"]]
         assert "F.CU" in names
-        assert "DIELECTRIC_1" not in names
-        assert document["summary"]["failed_layers"] == ["DIELECTRIC_1"]
+        assert "DIELECTRIC_1" in names
+        assert [l["name"] for l in document["steps"][0]["layers"] if l["geometry_status"] == "failed"] == ["DIELECTRIC_1"]
 
     def test_digits_changes_the_coordinate_precision(self, capsys, tmp_path):
         run(capsys, "export", str(sample_path("minimal-test-odb")),
             "-o", str(tmp_path), "--only-json", "--digits", "1")
         document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
-        assert document["coordinate_system"]["resolution_mm"] == 0.1
+        assert document["resolution_mm"] == 0.1
 
     def test_no_diagnostics_omits_the_array_from_the_file(self, capsys, tmp_path):
         # The flag only changed the terminal report; the file still carried the
@@ -257,7 +257,7 @@ class TestExport:
             "-o", str(tmp_path), "--only-json", "--exclude-type", "POWER_GROUND")
         document = json.loads((tmp_path / "BOARD.json").read_text(encoding="utf-8"))
         assert all(l["type"] != "POWER_GROUND"
-                   for l in document["steps"][0]["layers"])
+                   for l in document["steps"][0]["layers"] if l["geometry_status"] == "ready")
 
     def test_the_default_output_directory_is_under_out(self, capsys,
                                                         tmp_path, monkeypatch):

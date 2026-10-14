@@ -111,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="ODB++ directory, .tgz/.tar.gz or .zip")
     p_eq.add_argument("--from-json", dest="from_json", default=None,
                       metavar="FILE",
-                      help="reuse an existing odbpp/preview-2 intermediate JSON "
+                      help="reuse the current intermediate JSON "
                            "instead of parsing an ODB++ input")
     p_eq.add_argument("--step", default=None, help="step name to parse")
     p_eq.add_argument("--no-features", action="store_true",
@@ -579,24 +579,21 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     )
 
     # --- the intermediate document (the only interface the equivalence has) --
-    source_schema = None
     if args.from_json:
         try:
-            with open(args.from_json, encoding="utf-8") as handle:
-                document = json.load(handle)
+            from .intermediate import read_document
+            document = read_document(args.from_json)
         except (OSError, ValueError) as exc:
             print(f"error: cannot read {args.from_json}: {exc}", file=sys.stderr)
             return 2
         source_path = args.from_json
-        steps = document.get("steps") or [{}]
-        step_name = steps[0].get("name") if isinstance(steps[0], dict) else None
-        source_schema = document.get("schema")
+        step_name = document.steps[0].name
     else:
         if not args.path:
             print("error: give an ODB++ input path or --from-json FILE",
                   file=sys.stderr)
             return 2
-        from .export import PreviewOptions, build_step_preview, step_to_json
+        from .export import PreviewOptions, build_step_preview, step_to_document
 
         try:
             job = load_job(args.path,
@@ -615,10 +612,9 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
             options=PreviewOptions(round_digits=args.digits),
             diagnostics=diagnostics,
         )
-        document = step_to_json(job, preview, round_digits=args.digits)
+        document = step_to_document(job, preview, round_digits=args.digits)
         source_path = job.source_path
         step_name = step.name
-        source_schema = document.get("schema")
 
     # --- materials: file config, then command-line global overrides ----------
     config: dict = {}
@@ -739,7 +735,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
 
     os.replace(temp_path, csv_path)
     write_metadata(result, metadata_path, source_path=source_path,
-                   source_schema=source_schema, step_name=step_name)
+                   step_name=step_name)
     mask_hrefs: dict[str, str] = {}
     for name, temp, final in mask_jobs:
         os.replace(temp, final)

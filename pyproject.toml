@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 license = { text = "Proprietary" }
 authors = [{ name = "kekesjtu", email = "mydearlong@sjtu.edu.cn" }]
 dependencies = [
+    "pydantic>=2.12,<3",
     # Core, not optional: ``odbpp/__init__.py`` imports the geometry layer
     # unconditionally, so every command -- including the pure-inventory ones --
     # needs pyclipper importable.  Leaving it in an extra made a plain

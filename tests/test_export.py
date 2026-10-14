@@ -14,7 +14,6 @@ import pytest
 from odbpp.diagnostics import Diagnostics
 from odbpp.errors import LayerProfileError
 from odbpp.export import (
-    SCHEMA,
     PreviewOptions,
     build_step_preview,
     iter_step_previews,
@@ -24,6 +23,11 @@ from odbpp.export import (
 from odbpp.job import load_job
 
 from conftest import fixture_path, sample_path
+
+
+def json_region(value):
+    from odbpp.clipper import region_from_rings
+    return region_from_rings([(p["points"], not p["island"]) for p in value["polygons"]])
 
 
 def preview_of(name: str, **kwargs):
@@ -42,7 +46,7 @@ class TestDocument:
     def test_schema_and_units_are_declared(self):
         job, preview, _diag = preview_of("minimal-test-odb")
         document = step_to_json(job, preview)
-        assert document["schema"] == SCHEMA
+        assert "schema" not in document and "generator" not in document
         assert document["units"] == "mm"
 
     def test_input_units_are_recorded_separately_from_output_units(self):
@@ -55,9 +59,8 @@ class TestDocument:
 
     def test_the_coordinate_convention_is_stated(self):
         job, preview, _diag = preview_of("minimal-test-odb")
-        system = step_to_json(job, preview)["coordinate_system"]
-        assert system["y_axis"] == "up"
-        assert "clockwise" in system["winding"]
+        system = step_to_json(job, preview)
+        assert "coordinate_system" not in system
         assert system["resolution_mm"] == pytest.approx(1e-4)
 
     def test_it_round_trips_through_json(self):
@@ -75,8 +78,8 @@ class TestDocument:
         # Z is a board axis, not a drawing direction: the Y-up model plane says
         # nothing about which way the stack runs.
         job, preview, _diag = preview_of("minimal-test-odb")
-        system = step_to_json(job, preview)["coordinate_system"]
-        assert "downward" in system["z_axis"]
+        system = step_to_json(job, preview)
+        assert "coordinate_system" not in system
 
 
 class TestSerialisationResolution:
@@ -106,14 +109,14 @@ class TestSerialisationResolution:
             Ring(((0, 0), (0, 1), (0.00002, 1), (0.00002, 0)), False)]))
         original = deepcopy(preview.step.profile)
         coarse = step_to_json(job, preview, round_digits=4)
-        assert coarse["steps"][0]["profile"]["polygons"] == []
+        assert coarse["steps"][0]["domains"][0]["polygons"] == []
         warnings = [d for d in coarse["diagnostics"]
                     if d["code"] == "export.degenerate_ring" and "profile:" in d["message"]]
         assert len(warnings) == 1
         assert step_to_json(job, preview, round_digits=4)["diagnostics"] == coarse["diagnostics"]
         fine = step_to_json(job, preview, round_digits=6)
         from shapely.geometry import Polygon
-        shape = Polygon(fine["steps"][0]["profile"]["polygons"][0]["points"])
+        shape = Polygon(fine["steps"][0]["domains"][0]["polygons"][0]["points"])
         assert shape.is_valid
         assert shape.area == pytest.approx(0.00002)
         assert preview.step.profile == original
@@ -127,7 +130,7 @@ class TestSerialisationResolution:
             ([(0, 0), (1, 0), (1, 1), (0, 1)], False),
             ([(1.00002, 0), (2, 0), (2, 1), (1.00002, 1)], False),
         ]))
-        polygons = step_to_json(job, preview, round_digits=4)["steps"][0]["profile"]["polygons"]
+        polygons = step_to_json(job, preview, round_digits=4)["steps"][0]["domains"][0]["polygons"]
         assert len(polygons) == 1
         assert polygons[0]["island"]
         shape = Polygon(polygons[0]["points"])
@@ -143,7 +146,7 @@ class TestSerialisationResolution:
             ([(0, 0), (10, 0), (10, 10), (0, 10)], False),
             ([(2, 2), (8, 2), (8, 8), (2, 8)], True),
         ]))
-        polygons = step_to_json(job, preview, round_digits=0)["steps"][0]["profile"]["polygons"]
+        polygons = step_to_json(job, preview, round_digits=0)["steps"][0]["domains"][0]["polygons"]
         islands = [p["points"] for p in polygons if p["island"]]
         holes = [p["points"] for p in polygons if not p["island"]]
         assert len(islands) == len(holes) == 1
@@ -160,8 +163,8 @@ class TestSerialisationResolution:
         polygon = Polygon(written["polygons"][0]["points"])
         assert polygon.is_valid
         assert polygon.area == pytest.approx(0.00002, abs=1e-9)
-        assert written["area_mm2"] == pytest.approx(polygon.area, abs=1e-9)
-        assert document["coordinate_system"]["resolution_mm"] == pytest.approx(1e-6)
+        assert json_region(written).area == pytest.approx(polygon.area, abs=1e-9)
+        assert document["resolution_mm"] == pytest.approx(1e-6)
 
     def test_a_coarser_request_is_re_regularised_and_recomputed(self):
         # Asking for 4 digits used to round the points of a 6-digit preview
@@ -171,35 +174,25 @@ class TestSerialisationResolution:
         written = step_to_json(job, preview,
                                round_digits=4)["steps"][0]["layers"][0]
         assert written["polygons"] == []
-        assert written["area_mm2"] == 0.0
-        assert written["bounds_mm"] is None
+        assert json_region(written).area == 0.0
+        assert json_region(written).bounds is None
 
-    def test_the_step_summary_describes_the_layers_that_were_written(self):
-        # A summary that counted rings the layer array no longer holds, or kept
-        # the pre-regularisation bounds, sends a consumer looking for geometry
-        # that is not in the file.
+    def test_empty_geometry_is_distinct_from_missing_geometry(self):
         job, preview = self._six_digit_preview()
         document = step_to_json(job, preview, round_digits=4)
-        step = document["steps"][0]
-        assert step["layers"][0]["polygons"] == []
-        assert step["bounds_mm"] is None
-        assert document["summary"]["polygon_count"] == 0
-        assert document["summary"]["empty_layers"] == ["top"]
+        layer = next(l for l in document["steps"][0]["layers"] if l["name"] == "top")
+        assert layer["polygons"] == []
+        assert layer["geometry_status"] == "ready"
+        assert "summary" not in document
+        assert "bounds_mm" not in document["steps"][0]
 
-    def test_the_summary_and_step_bounds_match_after_a_finer_request(self):
-        # The same invariant in the other direction: re-regularising finer must
-        # not leave the summary describing the coarser model.
-        _job, preview, _diag = preview_of("kicad-kitchen-sink")
-        document = step_to_json(_job, preview, round_digits=6)
-        layers = document["steps"][0]["layers"]
-        assert document["summary"]["polygon_count"] == \
-            sum(len(l["polygons"]) for l in layers)
-        assert document["summary"]["empty_layers"] == \
-            [l["name"] for l in layers if not l["polygons"]]
-        boxes = [l["bounds_mm"] for l in layers if l["bounds_mm"]]
-        step_bounds = document["steps"][0]["bounds_mm"]
-        assert step_bounds == [min(b[0] for b in boxes), min(b[1] for b in boxes),
-                               max(b[2] for b in boxes), max(b[3] for b in boxes)]
+    def test_finer_geometry_does_not_store_stale_statistics(self):
+        job, preview, _diag = preview_of("kicad-kitchen-sink")
+        document = step_to_json(job, preview, round_digits=6)
+        assert "summary" not in document
+        for layer in document["steps"][0]["layers"]:
+            assert "area_mm2" not in layer and "bounds_mm" not in layer
+            assert json_region(layer).area >= 0
 
 
 # ---------------------------------------------------------------------------
@@ -238,12 +231,12 @@ class TestLayerJson:
     def test_areas_and_bounds_are_present_and_consistent(self):
         _job, preview, _diag = preview_of("minimal-test-odb")
         for layer in step_to_json(_job, preview)["steps"][0]["layers"]:
-            assert layer["area_mm2"] >= 0.0
+            assert json_region(layer).area >= 0.0
             if layer["polygons"]:
-                x0, y0, x1, y1 = layer["bounds_mm"]
+                x0, y0, x1, y1 = json_region(layer).bounds
                 assert x1 >= x0 and y1 >= y0
             else:
-                assert layer["bounds_mm"] is None
+                assert json_region(layer).bounds is None
 
     def test_ring_count_matches_the_polygon_array(self):
         job, preview, _diag = preview_of("minimal-test-odb")
@@ -267,10 +260,10 @@ class TestLayerJson:
         data = {layer["name"]: layer for layer in
                 step_to_json(_job, preview)["steps"][0]["layers"]}
         gnd = data["GND"]
-        assert gnd["polarity"] == "N"
+        assert gnd["parse_info"]["polarity"] == "N"
         assert gnd["context"] == "BOARD"
         assert gnd["type"] == "POWER_GROUND"
-        assert gnd["base_from_profile"] is True
+        assert gnd["parse_info"]["base_from_profile"] is True
 
     def test_form_travels_with_its_provenance(self):
         # is_flex is always a real boolean because spec p.66 supplies a default;
@@ -279,11 +272,11 @@ class TestLayerJson:
         data = {layer["name"]: layer for layer in
                 step_to_json(_job, preview)["steps"][0]["layers"]}
         assert (data["FLEX_1"]["form"], data["FLEX_1"]["form_source"]) ==             ("FLEX", "DECLARED")
-        assert data["FLEX_1"]["is_flex"] is True
+        assert "is_flex" not in data["FLEX_1"]
         assert (data["GND_FLEX"]["form"], data["GND_FLEX"]["form_source"]) ==             ("FLEX", "FLEX_SUBTYPE")
-        assert data["GND_FLEX"]["is_flex"] is True
+        assert "is_flex" not in data["GND_FLEX"]
         assert (data["SILK_1"]["form"], data["SILK_1"]["form_source"]) ==             ("RIGID", "DEFAULT")
-        assert data["SILK_1"]["is_flex"] is False
+        assert "is_flex" not in data["SILK_1"]
 
     def test_layer_attributes_are_filtered_to_the_meaningful_ones(self):
         # AGENTS note 4: .layer_dielectric is meaningful only for non-copper
@@ -456,14 +449,13 @@ class TestStackupJson:
     every attribute-derived number has to state what it was interpreted as.
     """
 
-    def test_every_layer_states_the_scope_of_its_attributes(self):
-        _job, preview, _diag = preview_of("kicad-kitchen-sink")
-        document = step_to_json(_job, preview)
-        for layer in document["steps"][0]["layers"]:
-            units = layer["attribute_units"]
-            assert units is not None
-            assert units["system"] in ("MM", "INCH")
-            assert units["origin"]
+    def test_raw_thickness_provenance_has_its_own_unit(self):
+        job, preview, _diag = preview_of("kicad-kitchen-sink")
+        for layer in step_to_json(job, preview)["steps"][0]["layers"]:
+            thickness = layer.get("thickness")
+            if thickness and thickness.get("kind"):
+                assert thickness["unit"] in ("mm", "inch", "um", "oz/ft2")
+            assert "attributes" not in layer and "attribute_units" not in layer
 
     def test_the_stack_indexes_copper_and_spans_dielectrics(self):
         _job, preview, _diag = preview_of("kicad-kitchen-sink")
@@ -472,10 +464,9 @@ class TestStackupJson:
         assert layers["F.CU"]["copper_index"] == 0
         assert layers["B.CU"]["copper_index"] == 1
         dielectric = layers["DIELECTRIC_1"]
-        assert dielectric["z_span"] == {"from_layer": "F.CU", "to_layer": "B.CU",
-                                        "copper_index": [0, 1]}
+        assert dielectric["copper_span"] == [0, 1]
         # The step-level summary lists the same stack in row order.
-        stackup = document["steps"][0]["stackup"]
+        stackup = document["steps"][0]["layers"]
         assert [s["name"] for s in stackup][:7] == [
             "COMP_+_TOP", "F.SILKSCREEN", "F.PASTE", "F.MASK", "F.CU",
             "DIELECTRIC_1", "B.CU"]
@@ -492,7 +483,7 @@ class TestStackupJson:
         layers = {l["name"]: l for l in document["steps"][0]["layers"]}
         paste = layers["F.PASTE"]
         assert paste["polygons"]
-        assert paste["thickness_mm"] is None
+        assert paste["thickness"]["known"] is False
         assert paste["z_mm"]["thickness_known"] is False
         assert paste["z_mm"]["source"] == "unknown"
         assert layers["F.CU"]["z_mm"]["thickness_known"] is True
@@ -502,9 +493,8 @@ class TestStackupJson:
         document = step_to_json(_job, preview)
         drill = next(l for l in document["steps"][0]["layers"]
                      if l["type"] == "DRILL")
-        assert drill["start_layer"] == "F.CU"
-        assert drill["end_layer"] == "B.CU"
-        assert drill["z_span"]["copper_index"] == [0, 1]
+        assert drill["copper_span"] == [0, 1]
+        assert "start_layer" not in drill and "end_layer" not in drill
 
     def test_a_metric_thickness_is_millimetres(self):
         # kicad-kitchen-sink is an MM job: 1.51 is 1.51 mm, not 38 um.
@@ -512,8 +502,8 @@ class TestStackupJson:
         document = step_to_json(_job, preview)
         dielectric = next(l for l in document["steps"][0]["layers"]
                           if l["name"] == "DIELECTRIC_1")
-        assert dielectric["thickness_mm"] == pytest.approx(1.51)
-        assert dielectric["thickness"]["attribute_units"] == "MM"
+        assert (dielectric["z_mm"]["end_mm"] - dielectric["z_mm"]["start_mm"]) == pytest.approx(1.51)
+        assert dielectric["thickness"]["unit"] == "mm"
 
     def test_an_imperial_thickness_is_converted_to_millimetres(self):
         # The review's exact example: designodb-rigidflex DIELECTRIC_3 declares
@@ -526,12 +516,12 @@ class TestStackupJson:
             job, options=PreviewOptions(layers=["DIELECTRIC_3"]),
             diagnostics=diagnostics)
         document = step_to_json(job, preview)
-        dielectric = document["steps"][0]["layers"][0]
-        assert dielectric["attribute_units"]["system"] == "INCH"
-        assert dielectric["thickness_mm"] == pytest.approx(0.065, abs=1e-6)
+        dielectric = next(l for l in document["steps"][0]["layers"] if l["name"] == "DIELECTRIC_3")
+        assert dielectric["thickness"]["unit"] == "inch"
+        assert (dielectric["z_mm"]["end_mm"] - dielectric["z_mm"]["start_mm"]) == pytest.approx(0.065, abs=1e-6)
         provenance = dielectric["thickness"]
-        assert provenance["raw"] == pytest.approx(0.00255906)
-        assert provenance["value_mm"] == pytest.approx(0.065000124)
+        assert provenance["input_value"] == pytest.approx(0.00255906)
+        assert (dielectric["z_mm"]["end_mm"] - dielectric["z_mm"]["start_mm"]) == pytest.approx(0.065000124)
 
     def test_the_dielectric_no_longer_covers_the_crossing_drill(self):
         # The whole point of constraint 3: the drill layer is a separate layer,
@@ -544,8 +534,8 @@ class TestStackupJson:
         dielectric = layers["DIELECTRIC_1"]
         drill = next(l for l in layers.values() if l["type"] == "DRILL")
 
-        assert dielectric["drills_subtracted"] == [drill["name"]]
-        assert dielectric["drill_cut_mm2"] > 0.0
+        assert dielectric["parse_info"]["drills_subtracted"] == [drill["name"]]
+        assert dielectric["parse_info"]["drill_cut_mm2"] > 0.0
 
         def region(layer):
             return clipper.region_from_rings(
@@ -569,7 +559,7 @@ class TestStackupJson:
         assert dielectric["end_mm"] > dielectric["start_mm"]
         # The step-level stack carries the same Z, so a consumer can rebuild the
         # board without walking the per-layer array.
-        stack = document["steps"][0]["stackup"]
+        stack = document["steps"][0]["layers"]
         assert any(s["name"] == "F.CU" and s["z_mm"] for s in stack)
 
     def test_an_imperial_weight_gets_a_thickness_and_a_z(self):
@@ -581,8 +571,8 @@ class TestStackupJson:
         preview = build_step_preview(
             job, options=PreviewOptions(layers=["SIGNAL_1"]),
             diagnostics=diagnostics)
-        layer = step_to_json(job, preview)["steps"][0]["layers"][0]
-        weight = layer["copper_weight"]
+        layer = next(l for l in step_to_json(job, preview)["steps"][0]["layers"] if l["name"] == "SIGNAL_1")
+        weight = layer["thickness"]
         assert weight["unit"] == "oz/ft2"
         assert weight["thickness_source"] == "assumed_density"
         assert layer["z_mm"]["end_mm"] == pytest.approx(0.0398192, abs=1e-5)
@@ -623,7 +613,7 @@ class TestSerialisedTopology:
                 area = Polygon(polygon["points"]).area
                 net += area if polygon["island"] else -area
             if layer["polygons"]:
-                assert layer["area_mm2"] == pytest.approx(net, abs=0.01), layer["name"]
+                assert json_region(layer).area == pytest.approx(net, abs=0.01), layer["name"]
 
 
 class TestComputationalDomains:
@@ -641,8 +631,8 @@ class TestComputationalDomains:
         assert ids == ["step_profile"]
         for layer in step["layers"]:
             assert layer["domain_id"] == "step_profile"
-            assert layer["domain_source"] == "step_profile"
-            assert layer["domain_error"] is None
+            assert "domain_source" not in layer
+            assert layer.get("geometry_error") is None
 
     def test_the_step_profile_domain_keeps_its_holes(self):
         from shapely.geometry import Polygon
@@ -656,7 +646,7 @@ class TestComputationalDomains:
         assert islands and holes
         shape = Polygon(islands[0]["points"], [h["points"] for h in holes])
         assert shape.is_valid
-        assert domain["area_mm2"] == pytest.approx(shape.area, abs=0.01)
+        assert json_region(domain).area == pytest.approx(shape.area, abs=0.01)
 
     def test_an_unparsable_layer_profile_is_never_replaced_by_the_step_profile(self):
         # fx_bad_layer_profile's dielectric profile parses but is empty; the
@@ -671,6 +661,9 @@ class TestComputationalDomains:
         preview = build_step_preview(job, diagnostics=diagnostics)
         step = step_to_json(job, preview)["steps"][0]
         names = [l["name"] for l in step["layers"]]
-        assert "DIELECTRIC_1" not in names
-        assert "DIELECTRIC_1" in step_to_json(job, preview)["summary"]["failed_layers"]
-        assert "DIELECTRIC_1" in [row["name"] for row in step["stackup"]]
+        assert "DIELECTRIC_1" in names
+        failed = next(l for l in step["layers"] if l["name"] == "DIELECTRIC_1")
+        assert failed["geometry_status"] == "failed"
+        assert failed["geometry_error"]
+        assert "domain_id" not in failed
+        assert "DIELECTRIC_1" in [row["name"] for row in step["layers"]]

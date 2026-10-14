@@ -25,7 +25,8 @@ from .diagnostics import (
     Diagnostics,
 )
 from .errors import OdbError
-from .export import KNOWN_SCHEMAS
+from .intermediate import BoardDocument, validate_document
+from pydantic import ValidationError
 from .grid import BoardGrid, GridOptions, build_grid
 from .materials import MaterialBook, ResolvedMaterials
 from .raster import LayerMask, RasterAxis, region_edges
@@ -108,7 +109,7 @@ def pipeline_fingerprint() -> str:
     from pathlib import Path
     digest = hashlib.sha256()
     for name in ("equiv.py", "rectify.py", "grid.py", "raster.py",
-                 "materials.py", "visualize.py", "mesh.py"):
+                 "materials.py", "visualize.py", "mesh.py", "intermediate.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
     return digest.hexdigest()
 
@@ -234,7 +235,6 @@ class EquivalenceResult:
         return len(self.cells)
 
     def metadata(self, *, source_path: Optional[str] = None,
-                 source_schema: Optional[str] = None,
                  step_name: Optional[str] = None) -> dict:
         from . import __version__
 
@@ -244,7 +244,6 @@ class EquivalenceResult:
             "pipeline_fingerprint": pipeline_fingerprint(),
             "source": {
                 "path": source_path,
-                "preview_schema": source_schema,
                 "step": step_name,
             },
             "units": {
@@ -316,7 +315,7 @@ def rectify_step_outline(step: Mapping[str, Any], px: int, py: int,
                          options: RectifyOptions, *,
                          diagnostics: Optional[Diagnostics] = None) -> RectifyResult:
     """Prepare the same outline for equivalence and batch grid planning."""
-    step_domain = _domain_index(step).get("step_profile")
+    step_domain = _domain_index(step).get(step.get("profile_domain_id"))
     if step_domain is None:
         raise EquivalenceError(
             f"step {step.get('name')!r} has no step_profile domain; the board outline "
@@ -373,9 +372,8 @@ class _Drill:
 
 
 def _copper_span(row: Mapping[str, Any]) -> Optional[tuple[int, int]]:
-    """Read ``z_span.copper_index`` from a stackup row, if it is well formed."""
-    span = row.get("z_span")
-    index = span.get("copper_index") if isinstance(span, Mapping) else None
+    """Read the sole resolved copper-plane span from a layer record."""
+    index = row.get("copper_span")
     if isinstance(index, (list, tuple)) and len(index) == 2:
         try:
             return (int(index[0]), int(index[1]))
@@ -390,8 +388,8 @@ def _collect_drills(step: Mapping[str, Any],
     layers = _layer_index(step)
     drills: list[_Drill] = []
     fatal = False
-    for row in step.get("stackup") or ():
-        if row.get("type") != "DRILL":
+    for row in step.get("layers") or ():
+        if row.get("type") != "DRILL" or row.get("context", "BOARD") != "BOARD":
             continue
         name = row.get("name", "?")
         extent = row.get("z_mm")
@@ -406,7 +404,7 @@ def _collect_drills(step: Mapping[str, Any],
             fatal = True
             continue
         layer = layers.get(name)
-        if layer is None:
+        if layer is None or layer.get("geometry_status", "ready") != "ready":
             diagnostics.error(
                 EQUIV_DRILL_SPAN_UNKNOWN,
                 f"drill layer {name!r} is in the stack but has no geometry in "
@@ -442,9 +440,7 @@ def _topological_overlap(layer_type: str, layer_doc: Mapping[str, Any],
         if index is None:
             return None
         return start <= int(index) <= end
-    layer_span = layer_doc.get("z_span")
-    index = (layer_span.get("copper_index")
-             if isinstance(layer_span, Mapping) else None)
+    index = layer_doc.get("copper_span")
     if not isinstance(index, (list, tuple)) or len(index) != 2:
         return None
     return max(int(index[0]), start) < min(int(index[1]), end)
@@ -595,19 +591,21 @@ def plan_geometry(step, options, diagnostics):
     from shapely.ops import unary_union
     rectification=rectify_step_outline(step,0,0,options.rectify,diagnostics=diagnostics)
     domains=_domain_index(step)
+    profile_id=step.get("profile_domain_id")
     layers=_layer_index(step)
-    ids={layers.get(row.get("name"),{}).get("domain_id") for row in step.get("stackup",[])
-         if row.get("type") in COPPER_TYPES or row.get("type")==DIELECTRIC_TYPE}
+    ids={row.get("domain_id") for row in step.get("layers",[])
+         if row.get("context", "BOARD")=="BOARD" and
+         (row.get("type") in COPPER_TYPES or row.get("type")==DIELECTRIC_TYPE)}
 
-    step_original=profile_shape(_region_from_polygons(domains["step_profile"].get("polygons")))
+    step_original=profile_shape(_region_from_polygons(domains[profile_id].get("polygons")))
     basis_options=replace(options.rectify,basis_mm=step_original.bounds)
-    originals={"step_profile":step_original}
-    plans={"step_profile":rectification}
-    effective_regions={"step_profile":_region_from_polygons(domains["step_profile"].get("polygons"))}
+    originals={profile_id:step_original}
+    plans={profile_id:rectification}
+    effective_regions={profile_id:_region_from_polygons(domains[profile_id].get("polygons"))}
     from .clipper import region_from_rings
     from copy import deepcopy
     dedup={step_original.wkb:rectification}
-    for domain_id in sorted(ids-{"step_profile",None}):
+    for domain_id in sorted(ids-{profile_id,None}):
         if domain_id not in domains: continue
         authored=profile_shape(_region_from_polygons(domains[domain_id].get("polygons")))
         original=authored.intersection(step_original)
@@ -683,7 +681,7 @@ def plan_geometry(step, options, diagnostics):
 # ---------------------------------------------------------------------------
 
 def equivalence_from_document(
-    document: Mapping[str, Any],
+    document: BoardDocument | Mapping[str, Any],
     options: EquivalenceOptions,
     *,
     diagnostics: Optional[Diagnostics] = None,
@@ -705,20 +703,14 @@ def equivalence_from_document(
     immediately and never keep 43 of them resident.
     """
     diags = diagnostics if diagnostics is not None else Diagnostics()
-    schema = document.get("schema")
-    if schema not in KNOWN_SCHEMAS:
-        raise EquivalenceError(
-            f"unsupported preview schema {schema!r}; expected one of "
-            f"{', '.join(KNOWN_SCHEMAS)}. Regenerate the intermediate JSON "
-            f"with this version of odbpp.")
-    if schema == "odbpp/preview-1":
-        raise EquivalenceError(
-            "schema odbpp/preview-1 has no per-layer computational domain; the "
-            "material equivalence cannot tell where a layer exists and must not "
-            "infer it from copper polygons. Regenerate with odbpp/preview-2.")
+    try:
+        document = validate_document(document).internal_document()
+    except ValidationError as exc:
+        raise EquivalenceError(f"invalid intermediate JSON: {exc}") from exc
 
     step = _single_step(document)
     step_name = step.get("name")
+    profile_id = step.get("profile_domain_id")
     domains = _domain_index(step)
     layers = _layer_index(step)
 
@@ -733,7 +725,7 @@ def equivalence_from_document(
             raster_py=options.grid.py, pixel_step_mm=(0.0, 0.0),
             board_bounds_mm=None, diagnostics=diags, fatal=True)
 
-    bounds = _region_from_polygons(domains["step_profile"].get("polygons")).bounds
+    bounds = _region_from_polygons(domains[profile_id].get("polygons")).bounds
     assert bounds is not None
     x_min, y_min, x_max, y_max = bounds
     from .mesh import resolve_mesh, resolve_raster
@@ -768,15 +760,21 @@ def equivalence_from_document(
     }
     layer_materials: dict[str, ResolvedMaterials] = {}
     cell_without_pixel = 0
-    step_domain = _region_from_polygons(domains["step_profile"].get("polygons"))
+    step_domain = _region_from_polygons(domains[profile_id].get("polygons"))
     domain_regions = {}
     domain_sampling = {}
 
-    for row in step.get("stackup") or ():
+    for row in step.get("layers") or ():
         name = row.get("name", "?")
         type_name = row.get("type", "UNKNOWN")
         report = LayerReport(name=name, type=type_name, status="skipped")
         extent = row.get("z_mm")
+
+        if row.get("context", "BOARD") != "BOARD":
+            report.reason = "non-BOARD context has no physical slab"
+            reports.append(report)
+            diags.warn(EQUIV_LAYER_SKIPPED, f"layer {name!r} skipped: {report.reason}")
+            continue
 
         if type_name not in COPPER_TYPES and type_name != DIELECTRIC_TYPE:
             report.reason = SKIP_REASONS.get(
@@ -789,14 +787,13 @@ def equivalence_from_document(
             continue
 
         layer = layers.get(name)
-        if layer is None:
+        if layer is None or layer.get("geometry_status", "ready") != "ready":
             report.status = "failed"
-            report.reason = ("layer is in the stack but has no geometry in the "
-                             "preview; its profile probably could not be parsed")
+            report.reason = row.get("geometry_error") or f"geometry is {row.get('geometry_status', 'missing')}"
             reports.append(report)
             diags.error(EQUIV_LAYER_FAILED,
-                        f"equivalence candidate {name!r} ({type_name}) is absent "
-                        f"from the preview layers, so it cannot be equivalented")
+                        f"equivalence candidate {name!r} ({type_name}) cannot be "
+                        f"equivalented: {report.reason}")
             continue
 
         if not extent or extent.get("start_mm") is None:
@@ -813,7 +810,7 @@ def equivalence_from_document(
         domain_doc = domains.get(domain_id) if domain_id else None
         if domain_doc is None:
             report.status = "failed"
-            report.reason = (layer.get("domain_error")
+            report.reason = (layer.get("geometry_error")
                              or "no computational domain")
             reports.append(report)
             diags.error(EQUIV_MISSING_DOMAIN,
@@ -945,7 +942,6 @@ def write_materialmap(
     metadata_path: Optional[str] = None,
     *,
     source_path: Optional[str] = None,
-    source_schema: Optional[str] = None,
     step_name: Optional[str] = None,
 ) -> list[str]:
     """Write the CSV and (optionally) the metadata sidecar; return the paths."""
@@ -957,7 +953,7 @@ def write_materialmap(
             writer.writerow(cell.csv_row())
     if metadata_path:
         write_metadata(result, metadata_path, source_path=source_path,
-                       source_schema=source_schema, step_name=step_name)
+                       step_name=step_name)
         written.append(metadata_path)
     return written
 
@@ -967,7 +963,6 @@ def write_metadata(
     path: str,
     *,
     source_path: Optional[str] = None,
-    source_schema: Optional[str] = None,
     step_name: Optional[str] = None,
 ) -> str:
     """Write the metadata sidecar and return its path.
@@ -979,7 +974,6 @@ def write_metadata(
     import json
 
     document = result.metadata(source_path=source_path,
-                               source_schema=source_schema,
                                step_name=step_name)
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(document, handle, ensure_ascii=False, indent=1,

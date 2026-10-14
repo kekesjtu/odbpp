@@ -20,8 +20,6 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
     from matplotlib.path import Path as VectorPath
     from matplotlib.patches import PathPatch, Rectangle
 
-    if metadata.get("schema") != "odbpp/materialmap-5":
-        raise ValueError("grid plot requires final materialmap-5 metadata")
     grid = metadata["grid"]
     if grid.get("layout") != "global-cartesian" or not metadata["rectification"]["ok"]:
         raise ValueError("refusing to illustrate invalid or non-Cartesian geometry")
@@ -51,7 +49,7 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
         codes.extend([VectorPath.MOVETO, VectorPath.LINETO, VectorPath.LINETO,
                       VectorPath.LINETO, VectorPath.CLOSEPOLY])
     model_path = VectorPath(vertices, codes)
-    original = next(d for d in step["domains"] if d["id"] == "step_profile")
+    original = next(d for d in step["domains"] if d["id"] == step["profile_domain_id"])
     width, height = x1-x0, y1-y0
     # Focus at an actual modeled cell, so the inset cannot accidentally be outside the board.
     central = min(grid["cells"], key=lambda c: ((c["x0_mm"]+c["x1_mm"]-x0-x1)/width)**2

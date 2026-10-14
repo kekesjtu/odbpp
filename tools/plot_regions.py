@@ -150,9 +150,11 @@ def main() -> None:
     args=parser.parse_args()
     if args.px<1 or args.py<1:
         parser.error("px/py must be positive")
-    document=json.loads(args.json.read_text(encoding="utf-8"))
-    if document.get("schema") != "odbpp/preview-2" or document.get("units") != "mm" or len(document.get("steps",[]))!=1:
-        parser.error("requires one-step odbpp/preview-2 JSON in mm")
+    from odbpp.intermediate import read_document
+    try:
+        document=read_document(args.json).internal_document()
+    except (OSError, ValueError) as exc:
+        parser.error(f"invalid intermediate JSON: {exc}")
     stats=plot_regions(document,args.out or args.json.parent/"regions",
                        px=args.px,py=args.py,metadata=json.loads(args.metadata.read_text(encoding="utf-8")) if args.metadata else None)
     print({k:v for k,v in stats.items() if k!="rectification"})

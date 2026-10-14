@@ -1,6 +1,6 @@
 """Material equivalence: formulas, grid, rectification, drills and materials.
 
-Most tests build the ``odbpp/preview-2`` document directly, because that document
+Most tests build the ``current intermediate`` document directly, because that document
 *is* the interface between the parser and the equivalence (AGENTS: 中间 JSON 是
 解析器与等效器之间唯一的数据接口).  A few use the real cases to make sure the
 document the parser actually writes is accepted.
@@ -49,14 +49,12 @@ def hole(x0: float, y0: float, x1: float, y1: float) -> dict:
 
 
 def build_document(*, profile=None, layers=(), domains=None, z=0.035) -> dict:
-    """A minimal but valid ``odbpp/preview-2`` document."""
+    """A minimal but valid ``current intermediate`` document."""
     profile = profile if profile is not None else rect(0, 0, 10, 10)
     domain_list = domains or [{
-        "id": "step_profile", "source": "step_profile", "layer": None,
-        "polygons": [profile],
+        "id": "step_profile", "source": "step_profile",         "polygons": [profile],
     }]
     layer_docs = []
-    stackup = []
     for spec in layers:
         extent = spec.get("z_mm")
         if extent is None:
@@ -68,11 +66,9 @@ def build_document(*, profile=None, layers=(), domains=None, z=0.035) -> dict:
             "domain_id": spec.get("domain_id", "step_profile"),
             "z_mm": extent,
         })
-        stackup.append({"name": spec["name"], "type": spec.get("type", "SIGNAL"),
-                        "z_mm": extent})
-    return {"schema": "odbpp/preview-2", "units": "mm",
+    return {"units": "mm",
             "steps": [{"name": "pcb", "domains": domain_list,
-                       "layers": layer_docs, "stackup": stackup}]}
+                       "layers": layer_docs, "profile_domain_id": "step_profile"}]}
 
 
 def run(document, *, px=10, py=10, max_cell_mm=None, tolerance=0.01,
@@ -198,10 +194,8 @@ class TestPartialDomain:
         # computational domain covers only the left half.  The CSV must not
         # imply the cell is solid FR4 over its full area.
         domains = [
-            {"id": "step_profile", "source": "step_profile", "layer": None,
-             "polygons": [rect(0, 0, 10, 10)]},
-            {"id": "half", "source": "layer_profile", "layer": "CU",
-             "polygons": [rect(0, 0, 5, 10)]},
+            {"id": "step_profile", "source": "step_profile",              "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "half", "source": "layer_profile", "polygons": [rect(0, 0, 5, 10)]},
         ]
         document = build_document(domains=domains, layers=[
             {"name": "CU", "type": "SIGNAL", "domain_id": "half",
@@ -219,10 +213,8 @@ class TestPartialDomain:
 
     def test_partial_coverage_is_warned_by_default(self):
         domains = [
-            {"id": "step_profile", "source": "step_profile", "layer": None,
-             "polygons": [rect(0, 0, 10, 10)]},
-            {"id": "half", "source": "layer_profile", "layer": "CU",
-             "polygons": [rect(0, 0, 5, 10)]},
+            {"id": "step_profile", "source": "step_profile",              "polygons": [rect(0, 0, 10, 10)]},
+            {"id": "half", "source": "layer_profile", "polygons": [rect(0, 0, 5, 10)]},
         ]
         document = build_document(domains=domains, layers=[
             {"name": "CU", "type": "SIGNAL", "domain_id": "half",
@@ -295,7 +287,7 @@ class TestDrillProjection:
              "z_mm": None},
         ])
         # Force the unresolvable span rather than the synthetic default.
-        document["steps"][0]["stackup"][1]["z_mm"] = None
+        document["steps"][0]["layers"][1]["z_mm"] = None
         diagnostics = Diagnostics()
         result = run(document, diagnostics=diagnostics)
         assert result.fatal
@@ -307,32 +299,20 @@ class TestDrillProjection:
         # authored copper-plane span must win, and the disagreement must be
         # reported rather than silently producing a wrong layer.
         layers = []
-        stackup = []
         for index, name in enumerate(("C1", "C2", "C3")):
             extent = {"start_mm": 0.0, "end_mm": 0.0,
                       "thickness_known": False}
             layers.append({"name": name, "type": "SIGNAL",
                            "polygons": [],
-                           "copper_index": index, "z_span": None,
+                           "copper_index": index, "copper_span": None,
                            "domain_id": "step_profile", "z_mm": extent})
-            stackup.append({"name": name, "type": "SIGNAL",
-                            "copper_index": index, "z_span": None,
-                            "z_mm": extent})
         layers.append({"name": "D_1_2", "type": "DRILL",
                        "polygons": [rect(4, 4, 6, 6)], "copper_index": None,
-                       "z_span": {"from_layer": "C1", "to_layer": "C2",
-                                  "copper_index": [0, 1]},
+                       "copper_span": [0, 1],
                        "z_mm": {"start_mm": 0.0, "end_mm": 0.0,
                                 "thickness_known": True}})
-        stackup.append({"name": "D_1_2", "type": "DRILL",
-                        "copper_index": None,
-                        "z_span": {"from_layer": "C1", "to_layer": "C2",
-                                   "copper_index": [0, 1]},
-                        "z_mm": {"start_mm": 0.0, "end_mm": 0.0,
-                                 "thickness_known": True}})
         document = build_document(layers=[])
         document["steps"][0]["layers"] = layers
-        document["steps"][0]["stackup"] = stackup
         diagnostics = Diagnostics()
         result = run(document, diagnostics=diagnostics)
         assert not result.fatal
@@ -368,8 +348,9 @@ class TestLayerSelection:
 
     def test_a_candidate_absent_from_the_preview_is_reported(self):
         document = build_document(layers=[])
-        document["steps"][0]["stackup"].append({
-            "name": "DIEL", "type": "DIELECTRIC",
+        document["steps"][0]["layers"].append({
+            "name": "DIEL", "type": "DIELECTRIC", "polygons": [],
+            "geometry_status": "failed", "geometry_error": "invalid layer profile",
             "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": True},
         })
         diagnostics = Diagnostics()
@@ -389,17 +370,17 @@ class TestLayerSelection:
         assert result.layers[0].status == "failed"
 
 
-class TestSchema:
-    def test_preview_1_is_rejected_because_it_has_no_domains(self):
+class TestContract:
+    def test_missing_required_structure_is_rejected(self):
         document = build_document()
-        document["schema"] = "odbpp/preview-1"
-        with pytest.raises(EquivalenceError):
+        del document["steps"][0]["domains"]
+        with pytest.raises(EquivalenceError, match="domains"):
             run(document)
 
-    def test_an_unknown_schema_is_rejected(self):
+    def test_unknown_field_is_reported_without_version_negotiation(self):
         document = build_document()
-        document["schema"] = "something/else"
-        with pytest.raises(EquivalenceError):
+        document["unexpected"] = 42
+        with pytest.raises(EquivalenceError, match="unexpected"):
             run(document)
 
 
@@ -532,7 +513,7 @@ class TestOutput:
         csv_path = tmp_path / "board.MaterialMap.csv"
         meta_path = tmp_path / "board.MaterialMap.meta.json"
         write_materialmap(result, str(csv_path), str(meta_path),
-                          source_path="x", source_schema="odbpp/preview-2",
+                          source_path="x",
                           step_name="pcb")
         header = csv_path.read_text(encoding="utf-8").splitlines()[0]
         assert header.split(",") == CSV_COLUMNS
@@ -572,8 +553,7 @@ class TestOutput:
         # A 0.2 mm slot cannot survive a 5 mm tolerance; filling it changes the
         # board shape, so the run must be marked untrustworthy, not written.
         domains = [{
-            "id": "step_profile", "source": "step_profile", "layer": None,
-            "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)],
+            "id": "step_profile", "source": "step_profile",             "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)],
         }]
         document = build_document(domains=domains, layers=[
             {"name": "CU", "type": "SIGNAL", "polygons": []}])
@@ -656,8 +636,7 @@ class TestCommandLine:
         from odbpp.cli import main
 
         domains = [{
-            "id": "step_profile", "source": "step_profile", "layer": None,
-            "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)],
+            "id": "step_profile", "source": "step_profile",             "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)],
         }]
         document = build_document(domains=domains, layers=[
             {"name": "CU", "type": "SIGNAL", "polygons": []}])
