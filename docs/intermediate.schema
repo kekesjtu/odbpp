@@ -155,6 +155,7 @@
           "title": "Domain Id"
         },
         "polygons": {
+          "description": "本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。",
           "items": {
             "$ref": "#/$defs/PolygonModel"
           },
@@ -260,27 +261,13 @@
           "minimum": 0,
           "title": "Polarity Runs",
           "type": "integer"
-        },
-        "drills_subtracted": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Drills Subtracted",
-          "type": "array"
-        },
-        "drill_cut_mm2": {
-          "minimum": 0,
-          "title": "Drill Cut Mm2",
-          "type": "number"
         }
       },
       "required": [
         "polarity",
         "base_from_profile",
         "feature_records",
-        "polarity_runs",
-        "drills_subtracted",
-        "drill_cut_mm2"
+        "polarity_runs"
       ],
       "title": "ParseInfoModel",
       "type": "object"

@@ -16,8 +16,9 @@ domain_area_mm2=cell_area_mm2、domain_coverage=1、partial_domain=false。
 
 逐层光栅范围来自原始 step profile，默认密集光栅，Px/Py 可成对覆盖。
 计算域、铜图案和相交钻孔独立扫描线处理：
-黑色 = step 域 AND layer 域 AND (铜图案 OR 钻孔)。
-介质初始铜图案为空。钻孔按 solid_copper 投影，不作为厚度层。
+铜层黑色 = step 域 AND layer 域 AND 铜图案。
+介质层黑色 = step 域 AND layer 域 AND 相交钻孔。
+介质初始铜图案为空。钻孔仅作用于介质，按 solid_copper 投影，不作为厚度层；铜层不受 DRILL 影响。
 未知跨度或任何待等效层失败都阻止生成正式结果。
 
 kx 为像素行内串联、行间并联；ky 为像素列内串联、列间并联。

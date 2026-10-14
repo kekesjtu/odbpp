@@ -3,9 +3,9 @@
 The parser knows the matrix row order, each layer's ``TYPE`` and the drill
 layers' ``START_NAME``/``END_NAME``.  It does **not** know, without a stack
 model, whether a hole in ``D_3_8`` passes through ``DIELECTRIC_5``.  AGENTS
-constraint 3 requires exactly that judgement: a dielectric layer's material is
-the board outline minus the projection of every drill whose Z interval overlaps
-the dielectric's own.
+constraint 3 requires that judgement for dielectric display cutouts and
+solid-copper dielectric sampling. The intermediate geometry stays uncut;
+copper artwork and its sampling are independent of DRILL projections.
 
 The model used here is deliberately coarse but honest:
 

@@ -156,7 +156,7 @@ def test_drill_span_cannot_reference_nonexistent_copper_planes():
 
 
 def test_best_effort_drill_z_cannot_replace_an_unknown_topological_span():
-    document = copper_document()
+    document = build_document(layers=[{"name": "DIEL", "type": "DIELECTRIC", "polygons": []}])
     document["steps"][0]["layers"].append({
         "name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)],
         "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": False},

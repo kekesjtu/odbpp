@@ -523,9 +523,9 @@ class TestStackupJson:
         assert provenance["input_value"] == pytest.approx(0.00255906)
         assert (dielectric["z_mm"]["end_mm"] - dielectric["z_mm"]["start_mm"]) == pytest.approx(0.065000124)
 
-    def test_the_dielectric_no_longer_covers_the_crossing_drill(self):
-        # The whole point of constraint 3: the drill layer is a separate layer,
-        # but the dielectric between the planes it crosses has its holes.
+    def test_json_dielectric_keeps_material_before_drill_projection(self):
+        # DRILL remains separate; dielectric JSON retains the full base.
+        # The later renderer, rather than the export model, cuts its holes.
         from odbpp import clipper
 
         _job, preview, _diag = preview_of("kicad-kitchen-sink")
@@ -534,15 +534,15 @@ class TestStackupJson:
         dielectric = layers["DIELECTRIC_1"]
         drill = next(l for l in layers.values() if l["type"] == "DRILL")
 
-        assert dielectric["parse_info"]["drills_subtracted"] == [drill["name"]]
-        assert dielectric["parse_info"]["drill_cut_mm2"] > 0.0
+        assert "drills_subtracted" not in dielectric["parse_info"]
+        assert "drill_cut_mm2" not in dielectric["parse_info"]
 
         def region(layer):
             return clipper.region_from_rings(
                 [(p["points"], not p["island"]) for p in layer["polygons"]])
 
         assert clipper.intersection(region(dielectric), region(drill)).area \
-            == pytest.approx(0.0, abs=1e-9)
+            == pytest.approx(region(drill).area, abs=1e-8)
 
     def test_a_board_layer_states_its_absolute_z_in_millimetres(self):
         _job, preview, _diag = preview_of("kicad-kitchen-sink")

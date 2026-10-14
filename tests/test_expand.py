@@ -298,56 +298,31 @@ def _drill_step(*, include: tuple[str, ...] = ("D_1_2",)):
 
 
 class TestDrillProjection:
-    def test_a_crossing_drill_is_removed_from_the_dielectric(self):
-        step = _drill_step()
+    @pytest.mark.parametrize("drills", [("D_1_2",), ("D_2_3",), ("D_1_3",)])
+    def test_parser_dielectric_does_not_subtract_cross_layer_drills(self, drills):
+        step = _drill_step(include=drills)
         expander = Expander(None)
-        result = expand_layer(step.layer("DIELECTRIC_A"), step, expander=expander)
-        assert result.used_base
-        # 10x10 outline minus the r2000 pad (2 mm diameter, r = 1 mm).  The pad
-        # is tessellated, so the hole is a hair under pi mm^2 -- hence rel=1e-2.
-        assert result.region.area == pytest.approx(100.0 - math.pi, rel=1e-2)
-        assert result.drills_subtracted == ["D_1_2"]
-        assert result.drill_cut_mm2 == pytest.approx(math.pi, rel=1e-2)
-        assert result.region.holes
+        for name in ("DIELECTRIC_A", "INTERSTITIAL"):
+            result = expand_layer(step.layer(name), step, expander=expander)
+            assert result.used_base
+            assert result.region.area == pytest.approx(100.0)
+            assert not result.region.holes
+            assert result.drills_subtracted == [] and result.drill_cut_mm2 == 0
 
-    def test_a_drill_starting_below_does_not_touch_it(self):
-        # D_2_3 spans planes (1, 2); the dielectric spans (0, 1).  Half-open
-        # intervals are what keep the blind drill out of it.
-        step = _drill_step(include=("D_2_3",))
-        result = expand_layer(step.layer("DIELECTRIC_A"), step,
-                              expander=Expander(None))
-        assert result.drills_subtracted == []
+    def test_empty_dielectric_artwork_remains_the_uncut_base(self):
+        step = _drill_step()
+        result = expand_layer(step.layer("DIELECTRIC_A"), step, expander=Expander(None))
         assert result.region.area == pytest.approx(100.0)
+        assert not result.region.holes
 
-    def test_a_through_drill_crosses_both_dielectrics(self):
-        step = _drill_step(include=("D_1_3",))
-        expander = Expander(None)
-        upper = expand_layer(step.layer("DIELECTRIC_A"), step, expander=expander)
-        lower = expand_layer(step.layer("INTERSTITIAL"), step, expander=expander)
-        assert upper.drills_subtracted == ["D_1_3"]
-        assert lower.drills_subtracted == ["D_1_3"]
-        assert upper.region.area == pytest.approx(100.0 - math.pi, rel=1e-2)
-
-    def test_an_empty_features_file_still_gets_its_holes(self):
-        # The regression: the early return for "no records" used to hand back the
-        # bare board outline, so a real dielectric (whose features file is often
-        # empty) filled every drill.
-        step = _drill_step()
-        dielectric = step.layer("DIELECTRIC_A")
-        assert dielectric.features.records == []
-        result = expand_layer(dielectric, step, expander=Expander(None))
-        assert result.drills_subtracted == ["D_1_2"]
-        assert result.region.area < 100.0
-
-    def test_an_unresolved_span_subtracts_nothing_and_warns(self):
+    def test_parser_does_not_consult_drill_span_to_compose_dielectric(self):
         diagnostics = Diagnostics()
         step = _drill_step()
         step.layer("D_1_2").ref.end_name = ""
-        expander = Expander(None, diagnostics=diagnostics)
-        result = expand_layer(step.layer("DIELECTRIC_A"), step, expander=expander)
+        result = expand_layer(step.layer("DIELECTRIC_A"), step,
+                              expander=Expander(None, diagnostics=diagnostics))
         assert result.region.area == pytest.approx(100.0)
-        assert result.drills_subtracted == []
-        assert "stackup.drill_span_unknown" in diagnostics.codes()
+        assert "stackup.drill_span_unknown" not in diagnostics.codes()
 
 
 # ---------------------------------------------------------------------------

@@ -125,7 +125,7 @@ def test_same_source_through_via_converts_both_unit_systems():
         assert (drill.ref.start_name, drill.ref.end_name) == ("F.CU", "B.CU")
         assert next(iter(drill.tools.tools.values())).drill_size_mm == pytest.approx(.4, abs=.0001)
         assert preview.layer("DIELECTRIC_1").area_mm2 == pytest.approx(
-            200 - math.pi * .2**2, abs=.006)
+            200, abs=.006)
         documents[unit] = by_name(step_to_json(job, preview))
     for name in ("F.CU", "B.CU", "DIELECTRIC_1", "DRILL_PLATED_F.CU-B.CU"):
         mm, inch = documents["mm"][name], documents["in"][name]
@@ -167,7 +167,9 @@ def test_four_copper_layers_and_three_distinct_drill_spans():
     for layer in step.drill_layers:
         assert layer.feature_count == 1
         assert next(iter(layer.tools.tools.values())).drill_size_mm == pytest.approx(.4)
-    cut = {l.name: set(l.geometry.drills_subtracted) for l in preview.layers
+    from odbpp.drawing import dielectric_drill_cutouts
+    drawing = dielectric_drill_cutouts(preview)
+    cut = {l.name: set(l.geometry.drills_subtracted) for l in drawing.layers
            if l.name.startswith("DIELECTRIC_")}
     through = "DRILL_PLATED_F.CU-B.CU"
     blind = "DRILL_PLATED_F.CU-IN1.CU"
@@ -177,7 +179,9 @@ def test_four_copper_layers_and_three_distinct_drill_spans():
                    "DIELECTRIC_3": {through}}
     for name, count in (("DIELECTRIC_1", 2), ("DIELECTRIC_2", 2),
                         ("DIELECTRIC_3", 1)):
-        assert sum(r.is_hole for r in preview.layer(name).rings) == count
+        assert sum(r.is_hole for r in drawing.layer(name).rings) == count
+        assert not preview.layer(name).geometry.drills_subtracted
+        assert not preview.layer(name).geometry.region.holes
 
 
 @pytest.mark.parametrize("case", ("outline-only", "pad-shapes", "tracks-arcs",

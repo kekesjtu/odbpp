@@ -30,7 +30,7 @@ ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**�
 ```
 
 四个真实样本均已跑通，含 520k 图元 / 43 层的 INCH 刚挠结合板
-（导出约 150 s，含 DOCUMENT 层）。介质层按 AGENTS 约束 3 扣除与其 Z 区间相交的钻孔投影，
+（导出约 150 s，含 DOCUMENT 层）。中间 JSON 的介质几何不扣除 DRILL 投影，SVG/HTML 仅在绘图副本上生成介质孔洞；铜层图案不受 DRILL 影响，
 输出坐标在目标分辨率下重新量化与布尔规整后才写出。
 
 ## 快速开始
@@ -113,7 +113,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
     -o build/ks-eq/heatmaps --shared-scale --layer B.CU
 ```
 
-掩膜三色语义：黑 = 铜/钻孔投影（材料 1），白 = 计算域内的基底（材料 2），
+掩膜三色语义：黑 = 铜图案或介质内钻孔投影（材料 1），白 = 计算域内的基底（材料 2），
 灰 = 该层在这里**没有计算域**（不是 FR4）。热图三面板共用一条色标，
 浅灰 `n/a` 表示该层在此单元没有值。命令、色标、内存与失败处理详见
 [可视化文档](docs/equivalence/02-visualization.md)。
@@ -196,7 +196,8 @@ for layer in step.layers:
 | `geometry.py` | 圆弧离散化、环方向约定、变换，以及 `r`/`s`/`rect`/`oval` 等基础标准符号的原生展开 |
 | `job.py` | 编排：把上述内容组装成一个自洽的产品模型，并执行跨文件约束 |
 | **`clipper.py`** | **平面布尔运算 + Minkowski 扫掠**：整数量化（1e-6 mm）、环方向归一、并/差/交、`stroke_paths`（圆符号精确带宽）、`sweep_paths`（方符号精确拖拽） |
-| **`expand.py`** | **图元 → 实心区域**：符号解析与放置、`L`/`A` 扫掠、极性与基底合成、按极性段与 stroke 定义批处理；介质层扣除相交钻孔投影 |
+| **`expand.py`** | **图元 → 实心区域**：符号解析与放置、`L`/`A` 扫掠、极性与基底合成、按极性段与 stroke 定义批处理；保留未扣除 DRILL 的介质几何 |
+| **`drawing.py`** | **绘图副本**：仅扣除介质层相交 DRILL 投影，保持 JSON 与铜层图案不变 |
 | **`stackup.py`** | **层叠模型**：铜层序号、介质/钻孔的 Z 区间（半开）、相交判定，以及 `.layer_dielectric`/`.copper_weight` 的单位规范化 |
 | **`export.py`** | **中间格式（数据流 2）**：逐层流式合成 `StepPreview`，构造 Pydantic 接口并导出公制 JSON，含逐层计算域 |
 | **`intermediate.py`** | **唯一 JSON 接口定义**：Pydantic 导出/导入与文本 `.schema`，计算内核仍为 dataclass/数组 |
@@ -244,8 +245,9 @@ for layer in step.layers:
     是否存在，由其**逐层计算域**决定，绝不用铜图案反推。
 14. **矩形化误差是显式数据。** 阶梯边界丢失/填平的面积、精度、以及每个岛/孔的
     存亡都写进 meta；超过精度允许的上界报 `rectify.area_error`，不静默近似。
-15. **钻孔一律实心铜。** 与某层 Z 区间相交的钻孔投影在该层内按全铜处理
-    （`drill_model=solid_copper`），铜层与介质层同理；跨度未知时报错，不猜通孔。
+15. **钻孔仅影响介质。** 介质内相交钻孔投影按实心铜处理
+    （`drill_model=solid_copper`、`drill_scope=dielectric_only`）；铜层仅依据自身图案。
+    需要介质采样时跨度未知时报错，不猜通孔；仅铜层输入无需钻孔跨度。
 16. **网格保留边界并遵守尺寸约束。** 各方向单元边长必须在用户给定范围内，
     不兼容时报 `grid.size_incompatible`；不能删除 region 边界或悄悄放宽尺寸。
     每个单元必须完整落在一个 region 内，且至少有光栅像素中心。

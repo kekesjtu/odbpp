@@ -880,7 +880,7 @@ def _gallery_note(result, args) -> str:
     skipped = [r for r in result.layers if r.status != "equivalent"]
     parts = [f"raster {result.raster_px}x{result.raster_py}px",
              f"grid {result.grid.nx}x{result.grid.ny}",
-             "drill_model=solid_copper（见 meta.json）"]
+             "介质层钻孔按实心铜计算，铜层仅依据铜图案"]
     if result.grid.size_constraints_mm:
         limits = result.grid.size_constraints_mm
         parts.append("单元边长 " + "，".join(
@@ -896,7 +896,7 @@ def _gallery_note(result, args) -> str:
         parts.append("本次未生成热图（--no-heatmap）")
     elif args.heatmap_grid:
         parts.append("热图灰线标出 CSV 单元边界")
-    return "；".join(parts) + "。掩膜灰阶：黑=铜/钻孔，白=基底，灰=该层在此无计算域。"
+    return "；".join(parts) + "。掩膜灰阶：黑=铜（钻孔投影仅作用于介质），白=基底，灰=该层在此无计算域。"
 
 
 def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:

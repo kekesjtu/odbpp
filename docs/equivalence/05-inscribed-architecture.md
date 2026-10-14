@@ -96,9 +96,10 @@ outside_step_area、effective_domain、有效域的模型损失，避免把层�
 
 铜图案、计算域及各相交钻孔分别扫描线光栅化。材料组合用区间逻辑：
 
-`black = step_domain AND layer_domain AND (copper OR drills)`。
+铜层 `black = step_domain AND layer_domain AND copper`；
+介质层 `black = step_domain AND layer_domain AND drills`。
 
-介质初始 copper 为空，钻孔覆盖为 solid_copper，且不生成独立厚度层。
+介质初始 copper 为空，仅介质内钻孔覆盖为 solid_copper，且不生成独立厚度层。
 每个输入 Region 使用其已规整的岛孔语义；不同铜/钻孔 Region 之间作 OR，
 防止 even-odd 把材料重叠抵消。材料分支不对复杂多边形重复 union、
 intersection 或 difference。简单 profile 的几何检查是独立的必要操作。
@@ -139,7 +140,7 @@ sync_out 从最终 metadata 的实际矩形画 region 图，输出边界、编�
 批量结果复用要求 source、当前字段结构、Px/Py、尺寸配置、图片配置、
 全部输出和 pipeline_fingerprint 一致；指纹包含几何、采样、材料与热图代码。
 改变 Px/Py 可重算材料，但 region/grid 的原始浮点坐标必须完全相同。
-任何待等效层失败或钻孔跨度未知都阻止正式结果写入。
+任何待等效层失败或介质采样需要的钻孔跨度未知都阻止正式结果写入；仅铜层输入忽略 DRILL。
 
 当前是二维两相、层内贯通的串并联近似；不含空气钻孔、镀铜薄壁、
 Z 内细分或真实三维细走线导热。内部几何尺度和用户 min 不相容会失败。

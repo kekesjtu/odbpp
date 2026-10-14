@@ -62,13 +62,16 @@ def test_material_branch_uses_no_complex_booleans(monkeypatch):
     assert all(.1<=c.copper_fraction<=1 for c in r.cells)
 
 
-def test_scanline_composition_matches_boolean_reference_with_drill_overlap():
+@pytest.mark.parametrize("target", ["CU", "DIEL"])
+def test_scanline_composition_matches_boolean_reference_with_drill_overlap(target):
     import numpy as np
     from odbpp.equiv import _region_from_polygons, _Scanline
     from odbpp.clipper import union, intersection
     from odbpp.raster import RasterAxis, region_edges
     d=build_document(layers=[
         {"name":"CU","type":"SIGNAL","polygons":[rect(0,0,10,10),hole(2,2,8,8),rect(4,4,6,6)]},
+        {"name":"DIEL","type":"DIELECTRIC","polygons":[rect(0,0,10,10)]},
+        {"name":"D2","type":"DRILL","polygons":[rect(5,3,8,5)]},
         {"name":"D","type":"DRILL","polygons":[rect(3,3,7,5)],
          "z_mm":{"start_mm":0,"end_mm":.035,"thickness_known":True}},
     ])
@@ -77,7 +80,8 @@ def test_scanline_composition_matches_boolean_reference_with_drill_overlap():
                                     mask_sink=lambda name,mask,pitch:masks.update({name:mask}))
     assert not result.fatal
     layers=d["steps"][0]["layers"]
-    reference=intersection(union(*[_region_from_polygons(l["polygons"]) for l in layers]),
+    ink = [l for l in layers if (l["name"] == "CU" if target == "CU" else l["type"] == "DRILL")]
+    reference=intersection(union(*[_region_from_polygons(l["polygons"]) for l in ink]),
                            _region_from_polygons([rect(0,0,10,10)]))
     scan=_Scanline(region_edges(reference))
     axis=RasterAxis(0,.1,100)
@@ -86,7 +90,7 @@ def test_scanline_composition_matches_boolean_reference_with_drill_overlap():
         for left,right in scan.spans_at(axis.centre(b)):
             a0,a1=axis.range_for(left,right)
             expected[b,a0:a1]=0
-    actual=np.frombuffer(masks["CU"].pixels,dtype=np.uint8).reshape(100,100)
+    actual=np.frombuffer(masks[target].pixels,dtype=np.uint8).reshape(100,100)
     assert np.array_equal(actual,expected)
 
 

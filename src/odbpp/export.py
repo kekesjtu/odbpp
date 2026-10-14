@@ -116,6 +116,7 @@ class LayerPreview:
     #: polygons written are the ones that were validated; asking for a different
     #: precision re-regularises instead of silently rounding points.
     round_digits: Optional[int] = None
+    drawing_only: bool = field(default=False, repr=False, compare=False)
 
     @property
     def name(self) -> str:
@@ -245,6 +246,12 @@ class StepPreview:
     #: is independent of the Y-up model plane.
     Z_AXIS = "increases downward from the top of the stack (matrix row 1), mm"
 
+    #: Used only when drawing a filtered dielectric with omitted drill geometry.
+    #: Retain the library/options, not the expander's large geometry caches.
+    source_symbols: Optional[object] = field(default=None, repr=False, compare=False)
+    expansion_options: Optional[ExpandOptions] = field(default=None, repr=False, compare=False)
+    drawing_only: bool = field(default=False, repr=False, compare=False)
+
     def z_axis(self) -> str:
         return self.Z_AXIS
 
@@ -320,8 +327,8 @@ def iter_step_previews(
     opts = options or PreviewOptions()
     diags = diagnostics if diagnostics is not None else Diagnostics()
     expander = expander or _make_expander(job, opts, diags)
-    # One stack model per step, shared with the expander so the drill spans that
-    # decided the dielectric holes and the ones written to the JSON are the same.
+    # One stack model per step; its spans are exported and used later by the
+    # dielectric renderer. Cross-layer drills do not modify parser geometry.
     stackup = expander.stackup(step)
 
     for layer in _selected_layers(step, opts, diags):
@@ -472,6 +479,8 @@ def build_step_preview(
         failed_layers=[name for name in unavailable if name not in empty],
         stackup=stackup,
         round_digits=opts.round_digits,
+        source_symbols=job.symbols,
+        expansion_options=opts.expand_options(),
     )
 
 
@@ -571,14 +580,14 @@ def _layer_data(preview: LayerPreview, digits: int) -> dict:
             "polarity": preview.layer.ref.polarity.value,
             "base_from_profile": geometry.used_base,
             "feature_records": geometry.records, "polarity_runs": geometry.polarity_runs,
-            "drills_subtracted": list(geometry.drills_subtracted),
-            "drill_cut_mm2": _round(geometry.drill_cut_mm2, digits + 2),
         },
     }
 
 
 def layer_to_json(preview: LayerPreview, *, round_digits: Optional[int] = None) -> dict:
     """Serialise a single layer through the shared Pydantic IO contract."""
+    if preview.drawing_only:
+        raise ValueError("a drawing-only layer cannot be exported as intermediate JSON")
     from .intermediate import LayerModel
     return LayerModel.model_validate(_layer_data(preview, _preview_digits(preview, round_digits))).model_dump(
         mode="json", exclude_none=True)
@@ -592,6 +601,8 @@ def step_to_document(job: Job, preview: StepPreview, *,
     Layer geometry may be filtered for a preview, but the entire layer catalog
     remains visible. Failed and intentionally omitted geometry are explicit.
     """
+    if preview.drawing_only:
+        raise ValueError("a drawing-only preview cannot be exported as intermediate JSON; use the uncut model")
     digits = _preview_digits(preview, round_digits)
     view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
     domains, domain_of_layer = _domains_json(view, digits)

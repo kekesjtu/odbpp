@@ -260,15 +260,15 @@ class TestDrillProjection:
                      and c.copper_fraction == 0]
         assert untouched and untouched[0].kz == pytest.approx(K2)
 
-    def test_a_drill_is_overlaid_on_copper_too(self):
+    def test_a_drill_never_adds_copper_to_a_copper_layer(self):
         document = build_document(layers=[
             {"name": "CU", "type": "SIGNAL", "polygons": []},
             {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)]},
         ])
         result = run(document)
         drilled = [c for c in result.cells if c.copper_fraction > 0]
-        assert drilled and all(c.copper_fraction == pytest.approx(1.0)
-                               for c in drilled)
+        assert not drilled
+        assert next(r for r in result.layers if r.name == "CU").drill_overlays == []
 
     def test_a_drill_outside_the_z_interval_is_not_projected(self):
         document = build_document(layers=[
@@ -282,7 +282,7 @@ class TestDrillProjection:
 
     def test_an_unresolvable_drill_span_is_fatal_never_a_through_hole(self):
         document = build_document(layers=[
-            {"name": "CU", "type": "SIGNAL", "polygons": []},
+            {"name": "CU", "type": "DIELECTRIC", "polygons": []},
             {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)],
              "z_mm": None},
         ])
@@ -293,35 +293,28 @@ class TestDrillProjection:
         assert result.fatal
         assert "equiv.drill_span_unknown" in diagnostics.codes()
 
-    def test_a_drill_spanning_two_planes_does_not_overlay_a_third(self):
-        # Three copper layers with no stated thickness: every best-effort Z is
-        # zero, so absolute-Z matching would project a C1-C2 drill into C3.  The
-        # authored copper-plane span must win, and the disagreement must be
-        # reported rather than silently producing a wrong layer.
-        layers = []
-        for index, name in enumerate(("C1", "C2", "C3")):
-            extent = {"start_mm": 0.0, "end_mm": 0.0,
-                      "thickness_known": False}
-            layers.append({"name": name, "type": "SIGNAL",
-                           "polygons": [],
-                           "copper_index": index, "copper_span": None,
-                           "domain_id": "step_profile", "z_mm": extent})
-        layers.append({"name": "D_1_2", "type": "DRILL",
-                       "polygons": [rect(4, 4, 6, 6)], "copper_index": None,
-                       "copper_span": [0, 1],
-                       "z_mm": {"start_mm": 0.0, "end_mm": 0.0,
-                                "thickness_known": True}})
-        document = build_document(layers=[])
-        document["steps"][0]["layers"] = layers
+    def test_a_blind_drill_affects_only_its_dielectric_interval(self):
+        document = build_document(layers=[
+            {"name": "C1", "polygons": []}, {"name": "C2", "polygons": []},
+            {"name": "C3", "polygons": []},
+            {"name": "UPPER", "type": "DIELECTRIC", "polygons": [],
+             "z_mm": {"start_mm": 0.0, "end_mm": 0.0, "thickness_known": False}},
+            {"name": "LOWER", "type": "DIELECTRIC", "polygons": [],
+             "z_mm": {"start_mm": 0.0, "end_mm": 0.0, "thickness_known": False}},
+            {"name": "DRILL", "type": "DRILL", "polygons": [rect(4,4,6,6)]},
+        ])
+        layers = document["steps"][0]["layers"]
+        for index, layer in enumerate(layers[:3]):
+            layer["copper_index"] = index
+        layers[3]["copper_span"] = [0,1]
+        layers[4]["copper_span"] = [1,2]
+        layers[5]["copper_span"] = [0,1]
         diagnostics = Diagnostics()
         result = run(document, diagnostics=diagnostics)
         assert not result.fatal
-        by_layer = {}
-        for cell in result.cells:
-            by_layer.setdefault(cell.layer_name, []).append(cell)
-        assert any(c.copper_fraction > 0 for c in by_layer["C1"])
-        assert any(c.copper_fraction > 0 for c in by_layer["C2"])
-        assert all(c.copper_fraction == 0.0 for c in by_layer["C3"])
+        for name in ("C1", "C2", "C3", "LOWER"):
+            assert all(c.copper_fraction == 0 for c in result.cells if c.layer_name == name)
+        assert any(c.copper_fraction > 0 for c in result.cells if c.layer_name == "UPPER")
         assert "equiv.drill_z_mismatch" in diagnostics.codes()
 
 
@@ -523,6 +516,7 @@ class TestOutput:
         assert meta["schema"] == "odbpp/materialmap-5"
         assert meta["units"]["thermal_conductivity"] == "W/(m*K)"
         assert meta["drill_model"] == "solid_copper"
+        assert meta["drill_scope"] == "dielectric_only"
         assert meta["z_axis"].startswith("increases downward")
         assert "rectification" in meta and "materials" in meta
         assert meta["materials"]["by_layer"]

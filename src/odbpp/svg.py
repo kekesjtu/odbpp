@@ -1,5 +1,8 @@
 """SVG and a self-contained HTML viewer (data-flow step 3).
 
+Dielectric drill cutouts are made on a local drawing copy. JSON keeps the uncut
+material geometry; copper artwork is never changed by DRILL projections.
+
 The output is not a picture of the files -- it is the composed geometry from
 :mod:`odbpp.export`, drawn.  That distinction is the whole point of the pipeline:
 a preview built from raw records would show clearances as solid copper and hide
@@ -35,6 +38,7 @@ from dataclasses import dataclass, field, replace
 from typing import Mapping, Optional, Sequence
 
 from .clipper import Ring, region_from_geometry, snap_to_grid
+from .drawing import dielectric_drill_cutouts
 from .export import (
     LayerPreview,
     PreviewOptions,
@@ -249,6 +253,7 @@ def render_svg(preview: StepPreview, *, options: Optional[SvgOptions] = None,
     # coordinates at a coarser precision is what turned a 0.00002 mm-wide pad
     # into a zero-width path whose JSON still claimed area.
     view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
+    view = dielectric_drill_cutouts(view, None if layers is None else {l.name for l in layers})
     if layers is not None:
         by_name = {l.name: l for l in view.layers}
         source = [by_name[l.name] for l in layers if l.name in by_name]
@@ -922,8 +927,9 @@ def render_html(preview: StepPreview, *, options: Optional[SvgOptions] = None,
     # longer shows.
     view = regularise_preview(preview, _render_digits(preview, opts),
                               diagnostics=preview.diagnostics)
+    view = dielectric_drill_cutouts(view)
     ordered = _ordered(list(view.layers), opts)
-    body = render_svg(view, options=opts, layers=ordered)
+    body = _render_svg(view, opts, ordered, _viewbox(view, _render_digits(view, opts)))
 
     return _render_html(view, opts, ordered, body, title=title, source=source)
 
@@ -1068,7 +1074,8 @@ def write_outputs(
 
     One resolution is chosen per artefact family and the geometry is
     re-regularised onto it before writing, so what the JSON reports, what the
-    SVG draws and what the HTML lists are the same polygons.  By default both
+    SVG draws and what the HTML lists agree at that resolution. Dielectric
+    cutouts exist only in the drawing copy; JSON retains uncut geometry. By default both
     families follow the preview's own model resolution; an explicit
     ``preview_options``/``svg_options`` precision overrides it, and a mismatch
     between the two is honoured rather than hidden.
@@ -1108,6 +1115,8 @@ def write_outputs(
     # The standalone SVG and the viewer contain exactly the same drawing.
     # Keep reuse local to this write: previews and rendering options can change
     # between calls, so a persistent render cache would be unsafe.
+    if want_svg or want_html or per_layer_svg:
+        draw_view = dielectric_drill_cutouts(draw_view)
     viewport = (_viewbox(draw_view, draw_digits)
                 if want_svg or want_html or per_layer_svg else None)
     drawing = (_render_svg(draw_view, opts, draw_view.layers, viewport)

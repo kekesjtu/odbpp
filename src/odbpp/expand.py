@@ -173,8 +173,7 @@ class LayerGeometry:
     polarity_runs: int = 0
     #: Whether the composition started from a filled base (profile) area.
     used_base: bool = False
-    #: Drill layers whose projection was subtracted from this layer's base, in
-    #: matrix order.  Empty for every layer that is not a dielectric sheet.
+    #: Rendering-only audit; Parser leaves these fields empty/zero.
     drills_subtracted: list[str] = field(default_factory=list)
     #: Area the drill projection actually removed (mm^2).  Overlap measured
     #: before the subtraction, so a hole that was already a feature-reported void
@@ -223,7 +222,6 @@ class Expander:
         self._geometry_cache: dict[tuple, Optional[SurfaceGeometry]] = {}
         self._definition_cache: dict[str, Optional[Region]] = {}
         self._stackups: dict[str, Stackup] = {}
-        self._drill_regions: dict[tuple[str, str], Optional[Region]] = {}
         self._warned: set[str] = set()
         # Only live during a polarity run; public symbol geometries are mutable.
         self._pad_regions: Optional[dict[int, tuple[SurfaceGeometry, Region]]] = None
@@ -241,24 +239,6 @@ class Expander:
             cached = Stackup(step, diagnostics=self.diagnostics)
             self._stackups[step.name] = cached
         return cached
-
-    def drill_region(self, step, layer) -> Optional[Region]:
-        """Composed projection of one drill layer, cached by step and layer.
-
-        A dielectric's base needs the union of every drill that crosses it, and
-        several dielectrics share the same drill layers -- expanding each drill
-        once turns an O(dielectrics x drills) composition into O(drills).
-        """
-        key = (step.name, layer.name.casefold())
-        if key in self._drill_regions:
-            return self._drill_regions[key]
-
-        region: Optional[Region] = None
-        if layer.features is not None and layer.features.records:
-            geometry = expand_layer(layer, step, expander=self, options=self.options)
-            region = geometry.region if geometry.region else None
-        self._drill_regions[key] = region
-        return region
 
     # ------------------------------------------------------------- warnings
 
@@ -811,19 +791,9 @@ def expand_layer(
                 region = clipper.difference(region, run_region)
         result.region = region
 
-    # AGENTS constraint 3, Z half: a dielectric is the board outline *minus* the
-    # projection of every drill whose Z interval overlaps this dielectric's own.
-    # Applied last, so a hole wins over anything the layer's own artwork drew
-    # inside it, and applied even when the features file is empty -- which on a
-    # real board is the common case and was exactly when the holes used to be
-    # filled in.
-    if result.used_base and layer.type is LayerType.DIELECTRIC:
-        region, drilled, removed = _subtract_drills(
-            result.region, layer, step, expander
-        )
-        result.region = region
-        result.drills_subtracted = drilled
-        result.drill_cut_mm2 = removed
+    # DRILL is an independent cross-layer pattern. JSON retains the dielectric
+    # before drill projection; only its SVG drawing copy cuts these holes.
+    # Copper polygons are never modified by cross-layer drill geometry.
 
     if not result.region:
         expander.diagnostics.warn(
@@ -832,43 +802,6 @@ def expand_layer(
             layer.dir_name or None,
         )
     return result
-
-
-def _subtract_drills(
-    region: Region,
-    layer,
-    step,
-    expander: Expander,
-) -> tuple[Region, list[str], float]:
-    """Remove the projection of every drill crossing *layer* (AGENTS constraint 3).
-
-    Returns ``(region_without_holes, drill_names, removed_area_mm2)``.  Nothing
-    is guessed: a span that cannot be resolved yields no subtraction and a
-    diagnostic from :class:`~odbpp.stackup.Stackup`, because treating an unknown
-    span as a through-hole would silently perforate the whole board.
-    """
-    if not region:
-        return region, [], 0.0
-
-    stackup = expander.stackup(step)
-    crossing = stackup.drills_through(layer)
-    if not crossing:
-        return region, [], 0.0
-
-    projection = Region()
-    names: list[str] = []
-    for drill in crossing:
-        drill_region = expander.drill_region(step, drill)
-        if not drill_region:
-            continue
-        projection = clipper.union(projection, drill_region)
-        names.append(drill.name)
-
-    if not projection:
-        return region, [], 0.0
-
-    removed = clipper.intersection(region, projection).area
-    return clipper.difference(region, projection), names, removed
 
 
 def _starts_from_profile(layer) -> bool:

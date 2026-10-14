@@ -77,8 +77,6 @@ class ParseInfoModel(ContractModel):
     base_from_profile: bool
     feature_records: Index
     polarity_runs: Index
-    drills_subtracted: list[str]
-    drill_cut_mm2: Number = Field(ge=0)
 
 
 class LayerModel(ContractModel):
@@ -91,7 +89,7 @@ class LayerModel(ContractModel):
     geometry_status: Literal["ready", "failed", "omitted"] = "ready"
     geometry_error: str | None = None
     domain_id: str | None = None
-    polygons: list[PolygonModel]
+    polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")
     z_mm: ZExtentModel | None = None
     thickness: ThicknessModel | None = None
     copper_index: Index | None = None

@@ -255,6 +255,7 @@ class EquivalenceResult:
             },
             "z_axis": "increases downward from the top of the stack, mm",
             "drill_model": "solid_copper",
+            "drill_scope": "dielectric_only",
             "coverage": {
                 "columns": ["cell_area_mm2", "domain_area_mm2",
                             "domain_coverage"],
@@ -428,7 +429,7 @@ def _collect_drills(step: Mapping[str, Any],
     return drills, fatal
 
 
-def _topological_overlap(layer_type: str, layer_doc: Mapping[str, Any],
+def _topological_overlap(layer_doc: Mapping[str, Any],
                          drill: _Drill) -> Optional[bool]:
     """Decide drill/layer overlap from copper-plane indices, or ``None``.
 
@@ -436,18 +437,13 @@ def _topological_overlap(layer_type: str, layer_doc: Mapping[str, Any],
     thickness, several layers can share a best-effort ``start_mm == end_mm``,
     and matching by Z would then mark a layer the drill never reaches.  The
     copper-plane index is the topology the format authored, so it wins whenever
-    both sides expose one.  A copper layer is a plane, so it is covered
-    inclusively; a dielectric occupies the half-open interval between two planes.
+    both sides expose one. Only dielectric intervals participate; copper is
+    entirely independent of drill projections.
     """
     span = drill.copper_span
     if span is None:
         return None
     start, end = span
-    if layer_type in COPPER_TYPES:
-        index = layer_doc.get("copper_index")
-        if index is None:
-            return None
-        return start <= int(index) <= end
     index = layer_doc.get("copper_span")
     if not isinstance(index, (list, tuple)) or len(index) != 2:
         return None
@@ -754,7 +750,9 @@ def equivalence_from_document(
             diagnostics=diags, fatal=True)
 
     # --- layers -------------------------------------------------------------
-    drills, drill_fatal = _collect_drills(step, diags)
+    needs_drills = any(l.get("type") == DIELECTRIC_TYPE and l.get("context", "BOARD") == "BOARD"
+                       and l.get("geometry_status", "ready") == "ready" for l in step.get("layers", []))
+    drills, drill_fatal = _collect_drills(step, diags) if needs_drills else ([], False)
     # A rectangularisation that lost an island or filled a hole produced a board
     # outline that is not the outline being equivalented; the run must not write
     # a plausible-looking CSV from it.
@@ -855,7 +853,7 @@ def equivalence_from_document(
             materials_by_layer[name] = materials.as_dict()
 
         # Material 1 (black) is the copper pattern for a copper layer; for a
-        # dielectric it starts empty. Drill scanline spans are ORed for both.
+        # dielectric it starts empty. Drill scanline spans apply only to dielectric.
         pattern = (_region_from_polygons(layer.get("polygons"))
                    if type_name in COPPER_TYPES else Region())
         # Match drills by copper-plane topology first.  When a layer has no
@@ -866,8 +864,8 @@ def equivalence_from_document(
         covering: list[_Drill] = []
         z_fallback = False
         z_mismatch = False
-        for drill in drills:
-            topological = _topological_overlap(type_name, layer, drill)
+        for drill in drills if type_name == DIELECTRIC_TYPE else ():
+            topological = _topological_overlap(layer, drill)
             by_z = _overlaps(z_start, z_end, drill.z_start_mm, drill.z_end_mm)
             if topological is None:
                 matched = by_z
