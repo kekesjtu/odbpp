@@ -28,3 +28,5 @@
 文本定义：[intermediate.schema](../intermediate.schema)。
 
 解析审计字段移除验证：[remove-parse-info-validation.json](remove-parse-info-validation.json)。
+
+根诊断移除验证：[remove-root-diagnostics-validation.json](remove-root-diagnostics-validation.json)。

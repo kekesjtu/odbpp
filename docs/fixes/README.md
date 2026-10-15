@@ -23,3 +23,4 @@
 | [13 中间 JSON 与 Pydantic](13-intermediate-json.md) | 用户确认的接口精简 | 唯一层目录与域引用、无版本协商、Pydantic IO 边界、真实案例输出与性能对照 |
 | [14 介质 DRILL 处理后移](14-dielectric-drill-policy.md) | 用户明确更改材料规则 | JSON 保留未扣孔介质、仅绘图副本扣孔、铜层忽略 DRILL、真实案例与全量输出核查 |
 | [15 移除 parse_info](15-remove-parse-info.md) | 用户明确精简接口 | 删除解析审计字段，保留内部统计，同步 schema 与全部案例输出 |
+| [16 移除根 diagnostics](16-remove-root-diagnostics.md) | 用户明确精简接口 | 中间 JSON 不携带根诊断，保留内部诊断及逐层失败语义，同步注释代码与全部案例 |

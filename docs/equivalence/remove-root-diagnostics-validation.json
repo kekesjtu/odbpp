@@ -1,0 +1,203 @@
+{
+  "baseline_ref": "6a956c8",
+  "implementation_ref": "950f77f",
+  "tests": {
+    "passed": 188,
+    "seconds": 171.8
+  },
+  "case_count": 19,
+  "removed_diagnostic_count": 226,
+  "checks": "fresh source exports validate through current model; no root diagnostics; identical complete steps plus units/resolution; identical MaterialMap CSV bytes",
+  "cases": [
+    {
+      "case": "designodb-rigidflex",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 31,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "25c112a2237f170dc5b3d03330edd12c09ed4b062e2a3ac26b35f756e12014bd",
+      "csv_sha256": "ed1e7af055ec120ac2dbd8df548cf408f13144f7b46a8ea3faa7707ca8769a0f"
+    },
+    {
+      "case": "designodb-rigidflex.tgz",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 31,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "25c112a2237f170dc5b3d03330edd12c09ed4b062e2a3ac26b35f756e12014bd",
+      "csv_sha256": "ed1e7af055ec120ac2dbd8df548cf408f13144f7b46a8ea3faa7707ca8769a0f"
+    },
+    {
+      "case": "kicad-kitchen-sink",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 41,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "deccba77f7b960167a9cf219d9ca40721c84d99d0a858b4428d59f0d376959ac",
+      "csv_sha256": "2293f484e152592e5d61216fe0847b1789483ae609ece830b5ddb55509c1b6fe"
+    },
+    {
+      "case": "kicad-positive/clean/four-layer-drills-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 10,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "6b4effddadb0a4302a09ce397f91c206c78999db906bf82fe7940065b5454fa8",
+      "csv_sha256": "89e33dc3dd540b33bbc9f49293d3e8ba12e2fc0f76c9b6d0f50b8715788d7f71"
+    },
+    {
+      "case": "kicad-positive/clean/outline-only-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 3,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "ec0ed1792fd1687d13e2487be806af5f34fe15a05256fe4b77a8755f34a54556",
+      "csv_sha256": "62c9252122c0429070fbb44dcaa5d97c2bf22940f20110c43e08c349bae4e549"
+    },
+    {
+      "case": "kicad-positive/clean/pad-shapes-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 3,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "c99ead8ef99b71ddfa10279fea0ed4738db657d1cdafd5580fe7026c800e1efa",
+      "csv_sha256": "0bbb8e187101724606a2390ff3f0447bfc4501bf5750370e24fc028ee7353339"
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-in",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 4,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "3db791a4d9b17b91bf06b60fe046142c8a2dba816623dce2324613649db01faa",
+      "csv_sha256": "39df88475522ac05eb56938827c47f6ad0e556ad0bd6e65ff4a2750665422946"
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 4,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "366878beebfc53b4591dee7ca568e651625414150b20610d2b45fe494b8bf3b5",
+      "csv_sha256": "7b842efa99d42af4b9e138063386b07af93176be65c379489acfbc12d36260fe"
+    },
+    {
+      "case": "kicad-positive/clean/tracks-arcs-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 2,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "1c0eb91814d9049ee94f9d4486a1aa220c34950823704507706dbbf84f784fb0",
+      "csv_sha256": "ea0aead6696c9b4b5c52b8d6c3189e5625f1dcd831f3d86f998a8dc115155de0"
+    },
+    {
+      "case": "kicad-positive/clean/zone-hole-rotation-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 3,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "404f08a0d37a1f68c4d671358ab4c26a646aae8f16336b11aa8ef1f4d981a947",
+      "csv_sha256": "56e7f547b4e07762667231ae65291661085cdb46a88a1df855904b9e99fe256b"
+    },
+    {
+      "case": "kicad-positive/native/four-layer-drills-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 14,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "5e303f7cf76b5f466e51abaf7d4ab2608e95e25a229621348bd22120453342b8",
+      "csv_sha256": "89e33dc3dd540b33bbc9f49293d3e8ba12e2fc0f76c9b6d0f50b8715788d7f71"
+    },
+    {
+      "case": "kicad-positive/native/outline-only-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 7,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "8ed608cbf4c03161322bc041a328ac6fed2df8ed11c31edadb59ada7b9f61513",
+      "csv_sha256": "62c9252122c0429070fbb44dcaa5d97c2bf22940f20110c43e08c349bae4e549"
+    },
+    {
+      "case": "kicad-positive/native/pad-shapes-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 7,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "6ed82c3102fc0a492927eddec359b8f8ab96347d8818fd83e39ab29304c7a5a4",
+      "csv_sha256": "0bbb8e187101724606a2390ff3f0447bfc4501bf5750370e24fc028ee7353339"
+    },
+    {
+      "case": "kicad-positive/native/through-hole-in",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 8,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "d7f7d46b346a67f1aa6e26cb3fdea2da9d625f09ffab137baf5fd1c423400c99",
+      "csv_sha256": "39df88475522ac05eb56938827c47f6ad0e556ad0bd6e65ff4a2750665422946"
+    },
+    {
+      "case": "kicad-positive/native/through-hole-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 8,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "6656365bfb820aec4ee1c141f83393d826ce4b908f0349bb0579333f8a9fb389",
+      "csv_sha256": "7b842efa99d42af4b9e138063386b07af93176be65c379489acfbc12d36260fe"
+    },
+    {
+      "case": "kicad-positive/native/tracks-arcs-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 6,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "4dba3c213fc86c24adbac42117cc5f4a28c0b4b035bce24562397735dc106de5",
+      "csv_sha256": "ea0aead6696c9b4b5c52b8d6c3189e5625f1dcd831f3d86f998a8dc115155de0"
+    },
+    {
+      "case": "kicad-positive/native/zone-hole-rotation-mm",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 7,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "4b1d4448d9e52ed18871592e610db93c5e1f427e9949b78eab24eccca54ec966",
+      "csv_sha256": "56e7f547b4e07762667231ae65291661085cdb46a88a1df855904b9e99fe256b"
+    },
+    {
+      "case": "kicad-video-odb.tgz",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 37,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "45cbf49bc9d345932b03484234c4d74ae515ed473b81c51303f9334bd7947a75",
+      "csv_sha256": "2442913ed995c4bd593ac934f4c287de475dce083da3d0c0ac3361a9efa8af39"
+    },
+    {
+      "case": "minimal-test-odb",
+      "root_diagnostics_absent": true,
+      "current_model_validation": true,
+      "removed_diagnostic_count": 0,
+      "physical_data_identical": true,
+      "materialmap_identical": true,
+      "physical_sha256": "6f2f4cadc74f564759ecc7334732e8573c50e89d6af6ca0c6a8d62ecea6a9a46",
+      "csv_sha256": "aa1d7edf132022e1d1a2ab9ce5ec7d861450a3ec5e27a47f9a00db3a78bb5fe5"
+    }
+  ]
+}
