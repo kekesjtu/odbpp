@@ -68,12 +68,12 @@ def test_scanline_composition_matches_boolean_reference_with_drill_overlap(targe
     from odbpp.equiv import _region_from_polygons, _Scanline
     from odbpp.clipper import union, intersection
     from odbpp.raster import RasterAxis, region_edges
-    d=build_document(layers=[
+    from test_equiv import drill_document
+    d=drill_document(layers=[
         {"name":"CU","type":"SIGNAL","polygons":[rect(0,0,10,10),hole(2,2,8,8),rect(4,4,6,6)]},
         {"name":"DIEL","type":"DIELECTRIC","polygons":[rect(0,0,10,10)]},
         {"name":"D2","type":"DRILL","polygons":[rect(5,3,8,5)]},
-        {"name":"D","type":"DRILL","polygons":[rect(3,3,7,5)],
-         "z_mm":{"start_mm":0,"end_mm":.035,"thickness_known":True}},
+        {"name":"D","type":"DRILL","polygons":[rect(3,3,7,5)]},
     ])
     masks={}
     result=equivalence_from_document(d,EquivalenceOptions(GridOptions(100,100)),

@@ -131,7 +131,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "实体物理层自身的绝对 Z；DRILL 不保存此字段，由 copper_span 端点铜层推导。"
         },
         "thickness": {
           "anyOf": [
@@ -445,7 +446,7 @@
         },
         "source": {
           "default": "unknown",
-          "description": "绝对 Z 的来源；钻孔为跨层跨度，不代表独立厚度层。",
+          "description": "实体物理层绝对 Z 的来源。",
           "minLength": 1,
           "title": "Source",
           "type": "string"

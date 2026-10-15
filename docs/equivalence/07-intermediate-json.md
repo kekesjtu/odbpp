@@ -41,7 +41,7 @@ Pydantic 不代替这些算法，也不自动修复物理数据。入口验证�
 | layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
 | layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
-| layer `z_mm` | `{start_mm, end_mm, thickness_known, source}`；非实体层或未解算钻孔可缺省 |
+| layer `z_mm` | `{start_mm, end_mm, thickness_known, source}`；实体物理层自身的位置；DRILL 不导出 |
 | layer `thickness` | 本层厚度可信状态与原始物理量来源；不再保存第二份 mm 厚度 |
 | layer `copper_index` | 铜层自顶向下的索引 |
 | layer `copper_span` | 介质或钻孔跨越的两个铜层索引；不重复保存端点名称 |
@@ -58,7 +58,7 @@ Pydantic 不代替这些算法，也不自动修复物理数据。入口验证�
 ## 未扣钻孔的介质几何
 
 `layer.polygons` 只规整本层图元极性及自身 profile 基底，不扣除跨层 DRILL 投影。
-profile 的真实空洞仍保留；DRILL 几何、Z 和铜层跨度独立存于层目录。
+profile 的真实空洞仍保留；DRILL 投影多边形和铜层跨度独立存于层目录，不重复保存 Z。
 铜层自身的铜岛与避空区在 JSON、预览和等效采样中都不被 DRILL 改写。
 SVG/HTML 在局部绘图副本中对介质做 difference；该副本不能导出为中间 JSON。
 等效器按计算域规划 region/网格，以扫描线 OR 合并相交钻孔，介质黑色为
@@ -78,9 +78,10 @@ SVG/HTML 在局部绘图副本中对介质做 difference；该副本不能导出
 原始值不会由等效器再次换算，也不会覆盖 Z。
 
 厚度缺失时允许零厚度 best-effort Z，并明确 false；不以严格正厚度约束拒绝这种合法解析状态。
-钻孔的 Z 是跨层范围，不能由它生成独立实体厚度层。
+钻孔仅保存投影多边形和 `copper_span` 来描述几何与深度；层身份和解析状态仍保留。
+需要绝对 Z 时，以起点铜层 `z_mm.start_mm` 和终点铜层 `z_mm.end_mm` 推导，不能生成独立实体厚度层。
 未知厚度下仍以 `copper_span` 确定钻孔拓扑，不能仅凭重合的估算 Z 视为贯穿全板。
-跨度端点须引用层目录中的实际铜层索引；无拓扑跨度且钻孔绝对 Z 不可信时明确报错。
+跨度端点须引用层目录中的实际铜层索引；需要介质采样时，无拓扑跨度或端点铜层缺少 Z 均明确报错。
 无有效域、失败/未导出的待等效层、介质采样所需钻孔跨度未知仍阻止生成正式结果。
 铜层忽略 DRILL，仅铜层输入不要求钻孔跨度。
 原始层极性、profile 基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，

@@ -1,7 +1,9 @@
 """Compare the region JSON pipeline with an isolated former CSV implementation.
 
 uv run --all-extras python tools/validate_materialmap.py --baseline-ref 51c268b
-Both consumers read the same current intermediate JSON. No runtime migration.
+Both consumers use the same physical input. The historical reader's test fixture
+reconstructs its former redundant drill Z from endpoint copper layers; this is
+isolated audit code, not runtime format migration.
 """
 from __future__ import annotations
 import argparse
@@ -31,6 +33,19 @@ def worker(args):
     directory=ROOT/"out"/args.case
     source=next(p for p in directory.glob("*.json") if not p.name.endswith((".MaterialMap.json",".MaterialMap.meta.json")))
     document=json.loads(source.read_text(encoding="utf-8"))
+    if args.source_root:
+        # The frozen CSV implementation predates removal of DRILL.z_mm. Supply
+        # that derived value only to its isolated historical test fixture.
+        for step in document["steps"]:
+            copper={l["copper_index"]:l for l in step["layers"] if "copper_index" in l}
+            for layer in step["layers"]:
+                span=layer.get("copper_span")
+                if layer["type"]=="DRILL" and span and "z_mm" not in layer:
+                    top,bottom=copper[span[0]],copper[span[1]]
+                    layer["z_mm"]={"start_mm":top["z_mm"]["start_mm"],
+                        "end_mm":bottom["z_mm"]["end_mm"],
+                        "thickness_known":bottom["z_mm"]["thickness_known"],
+                        "source":f"drill span {top['name']}..{bottom['name']}"}
     folder=args.workspace/args.case;folder.mkdir(parents=True,exist_ok=True)
     cell_hash=hashlib.sha256();masks={};count=0
     def capture(cell):

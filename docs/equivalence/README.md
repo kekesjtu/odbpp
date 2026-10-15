@@ -31,3 +31,5 @@
 解析审计字段移除验证：[remove-parse-info-validation.json](remove-parse-info-validation.json)。
 
 根诊断移除验证：[remove-root-diagnostics-validation.json](remove-root-diagnostics-validation.json)。
+
+DRILL 冗余 Z 移除验证：[drill-z-validation.json](drill-z-validation.json)，19 份 MaterialMap 逐字节不变。

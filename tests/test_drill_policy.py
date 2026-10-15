@@ -12,7 +12,7 @@ from odbpp.equiv import EquivalenceOptions, equivalence_from_document
 from odbpp.grid import GridOptions
 from odbpp.raster import LayerMask
 from conftest import sample_path
-from test_equiv import build_document, rect, hole
+from test_equiv import build_document, drill_document, rect, hole
 from test_expand import _drill_step
 from test_svg import parse, layer_groups, path_of
 
@@ -28,7 +28,7 @@ def evaluate(doc):
 
 @pytest.mark.parametrize("kind", ["SIGNAL", "POWER_GROUND", "MIXED"])
 def test_drill_leaves_copper_clearance_and_every_property_unchanged(kind):
-    doc = build_document(layers=[
+    doc = drill_document(layers=[
         {"name": "CU", "type": kind, "polygons": [rect(0, 0, 10, 10), hole(4, 4, 6, 6)]},
         {"name": "DIEL", "type": "DIELECTRIC", "polygons": [rect(0, 0, 10, 10)]},
         {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)]}])
@@ -50,7 +50,7 @@ def test_copper_only_input_does_not_need_drill_span_or_geometry(status):
     doc = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]},
                                  {"name": "DRILL", "type": "DRILL"}])
     drill = doc["steps"][0]["layers"][1]
-    drill.pop("z_mm")
+    assert "z_mm" not in drill
     drill["geometry_status"] = status
     if status == "failed":
         drill["geometry_error"] = "synthetic failure"
@@ -61,7 +61,7 @@ def test_copper_only_input_does_not_need_drill_span_or_geometry(status):
 def test_profile_void_cannot_be_filled_by_a_dielectric_drill():
     domains = [{"id": "step_profile", "source": "step_profile",
                 "polygons": [rect(0, 0, 10, 10), hole(4, 4, 6, 6)]}]
-    doc = build_document(domains=domains, layers=[
+    doc = drill_document(domains=domains, layers=[
         {"name": "DIEL", "type": "DIELECTRIC", "polygons": domains[0]["polygons"]},
         {"name": "DRILL", "type": "DRILL", "polygons": [rect(3, 3, 7, 7)]}])
     result, masks = evaluate(doc)

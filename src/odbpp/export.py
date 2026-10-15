@@ -42,7 +42,7 @@ from .diagnostics import (
 from .errors import LayerProfileError
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
-from .model import Job, Layer, Step
+from .model import Job, Layer, LayerType, Step
 from .stackup import Stackup, describe_span
 from .intermediate import BoardDocument, LayerModel
 
@@ -532,7 +532,9 @@ def _serialised_rings(preview, digits: int) -> tuple[list[Ring], float, Optional
 def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> dict:
     """One authoritative layer record; numerical thickness is derived from Z."""
     ref = layer.ref
-    extent = None if stackup is None else stackup.z_extent(layer)
+    # DRILL depth is already defined by copper_span and the endpoint copper Z.
+    # Keep the derived extent inside Stackup for previews, not in the interface.
+    extent = None if stackup is None or layer.type is LayerType.DRILL else stackup.z_extent(layer)
     span = None if stackup is None else stackup.span_of(layer)
     thickness = None
     if stackup is not None and layer.type is not None and (

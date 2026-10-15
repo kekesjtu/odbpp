@@ -74,7 +74,10 @@ def worker(args):
         "domains": [{k: d[k] for k in ("id", "source", "polygons")} for d in step["domains"]],
         "layers": [{"name": l["name"], "type": l["type"], "polygons": l["polygons"],
                     "domain_id": l.get("domain_id"),
-                    "z_mm": None if not l.get("z_mm") else {k: l["z_mm"][k] for k in
+                    # Compare independent physical facts, not a former redundant
+                    # DRILL Z representation. Endpoint copper Z is checked below.
+                    "copper_index": l.get("copper_index"), "copper_span": l.get("copper_span"),
+                    "z_mm": None if l["type"] == "DRILL" or not l.get("z_mm") else {k: l["z_mm"][k] for k in
                          ("start_mm", "end_mm", "thickness_known", "source")}}
                    for l in step["layers"] if l.get("geometry_status", "ready") == "ready"],
     }

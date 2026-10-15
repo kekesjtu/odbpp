@@ -75,7 +75,10 @@ def test_approved_native_and_clean_archives(case: str):
         for layer in doc["steps"][0]["layers"]:
             assert "parse_info" not in layer
             assert preview.layer(layer["name"]).layer.ref.polarity.value == "P"
-            if bool(layer["polygons"]) and layer["context"] == "BOARD":
+            if layer["type"] == "DRILL":
+                assert "z_mm" not in layer
+                assert layer["copper_span"]
+            elif bool(layer["polygons"]) and layer["context"] == "BOARD":
                 assert layer["z_mm"] is not None
                 assert layer["z_mm"]["end_mm"] >= layer["z_mm"]["start_mm"]
                 assert isinstance(layer["z_mm"]["thickness_known"], bool)

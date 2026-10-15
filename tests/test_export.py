@@ -498,6 +498,8 @@ class TestStackupJson:
         drill = next(l for l in document["steps"][0]["layers"]
                      if l["type"] == "DRILL")
         assert drill["copper_span"] == [0, 1]
+        assert "z_mm" not in drill
+        assert "thickness" not in drill
         assert "start_layer" not in drill and "end_layer" not in drill
 
     def test_a_metric_thickness_is_millimetres(self):

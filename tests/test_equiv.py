@@ -58,16 +58,36 @@ def build_document(*, profile=None, layers=(), domains=None, z=0.035) -> dict:
         extent = spec.get("z_mm")
         if extent is None:
             extent = {"start_mm": 0.0, "end_mm": z, "thickness_known": True}
-        layer_docs.append({
+        row = {
             "name": spec["name"],
             "type": spec.get("type", "SIGNAL"),
             "polygons": spec.get("polygons", []),
             "domain_id": spec.get("domain_id", "step_profile"),
-            "z_mm": extent,
-        })
+        }
+        if row["type"] != "DRILL":
+            row["z_mm"] = extent
+        for field in ("copper_index", "copper_span"):
+            if field in spec:
+                row[field] = spec[field]
+        layer_docs.append(row)
     return {"units": "mm",
             "steps": [{"name": "pcb", "domains": domain_list,
                        "layers": layer_docs, "profile_domain_id": "step_profile"}]}
+
+
+def drill_document(**kwargs):
+    """Explicit endpoint copper catalogue for synthetic dielectric/drill tests."""
+    document = build_document(**kwargs)
+    layers = document["steps"][0]["layers"]
+    for layer in layers:
+        if layer["type"] in ("DIELECTRIC", "DRILL"):
+            layer["copper_span"] = [0, 1]
+    layers[:0] = [
+        {"name": name, "type": "SIGNAL", "polygons": [],
+         "domain_id": "step_profile", "copper_index": index,
+         "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": True}}
+        for index, name in enumerate(("ENDPOINT_TOP", "ENDPOINT_BOTTOM"))]
+    return document
 
 
 def run(document, *, px=10, py=10, max_cell_mm=None, tolerance=0.01,
@@ -242,7 +262,7 @@ class TestPartialDomain:
 
 class TestDrillProjection:
     def test_a_drill_through_a_dielectric_becomes_solid_copper(self):
-        document = build_document(layers=[
+        document = drill_document(layers=[
             {"name": "DIEL", "type": "DIELECTRIC", "polygons": []},
             {"name": "DRILL", "type": "DRILL",
              "polygons": [rect(4, 4, 6, 6)]},
@@ -270,23 +290,22 @@ class TestDrillProjection:
         assert next(r for r in result.layers if r.name == "CU").drill_overlays == []
 
     def test_a_drill_outside_the_z_interval_is_not_projected(self):
-        document = build_document(layers=[
-            {"name": "CU", "type": "SIGNAL", "polygons": [],
-             "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": True}},
-            {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)],
+        document = drill_document(layers=[
+            {"name": "DIEL", "type": "DIELECTRIC", "polygons": [],
              "z_mm": {"start_mm": 5.0, "end_mm": 6.0, "thickness_known": True}},
+            {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)]},
         ])
+        # Exercise absolute Z derived from the endpoint copper layers when a
+        # dielectric has no topological interval of its own.
+        document["steps"][0]["layers"][2].pop("copper_span")
         result = run(document)
         assert all(c.copper_fraction == 0.0 for c in result.cells)
 
     def test_an_unresolvable_drill_span_is_fatal_never_a_through_hole(self):
         document = build_document(layers=[
             {"name": "CU", "type": "DIELECTRIC", "polygons": []},
-            {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)],
-             "z_mm": None},
+            {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)]},
         ])
-        # Force the unresolvable span rather than the synthetic default.
-        document["steps"][0]["layers"][1]["z_mm"] = None
         diagnostics = Diagnostics()
         result = run(document, diagnostics=diagnostics)
         assert result.fatal

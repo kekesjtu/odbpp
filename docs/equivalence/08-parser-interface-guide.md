@@ -116,7 +116,7 @@ domain id 是稳定引用字符串；当前导出器用 `step_profile`、`layer_
 | `geometry_error` | 失败 / 域不可用的具体原因；`failed` 状态必须有非空原因 |
 | `domain_id` | 对已选定逐层计算域的引用；待等效物理层必须有有效、非空的计算域 |
 | `polygons` | 必填列表，可为空；无需额外 area、bounds 或图元极性缓存 |
-| `z_mm` | 绝对 Z 起止、联合可信状态和来源；板内实体物理层必须交付 |
+| `z_mm` | 绝对 Z 起止、联合可信状态和来源；板内实体物理层必须交付，DRILL 不导出 |
 | `thickness` | 本层厚度可信状态及来源，可保留原始物理量；数值建模厚度从 Z 差计算 |
 | `copper_index` | BOARD 铜层自上而下的非负整数索引；层目录中不得重复 |
 | `copper_span` | 介质 / DRILL 的两个递增铜层索引，端点必须存在于同一层目录 |
@@ -141,7 +141,7 @@ Z 从叠层顶面向下，使用绝对 mm 坐标；`end_mm >= start_mm >= 0`。�
 
 ## 6. DRILL 与介质：导出者最容易混淆的边界
 
-中间 JSON 的介质 `polygons` 保留未扣除跨层 DRILL 的几何。DRILL 作为独立层保留正向投影、绝对跨层 Z 和 `copper_span`；它不产生一个额外厚度层。铜层图案在 JSON、预览及等效器中都不受 DRILL 改写。
+中间 JSON 的介质 `polygons` 保留未扣除跨层 DRILL 的几何。DRILL 作为独立层保留正向投影和 `copper_span`，不保存可推导的 `z_mm`；层身份和解析状态仍用于识别。需要绝对范围时，由起点铜层 `z_mm.start_mm` 与终点铜层 `z_mm.end_mm` 推导，它不产生一个额外厚度层。铜层图案在 JSON、预览及等效器中都不受 DRILL 改写。
 
 SVG/HTML 只在绘图副本中对介质做扣孔；已扣孔副本不能交给 `step_to_document()`。等效器对介质材料采样从域内空铜图案开始，把相交 DRILL 投影视为实心铜。材料掩膜规则是：
 
@@ -157,7 +157,7 @@ profile 的真实孔洞 / 挖空始终保留在 domain 中。DRILL 与真实孔�
 
 例如铜层 C0、C1、C2 自上而下排列，C0→C1 的盲孔只作用于 `[0,1]` 间的介质，不影响 `[1,2]` 间的介质，也不改变任何铜层图案。跨度匹配采用严格正长度相交：`max(介质起点, 钻孔起点) < min(介质终点, 钻孔终点)`。
 
-未知厚度可能让几个绝对 Z 重合，因此不要丢弃拓扑跨度再根据估算 Z 推断通孔。只有铜层的输入无需解析 DRILL 跨度；需要介质采样时，缺少已解算跨度且缺少可信绝对 Z 的 DRILL 会阻止正式等效输出。
+未知厚度可能让几个绝对 Z 重合，因此不要丢弃拓扑跨度再根据估算 Z 推断通孔。只有铜层的输入无需解析 DRILL 跨度；需要介质采样时，缺少已解算跨度或端点铜层 Z 的 DRILL 会阻止正式等效输出。
 
 ## 7. 校验通过代表什么
 
@@ -368,12 +368,6 @@ profile 的真实孔洞 / 挖空始终保留在 domain 中。DRILL 与真实孔�
               ]
             }
           ],
-          "z_mm": {
-            "start_mm": 0,
-            "end_mm": 1.57,
-            "thickness_known": true,
-            "source": "synthetic_stackup"
-          },
           "copper_span": [
             0,
             1
@@ -501,7 +495,7 @@ class DomainModel(ContractModel):
     polygons: list[PolygonModel]
 
 
-# 物理层的绝对 Z 范围，或 DRILL 跨层范围；单位 mm，自叠层顶面向下。
+# 实体物理层的绝对 Z 范围；单位 mm，自叠层顶面向下。DRILL 不保存重复 Z。
 class ZExtentModel(ContractModel):
     # 绝对坐标允许为零。不要把每层都重置成从零开始的局部坐标。
     start_mm: Number = Field(ge=0)
@@ -510,7 +504,7 @@ class ZExtentModel(ContractModel):
     # 这是本层厚度与累计绝对位置的联合可信状态；有上方未知层时也可能为 false。
     thickness_known: bool = Field(description="本层厚度与累计绝对 Z 联合可信；未知时仍输出 best-effort Z。")
     # 来源文字由 stackup 交付；缺省 unknown 不表示已经查明跨度。
-    source: str = Field(default="unknown", min_length=1, description="绝对 Z 的来源；钻孔为跨层跨度，不代表独立厚度层。")
+    source: str = Field(default="unknown", min_length=1, description="实体物理层绝对 Z 的来源。")
 
     @model_validator(mode="after")
     # mode="after" 表示字段类型校验完成后再检查起止关系；返回同一模型。
@@ -583,8 +577,8 @@ class LayerModel(ContractModel):
     domain_id: str | None = None
     # 图案列表必填。介质保留未扣跨层 DRILL 的几何；铜层只含本层规整铜图案。
     polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")
-    # 可为空以表达非实体层或未解算 DRILL；正式实体物理层必须交付绝对 Z。
-    z_mm: ZExtentModel | None = None
+    # 非实体层可为空；正式实体物理层必须交付绝对 Z；DRILL 由端点铜层推导。
+    z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由 copper_span 端点铜层推导。")
     # 本层厚度来源，供追溯；几何数值厚度只从 z_mm 的起止差取得。
     thickness: ThicknessModel | None = None
     # BOARD 铜层自顶向下索引，从零开始；不要给 DRILL 分配独立铜层索引。
@@ -597,6 +591,9 @@ class LayerModel(ContractModel):
     # 单层语义检查：递增跨度、失败 / 未导出不带几何、失败必须有原因。
     # 没有在这里保证必要 domain / Z 存在，消费方仍有正式等效的输入要求。
     def consistent(self):
+        # 禁止用可推导的重复 Z 描述钻孔，避免与端点铜层的位置发生矛盾。
+        if self.type == "DRILL" and self.z_mm is not None:
+            raise ValueError("DRILL must not carry z_mm; derive it from copper_span endpoint copper layers")
         if self.copper_span is not None and self.copper_span[0] >= self.copper_span[1]:
             raise ValueError("copper_span endpoints must increase")
         if self.geometry_status != "ready" and self.polygons:

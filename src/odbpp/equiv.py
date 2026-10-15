@@ -313,10 +313,9 @@ class _Drill:
     z_start_mm: float
     z_end_mm: float
     region: Region
-    #: Half-open copper-plane interval ``(start, end)`` when the document
-    #: resolved ``START_NAME``/``END_NAME``; ``None`` when it did not, in which
-    #: case only absolute Z can be used (and only safely with a known thickness).
-    copper_span: Optional[tuple[int, int]] = None
+    #: Resolved copper-plane interval. Absolute Z above is derived internally
+    #: from these endpoint copper layers, never read from a DRILL JSON record.
+    copper_span: tuple[int, int]
 
 
 def _copper_span(row: Mapping[str, Any]) -> Optional[tuple[int, int]]:
@@ -332,30 +331,34 @@ def _copper_span(row: Mapping[str, Any]) -> Optional[tuple[int, int]]:
 
 def _collect_drills(step: Mapping[str, Any],
                     diagnostics: Diagnostics) -> tuple[list[_Drill], bool]:
-    """Every drill layer with a resolvable Z span, plus whether any was not."""
+    """Resolve drill depth from copper_span and endpoint copper layers only."""
     layers = _layer_index(step)
+    copper = {row["copper_index"]: row for row in layers.values()
+              if row.get("copper_index") is not None}
     drills: list[_Drill] = []
     fatal = False
     for row in step.get("layers") or ():
         if row.get("type") != "DRILL" or row.get("context", "BOARD") != "BOARD":
             continue
         name = row.get("name", "?")
-        extent = row.get("z_mm")
-        if not extent or extent.get("start_mm") is None:
+        span = _copper_span(row)
+        if span is None:
             diagnostics.error(
                 EQUIV_DRILL_SPAN_UNKNOWN,
-                f"drill layer {name!r} has no resolvable Z interval "
+                f"drill layer {name!r} has no resolvable copper_span "
                 f"(START_NAME/END_NAME do not resolve to copper layers); which "
                 f"layers it crosses cannot be determined, so its solid-copper "
                 f"projection is unknown. Refusing to guess a through-hole.",
             )
             fatal = True
             continue
-        if _copper_span(row) is None and not extent.get("thickness_known", False):
+        top = copper.get(span[0], {}).get("z_mm")
+        bottom = copper.get(span[1], {}).get("z_mm")
+        if not top or not bottom:
             diagnostics.error(
                 EQUIV_DRILL_SPAN_UNKNOWN,
-                f"drill layer {name!r} has neither a resolved copper_span nor a "
-                "known absolute Z interval; best-effort Z cannot establish its projection",
+                f"drill layer {name!r}: copper_span {list(span)} endpoint copper "
+                "layer is missing z_mm; its absolute depth cannot be derived",
             )
             fatal = True
             continue
@@ -369,10 +372,10 @@ def _collect_drills(step: Mapping[str, Any],
             fatal = True
             continue
         drills.append(_Drill(name=name,
-                             z_start_mm=float(extent["start_mm"]),
-                             z_end_mm=float(extent["end_mm"]),
+                             z_start_mm=float(top["start_mm"]),
+                             z_end_mm=float(bottom["end_mm"]),
                              region=_region_from_polygons(layer.get("polygons")),
-                             copper_span=_copper_span(row)))
+                             copper_span=span))
     return drills, fatal
 
 
@@ -388,8 +391,6 @@ def _topological_overlap(layer_doc: Mapping[str, Any],
     entirely independent of drill projections.
     """
     span = drill.copper_span
-    if span is None:
-        return None
     start, end = span
     index = layer_doc.get("copper_span")
     if not isinstance(index, (list, tuple)) or len(index) != 2:
@@ -806,8 +807,8 @@ def equivalence_from_document(
         # Match drills by copper-plane topology first.  When a layer has no
         # stated thickness several layers can share a best-effort Z, and a
         # Z-only match would project the drill into a layer it never reaches.
-        # Absolute Z is only a fallback for documents without a span, and it is
-        # safe only when the thickness is known.
+        # Derived absolute Z is a fallback only for a dielectric without its
+        # own span; unknown dielectric thickness emits a warning below.
         covering: list[_Drill] = []
         z_fallback = False
         z_mismatch = False
@@ -826,8 +827,8 @@ def equivalence_from_document(
         if z_fallback and not thickness_known:
             diags.warn(
                 EQUIV_DRILL_Z_FALLBACK,
-                f"layer {name!r}: its thickness is unknown and at least one "
-                f"drill has no copper-plane span, so drill coverage was decided "
+                f"dielectric layer {name!r}: its thickness is unknown and it "
+                f"has no copper-plane span, so drill coverage was decided "
                 f"by best-effort absolute Z and may be wrong",
             )
         if z_mismatch:

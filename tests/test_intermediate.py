@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from odbpp.intermediate import BoardDocument, read_document, write_document
 from odbpp.equiv import EquivalenceError
-from test_equiv import build_document, rect, run
+from test_equiv import build_document, drill_document, rect, run
 
 
 def copper_document():
@@ -149,21 +149,58 @@ def test_drill_span_cannot_reference_nonexistent_copper_planes():
     layer["copper_index"] = 0
     document["steps"][0]["layers"].append({
         "name": "DRILL", "type": "DRILL", "polygons": [], "copper_span": [0, 99],
-        "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": False},
     })
     with pytest.raises(EquivalenceError, match="DRILL.*copper_span"):
         run(document)
 
 
-def test_best_effort_drill_z_cannot_replace_an_unknown_topological_span():
+@pytest.mark.parametrize("known", [False, True])
+def test_drill_z_is_rejected_even_when_it_was_known(known):
     document = build_document(layers=[{"name": "DIEL", "type": "DIELECTRIC", "polygons": []}])
     document["steps"][0]["layers"].append({
         "name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)],
-        "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": False},
+        "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": known},
     })
+    with pytest.raises(EquivalenceError, match="DRILL must not carry z_mm"):
+        run(document)
+
+
+def test_drill_roundtrip_derives_absolute_z_from_indexed_copper_not_catalogue_order(tmp_path):
+    from odbpp.diagnostics import Diagnostics
+    from odbpp.equiv import _collect_drills
+    document = drill_document(layers=[
+        {"name": "DIEL", "type": "DIELECTRIC"},
+        {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)]},
+    ])
+    layers = document["steps"][0]["layers"]
+    layers[0]["z_mm"].update(start_mm=1.0, end_mm=1.1)
+    layers[1]["z_mm"].update(start_mm=2.5, end_mm=2.6)
+    layers.reverse()
+    path = tmp_path / "board.json"
+    write_document(BoardDocument.model_validate(document), path)
+    assert "z_mm" not in json.loads(path.read_text())["steps"][0]["layers"][0]
+    loaded = read_document(path)
+    drills, fatal = _collect_drills(loaded.internal_document()["steps"][0], Diagnostics())
+    assert not fatal and len(drills) == 1
+    assert (drills[0].z_start_mm, drills[0].z_end_mm) == (1.0, 2.6)
+    assert drills[0].copper_span == (0, 1)
+    result = run(loaded)
+    assert not result.fatal
+    assert next(r for r in result.layers if r.name == "DIEL").drill_overlays == ["DRILL"]
+
+
+@pytest.mark.parametrize("endpoint", [0, 1])
+def test_drill_missing_endpoint_z_is_a_locatable_error(endpoint):
+    document = drill_document(layers=[
+        {"name": "DIEL", "type": "DIELECTRIC"},
+        {"name": "DRILL", "type": "DRILL", "polygons": [rect(4, 4, 6, 6)]},
+    ])
+    document["steps"][0]["layers"][endpoint].pop("z_mm")
     result = run(document)
     assert result.fatal
-    assert "equiv.drill_span_unknown" in result.diagnostics.codes()
+    assert any(d.code == "equiv.drill_span_unknown" and "DRILL" in d.message
+               and "endpoint" in d.message and "z_mm" in d.message
+               for d in result.diagnostics.errors)
 
 
 @pytest.mark.parametrize("command", ["export", "equivalent"])

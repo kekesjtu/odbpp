@@ -63,7 +63,10 @@ def worker(args):
     geometry = {"domains": step["domains"], "profile_domain_id": step["profile_domain_id"],
         "copper": [{k: l.get(k) for k in ("name", "type", "polygons", "domain_id")}
                    for l in layers if l["type"] in COPPER_TYPES],
-        "stack": [{k: l.get(k) for k in ("name", "type", "z_mm", "domain_id", "copper_span", "copper_index")}
+        # DRILL Z was redundant in the historical interface; compare its span
+        # and the independently stored copper Z, not the removed duplicate.
+        "stack": [{k: (None if k == "z_mm" and l["type"] == "DRILL" else l.get(k))
+                   for k in ("name", "type", "z_mm", "domain_id", "copper_span", "copper_index")}
                   for l in layers]}
     masks = {}
 

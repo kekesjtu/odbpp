@@ -37,7 +37,7 @@ class ZExtentModel(ContractModel):
     start_mm: Number = Field(ge=0)
     end_mm: Number = Field(ge=0)
     thickness_known: bool = Field(description="本层厚度与累计绝对 Z 联合可信；未知时仍输出 best-effort Z。")
-    source: str = Field(default="unknown", min_length=1, description="绝对 Z 的来源；钻孔为跨层跨度，不代表独立厚度层。")
+    source: str = Field(default="unknown", min_length=1, description="实体物理层绝对 Z 的来源。")
 
     @model_validator(mode="after")
     def ordered(self):
@@ -82,7 +82,7 @@ class LayerModel(ContractModel):
     geometry_error: str | None = None
     domain_id: str | None = None
     polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")
-    z_mm: ZExtentModel | None = None
+    z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由 copper_span 端点铜层推导。")
     thickness: ThicknessModel | None = None
     copper_index: Index | None = None
     copper_span: list[Index] | None = Field(default=None, min_length=2, max_length=2,
@@ -90,6 +90,8 @@ class LayerModel(ContractModel):
 
     @model_validator(mode="after")
     def consistent(self):
+        if self.type == "DRILL" and self.z_mm is not None:
+            raise ValueError("DRILL must not carry z_mm; derive it from copper_span endpoint copper layers")
         if self.copper_span is not None and self.copper_span[0] >= self.copper_span[1]:
             raise ValueError("copper_span endpoints must increase")
         if self.geometry_status != "ready" and self.polygons:
