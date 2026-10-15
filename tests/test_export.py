@@ -68,11 +68,11 @@ class TestDocument:
         text = json.dumps(step_to_json(job, preview))
         assert json.loads(text)["steps"][0]["name"]
 
-    def test_diagnostics_can_be_omitted(self):
-        job, preview, _diag = preview_of("minimal-test-odb")
-        assert "diagnostics" in step_to_json(job, preview)
-        assert "diagnostics" not in step_to_json(job, preview,
-                                                 include_diagnostics=False)
+    def test_diagnostics_stay_internally_available_without_exporting(self):
+        job, preview, diag = preview_of("minimal-test-odb")
+        diag.warn("test.parser_warning", "parser warning stays available")
+        assert "diagnostics" not in step_to_json(job, preview)
+        assert "test.parser_warning" in preview.diagnostics.codes()
 
     def test_the_z_axis_is_stated(self):
         # Z is a board axis, not a drawing direction: the Y-up model plane says
@@ -110,10 +110,13 @@ class TestSerialisationResolution:
         original = deepcopy(preview.step.profile)
         coarse = step_to_json(job, preview, round_digits=4)
         assert coarse["steps"][0]["domains"][0]["polygons"] == []
-        warnings = [d for d in coarse["diagnostics"]
-                    if d["code"] == "export.degenerate_ring" and "profile:" in d["message"]]
+        assert "diagnostics" not in coarse
+        warnings = [d for d in preview.diagnostics
+                    if d.code == "export.degenerate_ring" and "profile:" in d.message]
         assert len(warnings) == 1
-        assert step_to_json(job, preview, round_digits=4)["diagnostics"] == coarse["diagnostics"]
+        diagnostics_before = list(preview.diagnostics)
+        step_to_json(job, preview, round_digits=4)
+        assert list(preview.diagnostics) == diagnostics_before
         fine = step_to_json(job, preview, round_digits=6)
         from shapely.geometry import Polygon
         shape = Polygon(fine["steps"][0]["domains"][0]["polygons"][0]["points"])

@@ -33,7 +33,7 @@ region 与物性网格规划           独立材料光栅采样
 
 解析器交付多边形、计算域、层身份、绝对 Z 和钻孔跨度。region 的内接近似、全局网格划分、材料参数、光栅分辨率和物性公式由等效器负责，不写进这个接口。SVG/HTML 是并行的工程核对输出，等效器不从 SVG 路径或截图恢复几何。
 
-`parse_info`、原始层极性、图元数量和极性段计数已移出中间 JSON；这些信息仍可存在于解析器内部统计中。`geometry_status`、厚度可信状态及来源保留，因为它们决定下游能否把某个几何结果视为可用实体。
+`parse_info`、原始层极性、图元数量和极性段计数已移出中间 JSON；这些信息仍可存在于解析器内部统计中。根节点不导出 `diagnostics`，诊断保留在内部模型、CLI 或独立报告中。`geometry_status`、厚度可信状态及来源保留，因为它们决定下游能否把某个几何结果视为可用实体。
 
 ## 2. Pydantic 模型与 .schema 各负责什么
 
@@ -103,7 +103,6 @@ domain 的选择流程固定为：有效层级 profile → 缺失时取 step pro
 | `profile_domain_id` | 整板轮廓引用；可为空以表达轮廓缺失，但这种数据不能用于正式整板等效 |
 | `domains` | `{id, source, polygons}`；id 唯一；source 为 `step_profile` 或 `layer_profile` |
 | `layers` | 完整层目录，按 matrix row 排列；名称唯一，保留非物理、失败与未导出层 |
-| `diagnostics` | 可选 `warning/error` 诊断，每条有 `code/message`，可带 path；不能代替层自身的失败状态 |
 
 domain id 是稳定引用字符串；当前导出器用 `step_profile`、`layer_profile:<层名>`，但模型不硬编码 id 名称。`profile_domain_id` 指向的条目必须有 `source=step_profile`。
 
@@ -124,7 +123,7 @@ domain id 是稳定引用字符串；当前导出器用 `step_profile`、`layer_
 
 类型字符串不被收窄成仅铜 / 介质枚举：DOCUMENT、COMPONENT、MASK 等输入仍应有明确层身份，由等效器报告是否跳过。将不支持的层改成 DIELECTRIC 会错误套用 FR4 模型。
 
-`ready + polygons=[]` 是已成功解析的空图案，例如一层没有铜图案；它可以仍有完整计算域。`failed + polygons=[]` 表示计算不可用，必须携带错误。`omitted + polygons=[]` 表示筛选等原因未交付几何。不能删除失败的物理层来制造一个看起来完整的接口；省略根 `diagnostics` 时，失败状态仍须保留。
+`ready + polygons=[]` 是已成功解析的空图案，例如一层没有铜图案；它可以仍有完整计算域。`failed + polygons=[]` 表示计算不可用，必须携带错误。`omitted + polygons=[]` 表示筛选等原因未交付几何。不能删除失败的物理层来制造一个看起来完整的接口；根诊断列表不进入文件，失败状态仍须保留。
 
 ### Z、厚度与原始量
 
@@ -180,7 +179,7 @@ profile 的真实孔洞 / 挖空始终保留在 domain 中。DRILL 与真实孔�
 
 这是 10 mm × 6 mm 矩形板、两铜层及一介质层的完整合成数据。下铜图案为空，但下铜层依然有计算域。DRILL 位于板内，跨越两端铜层之间的介质；介质几何仍是一整片矩形。
 
-示例使用模型允许的缺省 RIGID/DEFAULT 等元数据，省略可选 source / diagnostics；正式 Parser 应写入实际来源和显式层状态。下面 JSON 可直接经当前模型导入，数值仅用于展示接口结构。
+示例使用模型允许的缺省 RIGID/DEFAULT 等元数据，省略可选 source；正式 Parser 应写入实际来源和显式层状态。下面 JSON 可直接经当前模型导入，数值仅用于展示接口结构。
 
 ```json
 {
@@ -578,7 +577,7 @@ class LayerModel(ContractModel):
     form_source: Literal["DECLARED", "FLEX_SUBTYPE", "DEFAULT"] = "DEFAULT"
     # ready 可以是有效空图案；failed 是解析失败；omitted 是没有交付该层几何。
     geometry_status: Literal["ready", "failed", "omitted"] = "ready"
-    # 失败原因直接随层携带，即便根 diagnostics 被省略也不丢失失败语义。
+    # 失败原因直接随层携带；根诊断列表不进入文件，仍不能丢失失败语义。
     geometry_error: str | None = None
     # 引用实际层域；结构允许 None 表达不可用状态，正式物理层不能缺有效域。
     domain_id: str | None = None
@@ -665,15 +664,7 @@ class SourceModel(ContractModel):
     product: ProductModel
 
 
-# 可选解析诊断；必须用层 geometry_status 同时保留具体失败状态。
-class DiagnosticModel(ContractModel):
-    level: Literal["warning", "error"]
-    code: str
-    message: str
-    path: str | None = None
-
-
-# 顶层接口容器：统一 mm、恰好一个单板 step，以及可选来源和诊断。
+# 顶层接口容器：统一 mm、恰好一个单板 step，以及可选来源。
 class BoardDocument(ContractModel):
     """One physical step, positive polygons, mm XY and absolute downward Z."""
     # 固定输出单位。该字段的验证不能发现数字曾被错误换算，Parser 仍承担单位正确性。
@@ -686,11 +677,9 @@ class BoardDocument(ContractModel):
                                   description="规整后坐标网格间距，单位 mm；非材料采样光栅。")
     # 当前接口只支持一个单板 step。
     steps: list[StepModel] = Field(min_length=1, max_length=1)
-    # 可省略根诊断列表；失败层自身信息必须保留。
-    diagnostics: list[DiagnosticModel] | None = None
 
     # 等效器把已验证对象映射成算法使用的普通字典；这不是完整文件导出 API。
-    # 有意省略 source / diagnostics / thickness / form / resolution_mm 等非当前循环输入。
+    # 有意省略 source / thickness / form / resolution_mm 等非当前循环输入。
     # 只重建少量映射容器，points 直接复用；算法必须避免修改共享坐标列表。
     def internal_document(self) -> dict:
         """Drop the Pydantic containers without copying large coordinate lists.

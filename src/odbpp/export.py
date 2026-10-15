@@ -37,7 +37,6 @@ from .diagnostics import (
     EXPORT_LAYER_SKIPPED,
     EXPORT_NO_GEOMETRY,
     EXPORT_UNKNOWN_LAYER,
-    Diagnostic,
     Diagnostics,
 )
 from .errors import LayerProfileError
@@ -588,8 +587,7 @@ def layer_to_json(preview: LayerPreview, *, round_digits: Optional[int] = None) 
 
 
 def step_to_document(job: Job, preview: StepPreview, *,
-                     round_digits: Optional[int] = None,
-                     include_diagnostics: bool = True) -> BoardDocument:
+                     round_digits: Optional[int] = None) -> BoardDocument:
     """Build the current Pydantic contract once at the export boundary.
 
     Layer geometry may be filtered for a preview, but the entire layer catalog
@@ -633,16 +631,13 @@ def step_to_document(job: Job, preview: StepPreview, *,
         "steps": [{"name": preview.step.name,
                    "profile_domain_id": "step_profile" if preview.step.profile is not None else None,
                    "domains": domains, "layers": layers}],
-        "diagnostics": [_diagnostic_json(d) for d in preview.diagnostics] if include_diagnostics else None,
     })
 
 
 def step_to_json(job: Job, preview: StepPreview, *,
-                 round_digits: Optional[int] = None,
-                 include_diagnostics: bool = True) -> dict:
+                 round_digits: Optional[int] = None) -> dict:
     """Convenience mapping API; file writers use step_to_document directly."""
-    return step_to_document(job, preview, round_digits=round_digits,
-                            include_diagnostics=include_diagnostics).model_dump(mode="json", exclude_none=True)
+    return step_to_document(job, preview, round_digits=round_digits).model_dump(mode="json", exclude_none=True)
 
 
 def _region_polygons_json(region, round_digits: int) -> list[dict]:
@@ -739,15 +734,6 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
 def _domain_json(domain_id: str, source: str, region, round_digits: int) -> dict:
     return {"id": domain_id, "source": source,
             "polygons": _region_polygons_json(region, round_digits)}
-
-
-def _diagnostic_json(diagnostic: Diagnostic) -> dict:
-    return {
-        "level": diagnostic.level,
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "path": diagnostic.path,
-    }
 
 
 def write_json(document: dict, path: str) -> None:

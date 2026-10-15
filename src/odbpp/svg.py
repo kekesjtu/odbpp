@@ -1068,7 +1068,6 @@ def write_outputs(
     want_html: bool = True,
     per_layer_svg: bool = False,
     stem: Optional[str] = None,
-    include_diagnostics: bool = True,
 ) -> Outputs:
     """Write the preview, returning the paths produced.
 
@@ -1108,8 +1107,7 @@ def write_outputs(
     if want_json:
         path = os.path.join(out_dir, f"{stem}.json")
         from .intermediate import write_document
-        write_document(step_to_document(job, json_view, round_digits=json_digits,
-                                        include_diagnostics=include_diagnostics), path)
+        write_document(step_to_document(job, json_view, round_digits=json_digits), path)
         outputs.json = path
 
     # The standalone SVG and the viewer contain exactly the same drawing.

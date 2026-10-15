@@ -46,7 +46,6 @@ Pydantic 不代替这些算法，也不自动修复物理数据。入口验证�
 | layer `copper_index` | 铜层自顶向下的索引 |
 | layer `copper_span` | 介质或钻孔跨越的两个铜层索引；不重复保存端点名称 |
 | layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
-| 根 `diagnostics` | 可选解析诊断；层失败状态不依赖此列表是否导出 |
 
 去掉 `schema`、`generator`、`coordinate_system` 的常量说明、`summary`、独立 `profile`、
 独立 `stackup`、面积/包围盒缓存、派生 `is_copper/is_flex`、层的重复 domain 来源、
@@ -85,7 +84,9 @@ SVG/HTML 在局部绘图副本中对介质做 difference；该副本不能导出
 无有效域、失败/未导出的待等效层、介质采样所需钻孔跨度未知仍阻止生成正式结果。
 铜层忽略 DRILL，仅铜层输入不要求钻孔跨度。
 原始层极性、profile 基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，
-不写入中间 JSON（已删除 `parse_info`）。消费者直接使用规整后的实体几何。
+不写入中间 JSON（已删除 `parse_info`）。根节点也不导出 `diagnostics`，
+解析诊断保留在内部模型和命令行；逐层 `geometry_status/geometry_error` 保留。
+消费者直接使用规整后的实体几何。
 
 ## 使用与验证
 

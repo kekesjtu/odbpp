@@ -98,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_exp.add_argument("--per-layer-svg", action="store_true",
                        help="also write one SVG per layer under <out>/layers/")
     p_exp.add_argument("--no-diagnostics", action="store_true",
-                       help="omit the diagnostics array from the JSON")
+                       help="omit the final parser diagnostic listing on stderr; exit status is unchanged")
     p_exp.set_defaults(json_out=None, format=None, max_records=5, no_features=False)
 
     p_eq = sub.add_parser(
@@ -522,9 +522,6 @@ def _run_export(job: Job, args: argparse.Namespace,
             want_html=not args.only_json,
             per_layer_svg=args.per_layer_svg,
             stem=step.name,
-            # The flag has to reach the serialiser, not just the terminal report:
-            # omitting the array from the file is what the option promises.
-            include_diagnostics=not args.no_diagnostics,
         )
     except (OSError, ValueError) as exc:
         print(f"error: cannot export intermediate JSON: {exc}", file=sys.stderr)

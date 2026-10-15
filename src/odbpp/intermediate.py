@@ -143,13 +143,6 @@ class SourceModel(ContractModel):
     product: ProductModel
 
 
-class DiagnosticModel(ContractModel):
-    level: Literal["warning", "error"]
-    code: str
-    message: str
-    path: str | None = None
-
-
 class BoardDocument(ContractModel):
     """One physical step, positive polygons, mm XY and absolute downward Z."""
     units: Literal["mm"]
@@ -157,7 +150,6 @@ class BoardDocument(ContractModel):
     resolution_mm: Number = Field(default=0.0001, gt=0,
                                   description="规整后坐标网格间距，单位 mm；非材料采样光栅。")
     steps: list[StepModel] = Field(min_length=1, max_length=1)
-    diagnostics: list[DiagnosticModel] | None = None
 
     def internal_document(self) -> dict:
         """Drop the Pydantic containers without copying large coordinate lists.

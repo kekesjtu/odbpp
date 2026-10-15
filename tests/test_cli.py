@@ -238,19 +238,23 @@ class TestExport:
         document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
         assert document["resolution_mm"] == 0.1
 
-    def test_no_diagnostics_omits_the_array_from_the_file(self, capsys, tmp_path):
-        # The flag only changed the terminal report; the file still carried the
-        # array the option promises to omit.
-        run(capsys, "export", str(sample_path("minimal-test-odb")),
-            "-o", str(tmp_path), "--only-json", "--no-diagnostics")
-        document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
-        assert "diagnostics" not in document
+    def test_no_diagnostics_controls_terminal_listing_and_preserves_failure(self, capsys, tmp_path):
+        source = str(fixture_path("fx_bad_layer_profile"))
+        for flags in ((), ("--no-diagnostics",)):
+            code, _out, err = run(capsys, "export", source, "-o", str(tmp_path),
+                                  "--only-json", *flags)
+            assert code == 1
+            assert ("error-level diagnostic(s)" in err) == (not flags)
+            document = json.loads((tmp_path / "BOARD.json").read_text(encoding="utf-8"))
+            assert "diagnostics" not in document
+            failed = next(l for l in document["steps"][0]["layers"] if l["name"] == "DIELECTRIC_1")
+            assert failed["geometry_status"] == "failed" and failed["geometry_error"]
 
-    def test_diagnostics_are_present_by_default(self, capsys, tmp_path):
+    def test_diagnostics_are_absent_by_default(self, capsys, tmp_path):
         run(capsys, "export", str(sample_path("minimal-test-odb")),
             "-o", str(tmp_path), "--only-json")
         document = json.loads((tmp_path / "pcb.json").read_text(encoding="utf-8"))
-        assert "diagnostics" in document
+        assert "diagnostics" not in document
 
     def test_excluding_a_type_removes_those_layers(self, capsys, tmp_path):
         run(capsys, "export", str(fixture_path("fx_negative_layer")),

@@ -1,45 +1,5 @@
 {
   "$defs": {
-    "DiagnosticModel": {
-      "additionalProperties": false,
-      "properties": {
-        "level": {
-          "enum": [
-            "warning",
-            "error"
-          ],
-          "title": "Level",
-          "type": "string"
-        },
-        "code": {
-          "title": "Code",
-          "type": "string"
-        },
-        "message": {
-          "title": "Message",
-          "type": "string"
-        },
-        "path": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Path"
-        }
-      },
-      "required": [
-        "level",
-        "code",
-        "message"
-      ],
-      "title": "DiagnosticModel",
-      "type": "object"
-    },
     "DomainModel": {
       "additionalProperties": false,
       "properties": {
@@ -534,21 +494,6 @@
       "minItems": 1,
       "title": "Steps",
       "type": "array"
-    },
-    "diagnostics": {
-      "anyOf": [
-        {
-          "items": {
-            "$ref": "#/$defs/DiagnosticModel"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Diagnostics"
     }
   },
   "required": [
