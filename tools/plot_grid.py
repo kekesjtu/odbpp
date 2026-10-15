@@ -123,7 +123,7 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
     fig.savefig(directory/"cartesian-grid.png",dpi=180)
     fig.savefig(directory/"cartesian-grid.svg")
     plt.close(fig)
-    stats={"schema":"odbpp/grid-illustration-1","source_schema":metadata["schema"],
+    stats={"schema":"odbpp/grid-illustration-1","source":"MaterialMap.json",
            "layout":grid["layout"],"nx":len(xs)-1,"ny":len(ys)-1,
            "region_count":len(rects),"cell_count":len(grid["cells"]),
            "x_lines_mm":xs,"y_lines_mm":ys,"board_bounds_mm":bounds,
@@ -139,10 +139,13 @@ def main():
     parser.add_argument("--metadata",type=Path)
     parser.add_argument("-o","--out",type=Path)
     args=parser.parse_args()
-    metadata=args.metadata or args.json.with_name(args.json.stem+".MaterialMap.meta.json")
+    metadata=args.metadata or args.json.parent/"diagnostics"/"run.json"
+    from odbpp.materialmap import read_document, restore_report_grid
+    report=restore_report_grid(json.loads(metadata.read_text(encoding="utf-8")),
+                               read_document(args.json.with_name(args.json.stem+".MaterialMap.json")))
     stats=plot_grid(json.loads(args.json.read_text(encoding="utf-8")),
                     args.out or args.json.parent/"grid",
-                    json.loads(metadata.read_text(encoding="utf-8")))
+                    report)
     print(f"global Cartesian grid: {stats['nx']} x {stats['ny']}; {stats['cell_count']} modeled XY cells")
 
 

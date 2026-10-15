@@ -14,7 +14,7 @@ has three stages, each usable on its own:
    :func:`step_to_json`.
 4. **Equivalent** -- :func:`equivalence_from_document` turns each copper and
    dielectric layer into per-cell ``kx``/``ky``/``kz``/density/specific heat.
-5. **Publish** -- :func:`write_materialmap` writes ``MaterialMap.csv``, and
+5. **Publish** -- :func:`write_materialmap` writes ``MaterialMap.json``, and
    :func:`write_layer_mask` / :func:`render_heatmaps` draw the black/white
    raster and the ``kx``/``ky``/``kz`` heat maps a person can look at.
 
@@ -60,7 +60,6 @@ from .errors import (
 )
 from .clipper import Region, Ring, difference, intersection, union
 from .equiv import (
-    CSV_COLUMNS,
     EquivalenceOptions,
     EquivalenceResult,
     EquivalentCell,
@@ -178,7 +177,6 @@ __all__ = [
     "EquivalentCell",
     "equivalence_from_document",
     "write_materialmap",
-    "CSV_COLUMNS",
     "GridOptions",
     "BoardGrid",
     "Cell",

@@ -4,7 +4,6 @@ Properties apply to complete cells and complete physical layer Z intervals.
 
 from __future__ import annotations
 
-import csv
 import math
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
@@ -34,8 +33,6 @@ from .rectify import (Rect, RectifyOptions, RectifyResult, rectify_region,
                       profile_shape, _topology)
 
 __all__ = [
-    "METADATA_SCHEMA",
-    "CSV_COLUMNS",
     "EquivalenceOptions",
     "EquivalentCell",
     "LayerReport",
@@ -43,43 +40,7 @@ __all__ = [
     "equivalence_from_document",
     "rectify_step_outline",
     "write_materialmap",
-    "write_metadata",
-]
-
-#: v5: global Cartesian axes and adaptive presets; complete inscribed cell semantics.
-METADATA_SCHEMA = "odbpp/materialmap-5"
-
-#: The written CSV columns.  Deliberately self-describing: every quantity carries
-#: its unit in the header, because the file is meant to be readable without the
-#: sidecar and the sidecar is meant to be sufficient for anything the CSV cannot
-#: express.  The layout is our own; the FloTHERM reference was read for *what*
-#: needs expressing, not copied.
-CSV_COLUMNS = [
-    "layer",
-    "layer_type",
-    "region_id",
-    "cell_i",
-    "cell_j",
-    "cell_x0_mm",
-    "cell_y0_mm",
-    "cell_x1_mm",
-    "cell_y1_mm",
-    "z_start_mm",
-    "z_end_mm",
-    "z_thickness_known",
-    "copper_area_fraction",
-    "kx_w_mk",
-    "ky_w_mk",
-    "kz_w_mk",
-    "density_kg_m3",
-    "specific_heat_j_kgk",
-    "pixel_rows",
-    "pixel_cols",
-    "pixel_count",
-    "cell_area_mm2",
-    "domain_area_mm2",
-    "domain_coverage",
-    "partial_domain",
+    "write_run_report",
 ]
 
 #: Layer types that take the copper/base model in this first version.
@@ -109,7 +70,7 @@ def pipeline_fingerprint() -> str:
     from pathlib import Path
     digest = hashlib.sha256()
     for name in ("equiv.py", "rectify.py", "grid.py", "raster.py",
-                 "materials.py", "visualize.py", "mesh.py", "intermediate.py"):
+                 "materials.py", "visualize.py", "mesh.py", "intermediate.py", "materialmap.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
     return digest.hexdigest()
 
@@ -156,21 +117,11 @@ class EquivalentCell:
     domain_coverage: float
     partial_domain: bool
 
-    def csv_row(self) -> list:
-        return [
-            self.layer_name, self.layer_type, self.region_id, self.i, self.j,
-            _r(self.x0, 9), _r(self.y0, 9), _r(self.x1, 9), _r(self.y1, 9),
-            _r(self.z_start_mm, 6), _r(self.z_end_mm, 6),
-            int(self.thickness_known),
-            _r(self.copper_fraction, 6), _r(self.kx, 6), _r(self.ky, 6),
-            _r(self.kz, 6), _r(self.density, 4), _r(self.specific_heat, 4),
-            self.pixel_rows, self.pixel_cols, self.pixel_count,
-            _r(self.cell_area_mm2, 6), _r(self.domain_area_mm2, 6),
-            _r(self.domain_coverage, 6), int(self.partial_domain),
-        ]
-
-    def as_dict(self) -> dict:
-        return dict(zip(CSV_COLUMNS, self.csv_row()))
+    def property_values(self) -> list[float]:
+        """The sole serialized cell payload; preserve former published precision."""
+        values = (self.kx, self.ky, self.kz, self.density, self.specific_heat)
+        return [rounded if rounded > 0 else value for value, digits in zip(values, (6,6,6,4,4))
+                for rounded in (_r(value, digits),)]
 
 
 @dataclass
@@ -236,11 +187,7 @@ class EquivalenceResult:
 
     def metadata(self, *, source_path: Optional[str] = None,
                  step_name: Optional[str] = None) -> dict:
-        from . import __version__
-
         return {
-            "schema": METADATA_SCHEMA,
-            "generator": {"name": "odbpp", "version": __version__},
             "pipeline_fingerprint": pipeline_fingerprint(),
             "source": {
                 "path": source_path,
@@ -941,47 +888,34 @@ def equivalence_from_document(
 # writing
 # ---------------------------------------------------------------------------
 
-def write_materialmap(
-    result: EquivalenceResult,
-    csv_path: str,
-    metadata_path: Optional[str] = None,
-    *,
-    source_path: Optional[str] = None,
-    step_name: Optional[str] = None,
-) -> list[str]:
-    """Write the CSV and (optionally) the metadata sidecar; return the paths."""
-    written: list[str] = [csv_path]
-    with open(csv_path, "w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(CSV_COLUMNS)
-        for cell in result.cells:
-            writer.writerow(cell.csv_row())
-    if metadata_path:
-        write_metadata(result, metadata_path, source_path=source_path,
-                       step_name=step_name)
-        written.append(metadata_path)
-    return written
+def write_materialmap(result: EquivalenceResult, path: str, *, step_name=None) -> list[str]:
+    """Atomically write one region-based JSON; no CSV/metadata sidecar."""
+    import os
+    from .materialmap import MaterialMapWriter
+    temporary = str(path) + ".tmp"
+    try:
+        with MaterialMapWriter(temporary, step_name=step_name) as writer:
+            for cell in result.cells:
+                writer.add(cell)
+            writer.finish(result)
+        os.replace(temporary, path)
+    except Exception:
+        if os.path.isfile(temporary):
+            os.remove(temporary)
+        raise
+    return [str(path)]
 
 
-def write_metadata(
-    result: EquivalenceResult,
-    path: str,
-    *,
-    source_path: Optional[str] = None,
-    step_name: Optional[str] = None,
-) -> str:
-    """Write the metadata sidecar and return its path.
-
-    The CSV can carry numbers and identifiers; this document carries what it
-    cannot: units, absolute-Z trust, where every material value came from, the
-    rectangularisation error, and the diagnostics for the run.
-    """
+def write_run_report(result: EquivalenceResult, path: str, *, source_path=None, step_name=None) -> str:
+    """Separate execution/geometry audit; no per-cell indexes or sampling statistics."""
     import json
-
-    document = result.metadata(source_path=source_path,
-                               step_name=step_name)
-    with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(document, handle, ensure_ascii=False, indent=1,
-                  sort_keys=False)
-        handle.write("\n")
-    return path
+    from pathlib import Path
+    data = result.metadata(source_path=source_path, step_name=step_name)
+    for key in ("schema", "generator", "coverage"):
+        data.pop(key, None)
+    data["grid"].pop("cells", None)
+    for layer in data["layers"]:
+        layer.pop("partial_domain_cells", None)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=1)+"\n", encoding="utf-8")
+    return str(path)

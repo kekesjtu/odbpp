@@ -4,12 +4,12 @@ Two artefacts: standard-library mask PNGs and Matplotlib conductivity figures:
 
 * **material masks** -- one greyscale PNG per equivalented layer, containing
   exactly the black/white raster the formulas integrate over.  A reviewer can
-  then *look* at what produced the numbers instead of inferring it from the CSV
+  then *look* at what produced the numbers instead of inferring it from the JSON
   (AGENTS 验证要求 3: never judge the equivalence from a picture alone, but do
   look at it);
 * **conductivity heat maps** -- one PNG per layer with ``kx``, ``ky`` and ``kz``
   side by side on a shared colour scale, plus a small gallery HTML that names
-  the layers the pixels cannot.  These are rendered from the *written CSV* -- the
+  the layers the pixels cannot.  These are rendered from the *written JSON* -- the
   file is the interface between the equivalence and everything downstream, so the
   picture is a picture of the delivered data, not of a private in-memory result.
 
@@ -30,7 +30,6 @@ where the layer does not exist, and the equivalence never counts it as FR4
 
 from __future__ import annotations
 
-import csv
 import html
 import math
 import os
@@ -79,21 +78,12 @@ class VisualizeError(OdbError):
 NO_DATA_COLOUR: Rgb = (232, 236, 241)
 
 
-#: Panel titles, in drawing order.  The CSV columns are ``kx_w_mk`` ... one
+#: Panel titles, in drawing order.  The JSON columns are ``kx_w_mk`` ... one
 #: direction per panel, all three on one shared scale so they can be compared.
 PANELS: tuple[tuple[str, str], ...] = (
     ("kx", "kx_w_mk"),
     ("ky", "ky_w_mk"),
     ("kz", "kz_w_mk"),
-)
-
-#: Columns the heat map needs.  A CSV without them is a different layout, not a
-#: degraded one, so it is refused rather than partially drawn.
-_CSV_REQUIRED = (
-    "layer", "layer_type", "cell_i", "cell_j",
-    "cell_x0_mm", "cell_y0_mm", "cell_x1_mm", "cell_y1_mm",
-    "z_start_mm", "z_end_mm", "z_thickness_known",
-    "kx_w_mk", "ky_w_mk", "kz_w_mk",
 )
 
 _UNSAFE = set('<>:"/\\|?*')
@@ -238,12 +228,12 @@ def write_layer_mask(mask: LayerMask, path: str,
 
 
 # ---------------------------------------------------------------------------
-# reading the delivered CSV
+# reading the delivered JSON
 # ---------------------------------------------------------------------------
 
 @dataclass
 class LayerSeries:
-    """One layer's cells, in CSV order, straight off the file."""
+    """One layer's cells, in JSON order, straight off the file."""
 
     name: str
     layer_type: str = ""
@@ -280,7 +270,7 @@ class LayerSeries:
 
 @dataclass
 class MaterialMapData:
-    """The whole CSV as a rectilinear grid plus one series per layer."""
+    """The whole JSON as a rectilinear grid plus one series per layer."""
 
     x_edges: tuple[float, ...]
     y_edges: tuple[float, ...]
@@ -304,139 +294,38 @@ class MaterialMapData:
                 self.x_edges[-1], self.y_edges[-1])
 
 
-def _key(value: float) -> float:
-    """Round a coordinate to a stable dictionary key (1e-6 mm = 1 nm)."""
-    return round(float(value), 6)
-
-
-def _record(store: dict[int, float], index: int, value: float, column: str,
-            path: str, line_no: int) -> None:
-    existing = store.get(index)
-    if existing is None:
-        store[index] = value
-    elif abs(existing - value) > 1e-6 * max(1.0, abs(existing)):
-        raise VisualizeError(
-            f"{path}:{line_no}: {column} for index {index} is {value!r}, but "
-            f"{existing!r} was already recorded; the CSV is not one coherent "
-            f"rectilinear grid, so it cannot be drawn as a heat map")
-
-
-def _float_field(row: Mapping[str, str], column: str, path: str,
-                 line_no: int) -> Optional[float]:
-    raw = (row.get(column) or "").strip()
-    if not raw:
-        return None
-    try:
-        return float(raw)
-    except ValueError:
-        raise VisualizeError(
-            f"{path}:{line_no}: {column}={raw!r} is not a number") from None
-
-
 def read_materialmap(path: str) -> MaterialMapData:
-    """Read a ``MaterialMap.csv`` into per-layer series plus the grid they span.
+    """Strict JSON input; reconstruct cells in Y-major/X-fast row order.
 
-    Rows whose conductivity is missing, non-finite or non-positive are counted
-    and skipped, never drawn as a value: a heat map that silently paints a bad
-    number is worse than one with a hole in it.
+    A missing/invalid property row is fatal: skipping would shift every remaining
+    value onto a different cell. No ODB++ or run report is needed for heatmaps.
     """
-    x0: dict[int, float] = {}
-    x1: dict[int, float] = {}
-    y0: dict[int, float] = {}
-    y1: dict[int, float] = {}
-    by_name: dict[str, LayerSeries] = {}
-    order: list[str] = []
-    rows = 0
-    invalid = 0
-
+    from .materialmap import read_document, iter_cells
     try:
-        handle = open(path, encoding="utf-8", newline="")
-    except OSError as exc:
-        raise VisualizeError(f"cannot read {path}: {exc}") from None
-    with handle:
-        reader = csv.DictReader(handle)
-        fields = reader.fieldnames or []
-        missing = [column for column in _CSV_REQUIRED if column not in fields]
-        if missing:
-            raise VisualizeError(
-                f"{path}: not an odbpp MaterialMap CSV; missing column(s) "
-                f"{', '.join(missing)}")
-        for line_no, row in enumerate(reader, start=2):
-            rows += 1
-            name = (row.get("layer") or "").strip()
-            if not name:
-                invalid += 1
-                continue
-            try:
-                i = int(row.get("cell_i") or "")
-                j = int(row.get("cell_j") or "")
-            except (TypeError, ValueError):
-                raise VisualizeError(
-                    f"{path}:{line_no}: cell_i/cell_j are not integers") from None
-            geometry = [_float_field(row, column, path, line_no) for column in
-                        ("cell_x0_mm", "cell_y0_mm", "cell_x1_mm", "cell_y1_mm")]
-            values = [_float_field(row, column, path, line_no) for _, column
-                      in PANELS]
-            if any(value is None for value in geometry + values):
-                invalid += 1
-                continue
-            xa, ya, xb, yb = geometry  # type: ignore[misc]
-            if (xb <= xa or yb <= ya
-                    or not all(math.isfinite(value) and value > 0.0
-                               for value in values)):  # type: ignore[union-attr]
-                invalid += 1
-                continue
-
-            x0[rows] = xa
-            x1[rows] = xb
-            y0[rows] = ya
-            y1[rows] = yb
-
-            series = by_name.get(name)
-            if series is None:
-                z_start = _float_field(row, "z_start_mm", path, line_no)
-                z_end = _float_field(row, "z_end_mm", path, line_no)
-                known = (row.get("z_thickness_known") or "").strip()
-                series = LayerSeries(
-                    name=name,
-                    layer_type=(row.get("layer_type") or "").strip(),
-                    z_start_mm=z_start if z_start is not None and math.isfinite(z_start) else None,
-                    z_end_mm=z_end if z_end is not None and math.isfinite(z_end) else None,
-                    thickness_known=known in ("1", "true", "True"),
-                )
-                by_name[name] = series
-                order.append(name)
-            series.rectangles.append((xa,ya,xb,yb))
-            series.i.append(rows)
-            series.j.append(rows)
-            series.kx.append(values[0])  # type: ignore[arg-type]
-            series.ky.append(values[1])  # type: ignore[arg-type]
-            series.kz.append(values[2])  # type: ignore[arg-type]
-
-    if not by_name:
-        raise VisualizeError(
-            f"{path}: no readable cell rows ({rows} line(s) seen, "
-            f"{invalid} unusable)")
-
-    x_edges = tuple(sorted({_key(value) for value in
-                            list(x0.values()) + list(x1.values())}))
-    y_edges = tuple(sorted({_key(value) for value in
-                            list(y0.values()) + list(y1.values())}))
-    if len(x_edges) < 2 or len(y_edges) < 2:
-        raise VisualizeError(
-            f"{path}: the cells do not span a two-dimensional area")
-
-    x_index = {value: index for index, value in enumerate(x_edges)}
-    y_index = {value: index for index, value in enumerate(y_edges)}
-    x_interval = {column: x_index[_key(value)] for column, value in x0.items()}
-    y_interval = {row_index: y_index[_key(value)] for row_index, value in y0.items()}
-
-    return MaterialMapData(
-        x_edges=x_edges, y_edges=y_edges,
-        series=[by_name[name] for name in order],
-        row_count=rows, skipped_invalid=invalid,
-        x_interval_of_column=x_interval, y_interval_of_row=y_interval,
-    )
+        document = read_document(path)
+    except (OSError, ValueError) as exc:
+        raise VisualizeError(f"cannot read MaterialMap JSON {path}: {exc}") from exc
+    xs = tuple(sorted({x for r in document.regions for x in r.x_lines_mm}))
+    ys = tuple(sorted({y for r in document.regions for y in r.y_lines_mm}))
+    xi, yi = {x:i for i,x in enumerate(xs)}, {y:j for j,y in enumerate(ys)}
+    layers = {}
+    count = 0
+    for region, bounds, values in iter_cells(document):
+        name = region.layer.name
+        if name not in layers:
+            a,b = region.bounds_mm.z
+            layers[name] = LayerSeries(name=name, layer_type=region.layer.type,
+                z_start_mm=a, z_end_mm=b, thickness_known=a is not None and b is not None)
+        series = layers[name]
+        series.rectangles.append(bounds)
+        series.i.append(xi[bounds[0]])
+        series.j.append(yi[bounds[1]])
+        series.kx.append(values[0]); series.ky.append(values[1]); series.kz.append(values[2])
+        count += 1
+    return MaterialMapData(x_edges=xs, y_edges=ys, series=list(layers.values()),
+        row_count=count, skipped_invalid=0,
+        x_interval_of_column={i:i for i in range(len(xs)-1)},
+        y_interval_of_row={i:i for i in range(len(ys)-1)})
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +334,7 @@ def read_materialmap(path: str) -> MaterialMapData:
 
 @dataclass(frozen=True)
 class HeatmapOptions:
-    """Output resolution and presentation; these never change CSV geometry."""
+    """Output resolution and presentation; these never change JSON geometry."""
 
     panel_width_px: int = 1440
     max_panel_px: int = 2400
@@ -493,11 +382,11 @@ def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
                          bounds: tuple[float, float], path: str, *,
                          index: int, count: int,
                          options: HeatmapOptions) -> HeatmapImage:
-    """Render physical CSV rectangles with Agg, without resampling the values.
+    """Render physical JSON rectangles with Agg, without resampling the values.
 
     Layout is specified in inches, independently of PNG resolution. Axes keep
     equal physical scaling; every direction uses the same normalisation. Only
-    cells actually present in the CSV are painted or outlined.
+    cells actually present in the JSON are painted or outlined.
     """
     import textwrap
     import numpy as np
@@ -615,30 +504,30 @@ def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
 class HeatmapReport:
     """Everything one heat-map run produced, including the data it read."""
 
-    csv_path: str
+    map_path: str
     out_dir: str
     data: MaterialMapData
     images: list[HeatmapImage]
 
 
-def render_heatmaps(csv_path: str, out_dir: str, *,
+def render_heatmaps(map_path: str, out_dir: str, *,
                     options: Optional[HeatmapOptions] = None,
                     layers: Optional[Sequence[str]] = None) -> HeatmapReport:
-    """Render one kx/ky/kz heat map per layer of *csv_path* into *out_dir*."""
+    """Render one kx/ky/kz heat map per layer of *map_path* into *out_dir*."""
     opts = options or HeatmapOptions()
-    data = read_materialmap(csv_path)
+    data = read_materialmap(map_path)
     wanted = None if layers is None else list(dict.fromkeys(layers))
     if wanted is not None:
         known = {series.name for series in data.series}
         unknown = [name for name in wanted if name not in known]
         if unknown:
             raise VisualizeError(
-                f"{csv_path}: no such layer(s): {', '.join(unknown)}")
+                f"{map_path}: no such layer(s): {', '.join(unknown)}")
         selected = [series for series in data.series if series.name in set(wanted)]
     else:
         selected = list(data.series)
     if not selected:
-        raise VisualizeError(f"{csv_path}: no layer to draw")
+        raise VisualizeError(f"{map_path}: no layer to draw")
 
     bounds = [series.k_bounds() for series in selected]
     if opts.shared_scale:
@@ -655,7 +544,7 @@ def render_heatmaps(csv_path: str, out_dir: str, *,
         images.append(render_layer_heatmap(
             series, data, series_bounds, path,
             index=position, count=len(selected), options=opts))
-    return HeatmapReport(csv_path=csv_path, out_dir=out_dir, data=data,
+    return HeatmapReport(map_path=map_path, out_dir=out_dir, data=data,
                          images=images)
 
 
@@ -708,7 +597,7 @@ def write_gallery_html(path: str, title: str, entries: Sequence[GalleryEntry],
         f"<style>{_GALLERY_STYLE}</style>",
         f"<h1>{html.escape(title)}</h1>",
         "<p class='note'>逐层展示材料掩膜（光栅化的黑/白结果，灰=该层在此无计算域）"
-        "与该层的 kx/ky/kz 等效热导率热图。数值与单位以 MaterialMap.csv 与其 meta 为准，"
+        "与该层的 kx/ky/kz 等效热导率热图。数值与单位以 MaterialMap.json 与其 meta 为准，"
         "本页只便于人眼核对。</p>",
         "<p class='note'>三个方向始终在同一张热图中；窄屏可横向滚动，点击图像可查看原始 PNG。"
         "三个方向使用同一色标，灰色表示该层在此无单元。</p>",

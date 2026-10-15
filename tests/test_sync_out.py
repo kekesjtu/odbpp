@@ -34,8 +34,8 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     sync_out.main()
     result = out / "minimal-test-odb"
     preview = result / "pcb.json"
-    csv = result / "pcb.MaterialMap.csv"
-    meta = result / "pcb.MaterialMap.meta.json"
+    csv = result / "pcb.MaterialMap.json"
+    meta = result / "diagnostics/run.json"
     assert preview.is_file() and csv.is_file() and meta.is_file()
     assert (result / "pcb.svg").is_file()
     assert (result / "pcb.html").is_file()
@@ -44,7 +44,7 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     assert len(list((result / "heatmaps").glob("*.png"))) == 2
     assert json.loads(meta.read_text(encoding="utf-8"))["raster"]["px"] == 16
     index = (out / "index.html").read_text(encoding="utf-8")
-    assert "pcb.MaterialMap.csv" in index
+    assert "pcb.MaterialMap.json" in index
     assert "pcb.images.html" in index
     assert "grid/cartesian-grid.svg" in index
     assert (result / "grid" / "cartesian-grid.png").is_file()
@@ -79,10 +79,9 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     sync_out.main()
     coarse = json.loads(meta.read_text(encoding="utf-8"))
     assert (coarse["grid"]["nx"], coarse["grid"]["ny"]) == (4, 4)
-    with csv.open(encoding="utf-8", newline="") as handle:
-        records = list(csv_module.DictReader(handle))
-    assert len(records) == 32
-    assert {int(r["pixel_count"]) for r in records} == {16}
+    records = json.loads(csv.read_text(encoding="utf-8"))["regions"]
+    assert sum(len(r["values"]) for r in records) == 32
+    assert all(len(v) == 5 for r in records for v in r["values"])
     assert "4×4" in (out / "index.html").read_text(encoding="utf-8")
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,
                                          max_cell_mm=(25,20), draw_grid=True) is not None

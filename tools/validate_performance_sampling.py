@@ -66,7 +66,7 @@ report = {'schema':'odbpp/performance-sampling-validation-1',
           'optimized_ref':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),
           'cases':{}}
 for case in ('designodb-rigidflex.tgz','kicad-kitchen-sink'):
-    meta = json.loads(next((root/'out'/case).glob('*.meta.json')).read_text(encoding='utf-8'))
+    meta = json.loads((root/'out'/case/'diagnostics/run.json').read_text(encoding='utf-8'))
     px,py = meta['raster']['px'],meta['raster']['py']
     records=[]
     arrays=[]

@@ -15,7 +15,6 @@ import pytest
 
 from odbpp.diagnostics import Diagnostics
 from odbpp.equiv import (
-    CSV_COLUMNS,
     EquivalenceError,
     EquivalenceOptions,
     equivalence_from_document,
@@ -501,29 +500,19 @@ class TestAutoTolerance:
 # ---------------------------------------------------------------------------
 
 class TestOutput:
-    def test_csv_and_metadata_are_written(self, tmp_path):
+    def test_single_json_contains_only_region_geometry_and_five_properties(self, tmp_path):
+        from odbpp.materialmap import read_document, iter_cells
         result = run(only_layer(polygons=[rect(0, 0, 10, 10)]))
-        csv_path = tmp_path / "board.MaterialMap.csv"
-        meta_path = tmp_path / "board.MaterialMap.meta.json"
-        write_materialmap(result, str(csv_path), str(meta_path),
-                          source_path="x",
-                          step_name="pcb")
-        header = csv_path.read_text(encoding="utf-8").splitlines()[0]
-        assert header.split(",") == CSV_COLUMNS
-        assert len(csv_path.read_text(encoding="utf-8").splitlines()) == \
-            1 + len(result.cells)
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        assert meta["schema"] == "odbpp/materialmap-5"
-        assert meta["units"]["thermal_conductivity"] == "W/(m*K)"
-        assert meta["drill_model"] == "solid_copper"
-        assert meta["drill_scope"] == "dielectric_only"
-        assert meta["z_axis"].startswith("increases downward")
-        assert "rectification" in meta and "materials" in meta
-        assert meta["materials"]["by_layer"]
-        # A reader must be told what a partially covered cell means.
-        assert meta["coverage"]["columns"] == [
-            "cell_area_mm2", "domain_area_mm2", "domain_coverage"]
-        assert "complete" in meta["coverage"]["semantics"]
+        path = tmp_path / "board.MaterialMap.json"
+        write_materialmap(result, str(path), step_name="pcb")
+        document = read_document(path)
+        assert document.properties == ["kx", "ky", "kz", "density", "specific_heat"]
+        assert len(list(iter_cells(document))) == len(result.cells)
+        assert all(tuple(c.property_values()) == value for c, (_, _, value) in zip(result.cells, iter_cells(document)))
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        assert set(raw["regions"][0]) == {"layer", "bounds_mm", "x_lines_mm", "y_lines_mm", "values"}
+        assert all(len(values) == 5 for r in raw["regions"] for values in r["values"])
+        assert not list(tmp_path.glob("*.csv")) and not list(tmp_path.glob("*.meta.json"))
 
     def test_metadata_records_z_trust_and_thickness_source(self, tmp_path):
         document = build_document(layers=[
@@ -599,12 +588,11 @@ class TestCommandLine:
         code = main(["equivalent", str(case_path("minimal-test-odb")),
                      "--px", "10", "--py", "10", "--max-cell-mm", "20", "-o", str(tmp_path)])
         assert code == 0
-        csv_path = tmp_path / "pcb.MaterialMap.csv"
-        meta_path = tmp_path / "pcb.MaterialMap.meta.json"
+        csv_path = tmp_path / "pcb.MaterialMap.json"
+        meta_path = tmp_path / "diagnostics/run.json"
         assert csv_path.is_file() and meta_path.is_file()
-        rows = csv_path.read_text(encoding="utf-8").splitlines()
-        assert rows[0].split(",") == CSV_COLUMNS
-        assert len(rows) > 1
+        data = json.loads(csv_path.read_text(encoding="utf-8"))
+        assert data["regions"] and data["properties"] == ["kx", "ky", "kz", "density", "specific_heat"]
 
     def test_from_json_consumes_an_existing_preview(self, tmp_path):
         from odbpp.cli import main
@@ -615,7 +603,7 @@ class TestCommandLine:
         code = main(["equivalent", "--from-json", str(preview),
                      "--px", "8", "--py", "8", "--max-cell-mm", "20", "-o", str(tmp_path / "eq")])
         assert code == 0
-        assert (tmp_path / "eq" / "pcb.MaterialMap.csv").is_file()
+        assert (tmp_path / "eq" / "pcb.MaterialMap.json").is_file()
 
     def test_invalid_cell_size_bounds_are_rejected(self, tmp_path):
         from odbpp.cli import main
@@ -624,7 +612,7 @@ class TestCommandLine:
                      "--px", "10", "--py", "10", "--min-cell-mm", "6", "--max-cell-mm", "5",
                      "-o", str(tmp_path)])
         assert code == 2
-        assert not list(tmp_path.glob("*.csv"))
+        assert not list(tmp_path.glob("*.MaterialMap.json"))
 
     def test_a_rectification_failure_writes_no_csv(self, tmp_path):
         from odbpp.cli import main
@@ -641,7 +629,7 @@ class TestCommandLine:
                      "--px", "20", "--py", "20",
                      "--min-cell-mm", "0.1", "-o", str(out)])
         assert code == 2
-        assert not list(out.glob("*.csv"))
+        assert not list(out.glob("*.MaterialMap.json"))
         assert not list(out.glob("*.tmp"))
 
     def test_px_py_default_to_dense_automatic_sampling(self):

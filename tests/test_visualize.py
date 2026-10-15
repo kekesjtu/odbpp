@@ -10,6 +10,7 @@ that subset.
 from __future__ import annotations
 
 import struct
+import json
 import zlib
 from pathlib import Path
 
@@ -379,7 +380,7 @@ class TestReadMaterialMap:
             {"name": "CU", "polygons": [rect(0, 0, 10, 5)]},
             {"name": "FR", "type": "DIELECTRIC", "polygons": []},
         ]), **kwargs)
-        path = tmp_path / "pcb.MaterialMap.csv"
+        path = tmp_path / "pcb.MaterialMap.json"
         write_materialmap(result, str(path))
         return path
 
@@ -401,36 +402,27 @@ class TestReadMaterialMap:
         path.write_text("a,b\n1,2\n", encoding="utf-8")
         with pytest.raises(VisualizeError) as excinfo:
             read_materialmap(str(path))
-        assert "layer" in str(excinfo.value)
+        assert "MaterialMap JSON" in str(excinfo.value)
 
     def test_an_unreadable_file_is_refused(self, tmp_path):
         with pytest.raises(VisualizeError):
             read_materialmap(str(tmp_path / "nope.csv"))
 
-    def test_unusable_values_are_counted_not_drawn(self, tmp_path):
+    def test_unusable_values_are_rejected_without_shifting_following_cells(self, tmp_path):
         path = self._csv(tmp_path, px=4, py=4)
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for index, line in enumerate(lines[1:], start=1):
-            if ",0.3," in line:  # a base-laminate cell on the copper layer
-                lines[index] = line.replace(",0.3,", ",nan,", 1)
-                break
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        data = read_materialmap(str(path))
-        assert data.skipped_invalid == 1
-        assert sum(len(series) for series in data.series) == 31
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["regions"][0]["values"][0][0] = -1
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(VisualizeError, match="values"):
+            read_materialmap(str(path))
 
     def test_an_incoherent_grid_is_refused(self, tmp_path):
-        path = tmp_path / "broken.csv"
-        header = ("layer,layer_type,cell_i,cell_j,cell_x0_mm,cell_y0_mm,"
-                  "cell_x1_mm,cell_y1_mm,z_start_mm,z_end_mm,z_thickness_known,"
-                  "kx_w_mk,ky_w_mk,kz_w_mk\n")
-        rows = (
-            "CU,SIGNAL,0,0,0.0,0.0,1.0,1.0,0.0,0.035,1,1.0,1.0,1.0\n"
-            "CU,SIGNAL,0,1,0.5,1.0,1.0,2.0,0.0,0.035,1,1.0,1.0,1.0\n"
-        )
-        path.write_text(header + rows, encoding="utf-8")
-        data=read_materialmap(str(path))
-        assert data.series[0].rectangles == [(0,0,1,1),(.5,1,1,2)]
+        path = self._csv(tmp_path, px=4, py=4)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["regions"][0]["x_lines_mm"][1] = 0
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(VisualizeError, match="increase"):
+            read_materialmap(str(path))
 
 
 # ---------------------------------------------------------------------------
@@ -462,7 +454,7 @@ def near(actual, expected, tolerance: int = 16) -> bool:
 class TestHeatmapRendering:
     def _report(self, tmp_path, document_dict, *, px=4, py=4, out="maps",
                 layers=None, **kwargs):
-        csv_path = tmp_path / "pcb.MaterialMap.csv"
+        csv_path = tmp_path / "pcb.MaterialMap.json"
         write_materialmap(run(document_dict, px=px, py=py), str(csv_path))
         options = HeatmapOptions(panel_width_px=200, font_size_pt=12, **kwargs)
         return render_heatmaps(str(csv_path), str(tmp_path / out),
@@ -520,20 +512,14 @@ class TestHeatmapRendering:
             assert near(sample(body, 0.5, 0.9, rows), RAMP_LOW)
 
     def test_three_axes_show_their_own_conductivity_values(self, tmp_path):
-        import csv
         report = self._report(tmp_path, document([
             {"name": "CU", "polygons": [rect(0, 0, 10, 10)]}]))
-        path = Path(report.csv_path)
-        with path.open(encoding="utf-8", newline="") as handle:
-            reader = csv.DictReader(handle)
-            records = list(reader)
-            columns = reader.fieldnames
-        for record in records:
-            record.update(kx_w_mk="385", ky_w_mk="0.3", kz_w_mk="192.65")
-        with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=columns)
-            writer.writeheader()
-            writer.writerows(records)
+        path = Path(report.map_path)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for region in data["regions"]:
+            for record in region["values"]:
+                record[:3] = [385, 0.3, 192.65]
+        path.write_text(json.dumps(data), encoding="utf-8")
         image = render_heatmaps(str(path), report.out_dir,
                                 options=HeatmapOptions(panel_width_px=200)).images[0]
         rows = decode_png(image.path)[3]
@@ -616,7 +602,7 @@ class TestHeatmapRendering:
                            shared_rows), RAMP_HIGH)
 
     def test_the_layer_filter_selects_and_validates(self, tmp_path):
-        csv_path = tmp_path / "pcb.MaterialMap.csv"
+        csv_path = tmp_path / "pcb.MaterialMap.json"
         write_materialmap(run(document([
             {"name": "CU", "polygons": [rect(0, 0, 10, 10)]},
             {"name": "FR", "type": "DIELECTRIC", "polygons": []},
@@ -630,7 +616,7 @@ class TestHeatmapRendering:
                             layers=["NOPE"])
 
     def test_a_colliding_file_name_does_not_overwrite_a_layer(self, tmp_path):
-        csv_path = tmp_path / "pcb.MaterialMap.csv"
+        csv_path = tmp_path / "pcb.MaterialMap.json"
         write_materialmap(run(document([
             {"name": "A/B", "polygons": [rect(0, 0, 10, 10)]},
             {"name": "A:B", "polygons": [rect(0, 0, 10, 10)]},
@@ -652,7 +638,7 @@ class TestHeatmapRendering:
 
 class TestGallery:
     def test_the_gallery_names_what_the_pictures_cannot(self, tmp_path):
-        csv_path = tmp_path / "pcb.MaterialMap.csv"
+        csv_path = tmp_path / "pcb.MaterialMap.json"
         write_materialmap(run(document([
             {"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])), str(csv_path))
         report = render_heatmaps(str(csv_path), str(tmp_path / "heatmaps"),
@@ -709,8 +695,8 @@ class TestCommandLine:
         for filename in expected:
             assert f"masks/{filename}" in gallery
             assert f"heatmaps/{filename}" in gallery
-        assert (out / "pcb.MaterialMap.csv").is_file()
-        assert (out / "pcb.MaterialMap.meta.json").is_file()
+        assert (out / "pcb.MaterialMap.json").is_file()
+        assert (out / "diagnostics/run.json").is_file()
         assert not list(out.rglob("*.tmp"))
 
     def test_default_material_warnings_are_visible_on_stderr(
@@ -724,7 +710,7 @@ class TestCommandLine:
         assert stderr.count("materials.default_used") == 2
         assert "copper phase" in stderr
         assert "base phase" in stderr
-        assert (tmp_path / "pcb.MaterialMap.csv").is_file()
+        assert (tmp_path / "pcb.MaterialMap.json").is_file()
 
     def test_equivalent_writes_masks_heatmaps_and_a_gallery(self, tmp_path, capsys):
         from odbpp.cli import main
@@ -788,7 +774,7 @@ class TestCommandLine:
         assert main(["equivalent", str(case_path("minimal-test-odb")),
                      "--px", "10", "--py", "10", "--max-cell-mm", "20", "-o", str(tmp_path / "eq"),
                      "--no-raster-png", "--no-gallery"]) == 0
-        csv_path = tmp_path / "eq" / "pcb.MaterialMap.csv"
+        csv_path = tmp_path / "eq" / "pcb.MaterialMap.json"
         out = tmp_path / "from-csv"
         code = main(["heatmap", str(csv_path), "-o", str(out),
                      "--panel-width", "160"])
@@ -809,7 +795,7 @@ class TestCommandLine:
 
         assert main(["equivalent", str(case_path("minimal-test-odb")),
                      "--px", "8", "--py", "8", "--max-cell-mm", "20", "-o", str(tmp_path / "eq")]) == 0
-        code = main(["heatmap", str(tmp_path / "eq" / "pcb.MaterialMap.csv"),
+        code = main(["heatmap", str(tmp_path / "eq" / "pcb.MaterialMap.json"),
                      "--panel-width", "120"])
         assert code == 0
         assert (tmp_path / "eq" / "heatmaps" / "index.html").is_file()

@@ -91,7 +91,7 @@ def worker(args):
         source = Path(paths.json)
     else:
         source = next(p for p in (ROOT / "out" / case).glob("*.json")
-                      if not p.name.endswith(".meta.json"))
+                      if not p.name.endswith((".meta.json", ".MaterialMap.json")))
     record = {"case": case, "durations_s": durations}
     if args.mode in ("equivalent", "all"):
         document = json.loads(source.read_text(encoding="utf-8"))
@@ -112,15 +112,16 @@ def worker(args):
             mask_sink=sink))
         durations["masks"] = mask_time
         durations["equivalent"] = durations.pop("equivalent_and_masks") - mask_time
-        csv = output / (source.stem + ".MaterialMap.csv")
+        csv = output / (source.stem + ".MaterialMap.json")
         timed("csv", lambda: write_materialmap(result, str(csv)))
-        metadata = result.metadata(source_path=str(source))
-        # These two fields identify implementation/output location, not PCB behaviour.
-        metadata.pop("pipeline_fingerprint", None)
-        metadata.get("source", {}).pop("path", None)
-        meta = output / (source.stem + ".MaterialMap.meta.json")
-        meta.write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        meta = output / "diagnostics" / "run.json"
+        meta.parent.mkdir(exist_ok=True)
+        from odbpp import equiv as equiv_module
+        if hasattr(equiv_module, "write_run_report"):
+            equiv_module.write_run_report(result, str(meta), source_path=str(source))
+        else:
+            # A historical isolated baseline owns its former diagnostics layout.
+            meta.write_text(json.dumps(result.metadata(),indent=1)+"\n",encoding="utf-8")
         images = timed("heatmaps", lambda: render_heatmaps(str(csv), str(output / "heatmaps")))
         artefacts.extend([csv, meta] + [Path(image.path) for image in images.images])
         record.update(fatal=result.fatal, regions=len(result.rectification.rectangles),

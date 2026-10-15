@@ -20,6 +20,7 @@ from odbpp.visualize import unique_image_stem
 from odbpp.grid import GridOptions
 from odbpp.equiv import pipeline_fingerprint
 from odbpp.intermediate import read_document
+from odbpp.materialmap import read_document as read_map_document, restore_report_grid
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,7 +45,7 @@ def case_inputs() -> list[tuple[str, Path]]:
 
 def existing_preview(directory: Path, source: Path) -> tuple[Path, dict] | None:
     json_files = ([p for p in directory.glob("*.json")
-                   if not p.name.endswith(".MaterialMap.meta.json")]
+                   if not p.name.endswith((".MaterialMap.meta.json", ".MaterialMap.json"))]
                   if directory.is_dir() else [])
     if len(json_files) != 1:
         return None
@@ -75,15 +76,15 @@ def existing_equivalence(directory: Path, preview: Path, *,
                          draw_grid: bool = False) -> dict | None:
     """Reuse only a complete result for this JSON and this raster/grid choice."""
     stem = preview.stem
-    csv = directory / f"{stem}.MaterialMap.csv"
-    meta = directory / f"{stem}.MaterialMap.meta.json"
+    csv = directory / f"{stem}.MaterialMap.json"
+    meta = directory / "diagnostics" / "run.json"
     gallery = directory / f"{stem}.images.html"
     if not all(p.is_file() and p.stat().st_size > 0 for p in (csv, meta, gallery)):
         return None
     if csv.stat().st_mtime_ns < preview.stat().st_mtime_ns:
         return None
     try:
-        if ("热图灰线标出 CSV 单元边界" in gallery.read_text(encoding="utf-8")) != draw_grid:
+        if ("热图灰线标出 JSON 单元边界" in gallery.read_text(encoding="utf-8")) != draw_grid:
             return None
         data = json.loads(meta.read_text(encoding="utf-8"))
         expected_source = preview.relative_to(ROOT).as_posix()
@@ -117,7 +118,7 @@ def existing_equivalence(directory: Path, preview: Path, *,
                            or (folder / name).stat().st_size == 0
                            for name in names)):
                 return None
-        return data
+        return restore_report_grid(data, read_map_document(csv))
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
 
@@ -149,7 +150,7 @@ def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
         "td,th{padding:10px;text-align:left;border-bottom:1px solid #dde4ef}"
         "a{color:#135baf}small{color:#465569}</style>",
         "<h1>ODB++ 案例导出</h1>",
-        "<p>每份输入保留 JSON、SVG、可切换图层的 HTML，以及物性等效 CSV、"
+        "<p>每份输入保留 JSON、SVG、可切换图层的 HTML，以及物性等效 JSON、"
         "逐层光栅掩膜和 kx/ky/kz 热图。"
         "KiCad 原生 ZIP 与事后裁剪 ZIP 分组导出，可分别核对。</p>",
         "<table><tr><th>案例与输入</th><th>版本</th><th>层数</th>"
@@ -168,8 +169,7 @@ def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
         )
         links += " · " + " · ".join(
             f'<a href="{escape(relative)}/{escape(stem)}.{suffix}">{label}</a>'
-            for suffix, label in (("MaterialMap.csv", "CSV"),
-                                  ("MaterialMap.meta.json", "meta"),
+            for suffix, label in (("MaterialMap.json", "MaterialMap JSON"),
                                   ("images.html", "掩膜/热图"))
         )
         region_plot = preview_dir / "regions" / "regions.svg"
@@ -184,8 +184,8 @@ def render_index(rows: list[tuple[str, Path, Path, dict, dict]]) -> str:
                      f"<td>{equivalent_count}</td>"
                      f"<td>{equivalent['grid']['nx']}×{equivalent['grid']['ny']}</td>"
                      f"<td>{links}</td></tr>")
-    lines += ["</table>", "<p><small>光栅与尺寸约束以各 case 的 meta 为准；"
-              "表中 nx/ny 是全局笛卡尔栅的轴向区间数，完整实体单元见 CSV。"
+    lines += ["</table>", "<p><small>光栅与尺寸约束以各 case 的 diagnostics/run.json 为准；"
+              "表中 nx/ny 是全局笛卡尔栅的轴向区间数，完整实体单元见 JSON。"
               "修改解析器后使用 --force 重新生成。</small></p>", "</html>"]
     return "\n".join(lines) + "\n"
 
@@ -232,7 +232,7 @@ def main() -> None:
     parser.add_argument("--max-cell-mm", type=float, nargs="+", default=None, metavar="MM",
                         help="maximum edge, one value or X Y (default 5 mm)")
     parser.add_argument("--heatmap-grid", action="store_true",
-                        help="outline each CSV cell in heatmaps")
+                        help="outline each JSON cell in heatmaps")
     parser.add_argument("--prune", action="store_true",
                         help="remove out/ entries with no corresponding case")
     args = parser.parse_args()
@@ -289,7 +289,7 @@ def main() -> None:
                 command.append("--heatmap-grid")
             print(f"equiv  {name}", flush=True)
             subprocess.run(command, cwd=ROOT, check=True)
-            meta = json.loads((output / f"{preview.stem}.MaterialMap.meta.json")
+            meta = json.loads((output / "diagnostics" / "run.json")
                               .read_text(encoding="utf-8"))
             prune_stale_images(output, [r["name"] for r in meta["layers"]
                                         if r["status"] == "equivalent"])

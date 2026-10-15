@@ -154,8 +154,8 @@ def test_cli_default_preset_and_invalid_combinations(tmp_path):
     assert main(common+["--px","0","--py","100"])==2
     assert main(common+["--grid-level","fine","--min-cell-mm",".1"])==2
     assert main(common)==0
-    meta=json.loads(next(output.glob("*.meta.json")).read_text(encoding="utf-8"))
-    assert meta["schema"]=="odbpp/materialmap-5"
+    meta=json.loads((output/"diagnostics/run.json").read_text(encoding="utf-8"))
+    assert "schema" not in meta and "cells" not in meta["grid"]
     assert meta["grid"]["mesh_configuration"]["preset"]=="standard"
     assert meta["grid"]["layout"]=="global-cartesian"
     assert meta["raster"]["px"]>=4096

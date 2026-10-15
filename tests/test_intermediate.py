@@ -30,7 +30,7 @@ def test_file_roundtrip_uses_the_shared_contract_and_preserves_equivalence(tmp_p
     loaded = read_document(path)
     assert loaded == model
     original, restored = run(document), run(loaded)
-    assert [c.csv_row() for c in original.cells] == [c.csv_row() for c in restored.cells]
+    assert original.cells == restored.cells
     assert original.grid.x_lines == restored.grid.x_lines
     assert original.grid.y_lines == restored.grid.y_lines
 

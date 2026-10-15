@@ -12,9 +12,9 @@ Commands
 ``diagnostics`` every warning/error collected while loading
 ``summarize``  all of the above, as text or JSON
 ``export``     compose the layers and write the mm JSON, SVG and HTML preview
-``equivalent`` compose, equivalent every physical layer, write the CSV and draw
+``equivalent`` compose, equivalent every physical layer, write the JSON and draw
                the per-layer mask PNGs, heat maps and gallery
-``heatmap``    draw kx/ky/kz heat maps from an already written MaterialMap.csv
+``heatmap``    draw kx/ky/kz heat maps from an already written MaterialMap.json
 
 ``summarize --format json`` is a *structural* dump -- file-level facts that make
 the parse reviewable.  ``export --json`` is the intermediate format from the
@@ -103,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_eq = sub.add_parser(
         "equivalent",
-        help="material equivalence: preview JSON -> MaterialMap.csv + metadata",
+        help="material equivalence: preview JSON -> MaterialMap.json",
         description="Equivalent each copper and dielectric layer to per-cell "
                     "kx/ky/kz, density and specific heat.",
     )
@@ -167,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="use one colour scale for every layer instead of one "
                            "per layer")
     p_eq.add_argument("--heatmap-grid", action="store_true",
-                      help="outline the CSV cells in the heat maps")
+                      help="outline the JSON cells in the heat maps")
     p_eq.add_argument("--no-gallery", dest="gallery", action="store_false",
                       default=True,
                       help="do not write the per-run HTML gallery")
@@ -175,12 +175,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_map = sub.add_parser(
         "heatmap",
-        help="render per-layer kx/ky/kz heat maps from a MaterialMap CSV",
-        description="Read a MaterialMap.csv written by `equivalent` and draw one "
-                    "PNG per layer with kx, ky and kz side by side. The CSV is "
+        help="render per-layer kx/ky/kz heat maps from a MaterialMap JSON",
+        description="Read a MaterialMap.json written by `equivalent` and draw one "
+                    "PNG per layer with kx, ky and kz side by side. The JSON is "
                     "the interface: no ODB++ input is needed.",
     )
-    p_map.add_argument("csv", help="MaterialMap.csv written by `equivalent`")
+    p_map.add_argument("materialmap", help="MaterialMap.json written by `equivalent`")
     p_map.add_argument("-o", "--out", default=None,
                        help="output directory (default: <csv dir>/heatmaps)")
     p_map.add_argument("--layer", action="append", default=None, metavar="NAME",
@@ -190,7 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_map.add_argument("--shared-scale", action="store_true",
                        help="use one colour scale for every layer")
     p_map.add_argument("--grid", action="store_true",
-                       help="outline the CSV cells in the heat maps")
+                       help="outline the JSON cells in the heat maps")
     p_map.add_argument("--no-gallery", dest="gallery", action="store_false",
                        default=True,
                        help="do not write the gallery HTML next to the PNGs")
@@ -551,19 +551,18 @@ def _run_export(job: Job, args: argparse.Namespace,
 # ---------------------------------------------------------------------------
 
 def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
-    """Stream MaterialMap.csv + a metadata sidecar for one step."""
-    import csv as _csv
+    """Write region MaterialMap JSON and an independent execution audit."""
     import json
     import os
 
     from .equiv import (
-        CSV_COLUMNS,
         EquivalenceError,
         EquivalenceOptions,
         equivalence_from_document,
-        write_metadata,
+        write_run_report,
     )
     from .grid import GridOptions
+    from .materialmap import MaterialMapWriter
     from .materials import MaterialBook
     from .rectify import RectifyOptions
     from .visualize import (
@@ -682,14 +681,14 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         "out", os.path.basename(str(source_path).rstrip("/\\")) or "job")
     os.makedirs(out_dir, exist_ok=True)
     stem = step_name or "step"
-    csv_path = os.path.join(out_dir, f"{stem}.MaterialMap.csv")
-    metadata_path = os.path.join(out_dir, f"{stem}.MaterialMap.meta.json")
-    temp_path = csv_path + ".tmp"
+    map_path = os.path.join(out_dir, f"{stem}.MaterialMap.json")
+    report_path = os.path.join(out_dir, "diagnostics", "run.json")
+    temp_path = map_path + ".tmp"
 
     # Raster masks are written while the layers are equivalented, so only one
     # mask is ever resident.  They go to a temporary name and are moved into
     # place only once the whole run is known to be trustworthy, exactly like the
-    # CSV: a fatal run must not leave half a result behind.
+    # JSON: a fatal run must not leave half a result behind.
     masks_dir = os.path.join(out_dir, "masks")
     mask_jobs: list[tuple[str, str, str]] = []
     mask_images: list[MaskImage] = []
@@ -708,23 +707,18 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         mask_jobs.append((name, temp, final))
 
     # Stream rows as they are produced: a board-wide grid can hold millions of
-    # cells and holding them all just to write a CSV is pure waste.
+    # cells and holding them all just to write a JSON is pure waste.
     count = 0
     try:
-        with open(temp_path, "w", encoding="utf-8", newline="") as handle:
-            writer = _csv.writer(handle)
-            writer.writerow(CSV_COLUMNS)
-
-            def sink(cell) -> None:
-                nonlocal count
-                writer.writerow(cell.csv_row())
-                count += 1
-
+        with MaterialMapWriter(temp_path, step_name=step_name) as writer:
             result = equivalence_from_document(document, options,
                                                diagnostics=diagnostics,
-                                               cell_sink=sink,
+                                               cell_sink=writer.add,
                                                mask_sink=mask_sink)
-    except (EquivalenceError, ValueError) as exc:
+            count = writer.count
+            if not result.fatal:
+                writer.finish(result)
+    except (EquivalenceError, ValueError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         _discard(temp_path, [temp for _, temp, _ in mask_jobs])
         return 2
@@ -738,9 +732,11 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
             print(f"  {item}", file=sys.stderr)
         return 2
 
-    os.replace(temp_path, csv_path)
-    write_metadata(result, metadata_path, source_path=source_path,
+    os.replace(temp_path, map_path)
+    write_run_report(result, report_path, source_path=source_path,
                    step_name=step_name)
+    _discard(os.path.join(out_dir, f"{stem}.MaterialMap.csv"),
+             os.path.join(out_dir, f"{stem}.MaterialMap.meta.json"))
     mask_hrefs: dict[str, str] = {}
     for name, temp, final in mask_jobs:
         os.replace(temp, final)
@@ -759,9 +755,9 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         else:
             print(f"  {report.name:<24}{report.type:<14} {report.status}: "
                   f"{report.reason}")
-    print(f"wrote {csv_path} ({os.path.getsize(csv_path) / 1e6:.2f} MB)")
-    print(f"wrote {metadata_path} "
-          f"({os.path.getsize(metadata_path) / 1e6:.2f} MB)")
+    print(f"wrote {map_path} ({os.path.getsize(map_path) / 1e6:.2f} MB)")
+    print(f"wrote {report_path} "
+          f"({os.path.getsize(report_path) / 1e6:.2f} MB)")
     if mask_jobs:
         zooms = {image.isotropic_zoom for image in mask_images}
         if len(zooms) == 1 and None not in zooms:
@@ -774,7 +770,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
               f"({shape}; black=copper/drill, white=base, grey=no domain)")
 
     # --- pictures of what was written --------------------------------------
-    # Rendered from the CSV file, not from the in-memory result: the picture is
+    # Rendered from the JSON file, not from the in-memory result: the picture is
     # then a picture of the delivered data, and the two cannot drift apart.
     images = []
     try:
@@ -784,13 +780,13 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
             draw_grid=args.heatmap_grid,
         )
         if args.heatmap:
-            report = render_heatmaps(csv_path, os.path.join(out_dir, "heatmaps"),
+            report = render_heatmaps(map_path, os.path.join(out_dir, "heatmaps"),
                                      options=options_for_maps)
             images = report.images
             print(f"wrote {len(images)} heat map(s) -> "
                   f"{os.path.join(out_dir, 'heatmaps')}")
             if report.data.skipped_invalid:
-                print(f"warning: {report.data.skipped_invalid} CSV row(s) were "
+                print(f"warning: {report.data.skipped_invalid} JSON row(s) were "
                       f"unusable and left blank in the heat maps",
                       file=sys.stderr)
         if args.gallery:
@@ -805,7 +801,7 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
                 )
                 print(f"wrote {gallery_path}")
     except (VisualizeError, ValueError, OSError) as exc:
-        # The CSV and the metadata are the deliverable; failing to draw a picture
+        # The MaterialMap JSON is the deliverable; failing to draw a picture
         # of them is a reported failure, not a silent one, and not a corrupt one.
         print(f"warning: could not render the visualisations: {exc}",
               file=sys.stderr)
@@ -886,18 +882,18 @@ def _gallery_note(result, args) -> str:
     if result.rectification.tolerance_mm is not None:
         parts.append(f"矩形化 tolerance={result.rectification.tolerance_mm:g} mm")
     if skipped:
-        parts.append(f"{len(skipped)} 层未参与等效（逐层原因见 meta.json）")
+        parts.append(f"{len(skipped)} 层未参与等效（逐层原因见 diagnostics/run.json）")
     if not args.raster_png:
         parts.append("本次未生成掩膜 PNG（--no-raster-png）")
     if not args.heatmap:
         parts.append("本次未生成热图（--no-heatmap）")
     elif args.heatmap_grid:
-        parts.append("热图灰线标出 CSV 单元边界")
+        parts.append("热图灰线标出 JSON 单元边界")
     return "；".join(parts) + "。掩膜灰阶：黑=铜（钻孔投影仅作用于介质），白=基底，灰=该层在此无计算域。"
 
 
 def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
-    """Render kx/ky/kz heat maps from an already written MaterialMap.csv."""
+    """Render kx/ky/kz heat maps from an already written MaterialMap.json."""
     import os
 
     from .visualize import (
@@ -908,9 +904,9 @@ def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         write_gallery_html,
     )
 
-    csv_path = args.csv
-    if not os.path.isfile(csv_path):
-        print(f"error: no such file: {csv_path}", file=sys.stderr)
+    map_path = args.materialmap
+    if not os.path.isfile(map_path):
+        print(f"error: no such file: {map_path}", file=sys.stderr)
         return 2
     try:
         options = HeatmapOptions(panel_width_px=args.panel_width,
@@ -921,15 +917,15 @@ def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         return 2
 
     out_dir = args.out or os.path.join(
-        os.path.dirname(os.path.abspath(csv_path)), "heatmaps")
+        os.path.dirname(os.path.abspath(map_path)), "heatmaps")
     try:
-        report = render_heatmaps(csv_path, out_dir, options=options,
+        report = render_heatmaps(map_path, out_dir, options=options,
                                  layers=args.layer)
         gallery_path = None
         if args.gallery:
             gallery_path = write_gallery_html(
                 os.path.join(out_dir, "index.html"),
-                f"{os.path.basename(csv_path)} · kx/ky/kz 等效热导率热图",
+                f"{os.path.basename(map_path)} · kx/ky/kz 等效热导率热图",
                 gallery_entries(report, gallery_dir=out_dir),
             )
     except (VisualizeError, ValueError, OSError) as exc:
@@ -937,8 +933,8 @@ def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         return 2
 
     bounds = report.images[0]
-    print(f"{csv_path}: {len(report.images)} layer(s), "
-          f"{report.data.row_count} CSV row(s), "
+    print(f"{map_path}: {len(report.images)} layer(s), "
+          f"{report.data.row_count} JSON row(s), "
           f"grid {report.data.column_count}x{report.data.row_band_count} "
           f"(x=[{report.data.x_edges[0]:g},{report.data.x_edges[-1]:g}] mm)")
     for image in report.images:
@@ -947,7 +943,7 @@ def _run_heatmap(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         print(f"  {image.index}/{image.count} {image.layer:<24}"
               f"cells={image.cells:<8}{scale}")
     if report.data.skipped_invalid:
-        print(f"warning: {report.data.skipped_invalid} CSV row(s) were unusable "
+        print(f"warning: {report.data.skipped_invalid} JSON row(s) were unusable "
               f"and left blank in the heat maps", file=sys.stderr)
     print(f"wrote {len(report.images)} heat map(s) -> {out_dir}")
     if gallery_path:

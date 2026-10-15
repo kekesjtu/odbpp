@@ -89,7 +89,7 @@ def worker(args):
         EquivalenceOptions(GridOptions(1, 1, mesh_preset="standard", auto_raster=True)), mask_sink=mask_sink))
     if result.fatal:
         raise RuntimeError([d.message for d in result.diagnostics.errors])
-    csv_path = output / "board.MaterialMap.csv"
+    csv_path = output / "board.MaterialMap.json"
     timed("csv", lambda: write_materialmap(result, str(csv_path)))
     raw = hashlib.sha256()
     for cell in result.cells:
@@ -138,7 +138,7 @@ def main():
             records[label] = {"runs": runs, "median_s": {k: statistics.median(r["durations_s"][k] for r in runs)
                              for k in runs[0]["durations_s"]}}
         before, after = records["baseline"]["runs"][0], records["current"]["runs"][0]
-        fields = ("geometry_sha256", "grid_sha256", "properties_sha256", "csv_sha256", "masks", "regions", "cells", "raster")
+        fields = ("geometry_sha256", "grid_sha256", "properties_sha256", "masks", "regions", "cells", "raster")
         records["checks"] = {field: all(r[field] == before[field] for label in records.values() for r in label["runs"])
                              for field in fields}
         if not all(records["checks"].values()):

@@ -24,7 +24,7 @@ ODB++ v8.1 job，展开图元与符号，用布尔运算合成**完全正向**�
 [ 4. PCB 物性等效器 ]  ← 已实现  equivalence_from_document()
         │
         ▼
-[ 5. 等效结果 ]  MaterialMap.csv + MaterialMap.meta.json   ← 数值唯一依据
+[ 5. 等效结果 ]  MaterialMap.json   ← 数值唯一依据
         │
         └─ 只给人看：masks/<layer>.png、heatmaps/<layer>.png、<step>.images.html
 ```
@@ -50,7 +50,7 @@ uv run --all-extras python -m odbpp layers      <path> [--step S]
 uv run --all-extras python -m odbpp symbols     <path>
 uv run --all-extras python -m odbpp diagnostics <path>
 
-# 同步 cases/ 对应的预览、等效 CSV、逐层掩膜/热图及 out/index.html
+# 同步 cases/ 对应的预览、等效 JSON、逐层掩膜/热图及 out/index.html
 uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid --prune
 # 需要其他分辨率/网格时显式指定
 uv run --all-extras python tools/sync_out.py --grid-level fine
@@ -103,13 +103,13 @@ uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
 | `--copper-k` / `--copper-density` / `--copper-cp` 与 `--base-*` | 逐相命令行覆盖 |
 | `--no-raster-png` / `--raster-scale N` | 逐层黑白掩膜 PNG：默认自动取到约 1400 px 长边且**保持板的长宽比**；`N` 强制各向同性 N 倍放大（会拉伸非方形板） |
 | `--no-heatmap` / `--heatmap-panel-width PX` / `--heatmap-shared-scale` | 逐层 `kx`/`ky`/`kz` 三面板热图；面板宽默认 1440 px；共享色标便于层间比较 |
-| `--heatmap-grid` | 在热图中标出 CSV 单元边界；独立 `heatmap` 命令对应 `--grid` |
+| `--heatmap-grid` | 在热图中标出由 JSON 网格线还原的单元边界；独立 `heatmap` 命令对应 `--grid` |
 | `--no-gallery` | 不写 `<step>.images.html` 图例页 |
 
-可视化产物只依赖 CSV，可以事后单独重画（不需要 ODB++ 输入，也不重算等效）：
+热图只依赖 MaterialMap JSON，可以事后单独重画（不需要 ODB++ 输入，也不重算等效）：
 
 ```bash
-uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
+uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.json \
     -o build/ks-eq/heatmaps --shared-scale --layer B.CU
 ```
 
@@ -120,10 +120,11 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 每层一张 PNG，`kx`、`ky`、`kz` 横向并排并共用底部色条；使用 Matplotlib
 绘制毫米坐标、层名和 Z 信息。图例页窄屏可横向查看整张图，点击可看原图，材料掩膜折叠展示。
 
-输出 `*.MaterialMap.csv`（逐层逐单元 `kx/ky/kz/density/specific_heat`，并带
-`cell_area_mm2`/`domain_area_mm2`/`domain_coverage` 明确计算域覆盖率）与同名
-`*.MaterialMap.meta.json`（单位、Z 可信状态、材料来源、矩形化误差、诊断、
-覆盖率语义）。矩形化不通过（填孔/丢岛/超精度）时视为致命，不写任何结果。
+输出单个 `*.MaterialMap.json`：每个 region 保存层身份、XYZ 六个边界值和 XY 网格线，
+单元按 Y 外层、X 内层的行主序仅保存 `kx/ky/kz/density/specific_heat`。
+未知 Z 为 `null`，不写单元索引、面积、覆盖率或采样统计。
+运行设置、材料来源和几何误差单独记录于 `diagnostics/run.json`，不再生成 MaterialMap 元数据旁车。
+几何或采样检查失败时不发布新的结果。
 默认材料表、矩形化与网格规则、公式与验证见
 [物性等效器文档](docs/equivalence/01-material-equivalence.md)。
 
@@ -144,7 +145,7 @@ HTML 查看器后续采用按帧显示更新、减少 SVG 布局查询并缓存�
 
 修改预览生成代码后，使用 `tools/sync_out.py --px 400 --py 400 --force` 更新已有产物；
 仅修改等效或可视化代码时，用 `--force-equivalent`。同步结果按 case 放在
-`out/<case>/`：预览 JSON/SVG/HTML、MaterialMap CSV/meta、`masks/`、
+`out/<case>/`：预览 JSON/SVG/HTML、MaterialMap JSON 与独立运行诊断、`masks/`、
 `heatmaps/` 及图例页，`out/index.html` 提供入口。
 `out/index.html` 链接到四个既有样本及 KiCad 小型案例的原生、裁剪两组导出。
 每份输入仅保留 JSON、合并 SVG、可交互 HTML；KiCad 输出分别位于
@@ -207,8 +208,8 @@ for layer in step.layers:
 | **`raster.py`** | **光栅化**：region 边界扫描线 + even-odd 像素中心判定；`LayerMask` 同时供等效与掩膜 PNG 使用 |
 | **`materials.py`** | **两相材料**：铜/基底默认值（带来源）、逐层 > 全局 > 默认的优先级与警告 |
 | **`png.py`** | **图像编码**：零依赖的 8 位灰度/RGB PNG 写入器 + RGB 画布 + 5×7 点阵字体 |
-| **`visualize.py`** | **等效结果可视化**：掩膜 PNG、`kx`/`ky`/`kz` 热图、图例页，并从已写出的 CSV 读取 |
-| **`equiv.py`** | **物性等效（数据流 4-5）**：逐层光栅 + 钻孔覆盖 + 串并联公式，流式输出 CSV 与 meta |
+| **`visualize.py`** | **等效结果可视化**：掩膜 PNG、`kx`/`ky`/`kz` 热图、图例页，并从已写出的 MaterialMap JSON 读取 |
+| **`equiv.py`** | **物性等效（数据流 4-5）**：逐层光栅 + 钻孔覆盖 + 串并联公式，按层缓冲输出 region JSON |
 | `cli.py` | `python -m odbpp` 子命令 |
 
 ## 几条不变式
@@ -254,7 +255,7 @@ for layer in step.layers:
     每个单元必须完整落在一个 region 内，且至少有光栅像素中心。
 17. **单元必有采样。** 网格单元内无像素中心时报 `grid.cell_without_pixel`
     （致命），不静默取 0 或最近像素。
-18. **图不是数据。** 掩膜 PNG 取自等效计算所用光栅，热图从已写出的 CSV 重新读取渲染；
+18. **图不是数据。** 掩膜 PNG 取自等效计算所用光栅，热图从已写出的 MaterialMap JSON 还原网格并渲染；
     板外不画成 FR4（灰 = 无计算域），`n/a` 不画成低热导率，也不拿显示效果判断收敛。
 
 ## 目录
@@ -287,3 +288,5 @@ uv run --all-extras python -m pytest -k "not RealCases"    # 跳过真实样本
 
 真实样本缺失时相关测试自动 skip（`conftest.case_path`），因此裁剪过
 `cases/` 的检出仍可跑通全部合成测试。
+
+当前 MaterialMap 格式：[单个 region 层级 JSON](docs/equivalence/09-region-materialmap.md)。未知 Z 使用 null，单元仅包含五项物性，已退役逐单元 CSV 与 MaterialMap 元数据旁车。
