@@ -4,6 +4,7 @@
     {
       "case": "designodb-rigidflex",
       "region_count": 45,
+      "physical_region_count": 487,
       "nx": 145,
       "ny": 56,
       "grid_cells": 4262,
@@ -22,6 +23,7 @@
     {
       "case": "designodb-rigidflex.tgz",
       "region_count": 45,
+      "physical_region_count": 487,
       "nx": 145,
       "ny": 56,
       "grid_cells": 4262,
@@ -40,6 +42,7 @@
     {
       "case": "kicad-kitchen-sink",
       "region_count": 78,
+      "physical_region_count": 234,
       "nx": 104,
       "ny": 63,
       "grid_cells": 4217,
@@ -58,6 +61,7 @@
     {
       "case": "kicad-positive/clean/four-layer-drills-mm",
       "region_count": 1,
+      "physical_region_count": 7,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -76,6 +80,7 @@
     {
       "case": "kicad-positive/clean/outline-only-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -94,6 +99,7 @@
     {
       "case": "kicad-positive/clean/pad-shapes-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -112,6 +118,7 @@
     {
       "case": "kicad-positive/clean/through-hole-in",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -130,6 +137,7 @@
     {
       "case": "kicad-positive/clean/through-hole-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -148,6 +156,7 @@
     {
       "case": "kicad-positive/clean/tracks-arcs-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -166,6 +175,7 @@
     {
       "case": "kicad-positive/clean/zone-hole-rotation-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -184,6 +194,7 @@
     {
       "case": "kicad-positive/native/four-layer-drills-mm",
       "region_count": 1,
+      "physical_region_count": 7,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -202,6 +213,7 @@
     {
       "case": "kicad-positive/native/outline-only-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -220,6 +232,7 @@
     {
       "case": "kicad-positive/native/pad-shapes-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -238,6 +251,7 @@
     {
       "case": "kicad-positive/native/through-hole-in",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -256,6 +270,7 @@
     {
       "case": "kicad-positive/native/through-hole-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -274,6 +289,7 @@
     {
       "case": "kicad-positive/native/tracks-arcs-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -292,6 +308,7 @@
     {
       "case": "kicad-positive/native/zone-hole-rotation-mm",
       "region_count": 1,
+      "physical_region_count": 3,
       "nx": 91,
       "ny": 46,
       "grid_cells": 4186,
@@ -310,6 +327,7 @@
     {
       "case": "kicad-video-odb.tgz",
       "region_count": 6,
+      "physical_region_count": 42,
       "nx": 112,
       "ny": 39,
       "grid_cells": 3441,
@@ -328,6 +346,7 @@
     {
       "case": "minimal-test-odb",
       "region_count": 1,
+      "physical_region_count": 2,
       "nx": 72,
       "ny": 58,
       "grid_cells": 4176,

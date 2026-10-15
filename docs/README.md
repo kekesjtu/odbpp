@@ -77,3 +77,5 @@ python tools/fetch_spec.py --verify   # 只校验现有文件
 [接口说明](equivalence/07-intermediate-json.md) 记录字段和物理语义。项目保持唯一当前格式，不做版本协商。
 
 面向解析器开发人员：[中间 JSON 开发指南与完整注释代码](equivalence/08-parser-interface-guide.md)。
+
+等效结果接口：[region 层级 MaterialMap JSON](equivalence/09-region-materialmap.md)，以网格线和行主序五项物性表达完整单元。

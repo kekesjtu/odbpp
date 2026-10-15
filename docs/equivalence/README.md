@@ -1,10 +1,11 @@
 # docs/equivalence/ — 物性等效器文档
 
-数据流第 4-5 段（中间 JSON → `MaterialMap.csv`）与紧随其后的可视化（掩膜 PNG、
+数据流第 4-5 段（中间 JSON → `MaterialMap.json`）与紧随其后的可视化（掩膜 PNG、
 `kx|ky|kz` 热图）的实现说明、默认参数依据、验证结果与已知近似。
 
 | 文档 | 内容 |
 |---|---|
+| [09-region-materialmap.md](09-region-materialmap.md) | 当前正式 MaterialMap：region 层级 JSON、六边界、未知 Z、XY 网格线、行主序五项物性、热图及独立诊断 |
 | [08-parser-interface-guide.md](08-parser-interface-guide.md) | 面向 ODB++ 几何解析器开发人员：接口职责、导出约束、完整 JSON 示例与中文注释版 intermediate.py |
 | [drill-policy-validation.json](drill-policy-validation.json) | 未扣孔介质 JSON、仅介质 DRILL 采样的真实案例前后对照，铜层无 DRILL 参考与几何不变检查 |
 | [06-drill-rasterization.md](06-drill-rasterization.md) | 通孔/盲孔/埋孔、二维孔形、跨度判定、扫描线逻辑及 NPTH/空心孔/背钻的当前简化 |
@@ -13,7 +14,7 @@
 | [architecture-validation.json](architecture-validation.json) | 可重放的基线对比、真实案例几何坐标哈希、逐物性采样误差、运行时间与峰值内存 |
 | [01-material-equivalence.md](01-material-equivalence.md) | 输入契约、矩形化、网格、光栅、材料默认值、等效公式、钻孔规则、输出格式与诊断、合成/真实 case/收敛验证、已知近似 |
 | [02-visualization.md](02-visualization.md) | 等效结果的掩膜 PNG、`kx`/`ky`/`kz` 热图与图例页：命令、语义、色标、内存、失败处理与验证 |
-| [03-case-output-sync.md](03-case-output-sync.md) | `out/` 按 case 同步 JSON/SVG/HTML、MaterialMap CSV/meta、掩膜与热图，及复用/重建规则 |
+| [03-case-output-sync.md](03-case-output-sync.md) | `out/` 按 case 同步 JSON/SVG/HTML、MaterialMap JSON 与独立运行诊断、掩膜与热图，及复用/重建规则 |
 | [04-grid-sizes-and-regions.md](04-grid-sizes-and-regions.md) | 网格尺寸上下限、region 面积诊断图、刚挠/异形板分区统计与重新导出验证 |
 
 相关推导（数学模型来源）：

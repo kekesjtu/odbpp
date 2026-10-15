@@ -1,16 +1,18 @@
+> 当前正式输出已改为单个 region 层级 JSON，字段、行主序和未知 Z 规则见[MaterialMap 当前格式](09-region-materialmap.md)。下文的算法及历史测量继续有效；旧 MaterialMap JSON 字段/旁车描述已由该格式替代。
+
 # 02 · 等效结果的可视化（材料掩膜 PNG 与 kx/ky/kz 热图）
 
 数据流第 5 段之后，为工程师增加的两样**只给人看**的产物：
 
 ```text
-[ 4. 等效器 ] → [ 5. MaterialMap.csv + meta.json ]   ← 数值唯一依据
+[ 4. 等效器 ] → [ 5. MaterialMap.json ]   ← 数值唯一依据
                         │
                         ├──→ masks/<layer>.png      逐层黑白光栅（等效公式实际积分的那张图）
                         └──→ heatmaps/<layer>.png   逐层 kx|ky|kz 三面板热图
                                     ＋ <step>.images.html 图例页
 ```
 
-图像**不是**结论，也不是新的数据源：每个数值仍以 CSV 与 meta 为准。
+图像**不是**结论，也不是新的数据源：每个数值仍以 MaterialMap JSON 与独立运行诊断 为准。
 AGENTS 验证要求第 3 条明确「不得仅凭显示效果判断等效值正确」，因此掩膜与热图
 的用途是**核对几何与场的形态**（图层、走线、过孔、域覆盖、梯度走向），
 收敛性判断仍要靠分辨率扫描与逐层均值。
@@ -22,12 +24,12 @@ AGENTS 验证要求第 3 条明确「不得仅凭显示效果判断等效值正�
 uv run --all-extras python -m odbpp equivalent cases/kicad-kitchen-sink \
     --grid-level standard -o build/ks-eq
 
-# 只要 CSV：关掉全部图像
+# 只要 MaterialMap JSON：关掉全部图像
 uv run --all-extras python -m odbpp equivalent --from-json build/ks/PCB.json \
     --grid-level standard -o build/ks-eq --no-raster-png --no-heatmap --no-gallery
 
-# 只从已写出的 CSV 重画热图（不需要 ODB++ 输入，也不需要重算等效）
-uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
+# 只从已写出的 MaterialMap JSON 重画热图（不需要 ODB++ 输入，也不需要重算等效）
+uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.json \
     -o build/ks-eq/heatmaps --panel-width 900 --shared-scale
 ```
 
@@ -38,7 +40,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 | `--no-heatmap` | 不写 `<out>/heatmaps/*.png` |
 | `--heatmap-panel-width PX` | 单面板宽度（默认 1440；高度按板比例） |
 | `--heatmap-shared-scale` | 所有层共用一条色标（层间可比，单层对比度下降） |
-| `--heatmap-grid` / `heatmap --grid` | 按 CSV 坐标画出存在的单元边界；没有该层的区域不画网格 |
+| `--heatmap-grid` / `heatmap --grid` | 按 MaterialMap JSON 坐标画出存在的单元边界；没有该层的区域不画网格 |
 | `--no-gallery` | 不写图例 HTML |
 | `heatmap --layer NAME` | 只画指定层（可重复） |
 
@@ -46,8 +48,8 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 
 ```text
 <out>/
-  PCB.MaterialMap.csv        数值唯一依据
-  PCB.MaterialMap.meta.json  来源、Z 可信状态、矩形化误差、逐层报告
+  PCB.MaterialMap.json        数值唯一依据
+  diagnostics/run.json  来源、Z 可信状态、矩形化误差、逐层报告
   PCB.images.html            图例页：层名/类型/绝对 Z/k 范围/单元数 + 两类图
   masks/<layer>.png
   heatmaps/<layer>.png
@@ -58,7 +60,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 大小写。图例页仍显示原层名，并分别链接到正确的掩膜和热图。
 
 `odbpp heatmap <csv>` 是同一套渲染函数的另一种入口，输出 `heatmaps/*.png` 与
-`heatmaps/index.html`；`equivalent` 内部也是**重新读取刚写出的 CSV**再渲染，
+`heatmaps/index.html`；`equivalent` 内部也是**重新读取刚写出的 MaterialMap JSON**再渲染，
 所以图像与交付数据不可能分叉。
 
 ## 2. 材料掩膜（黑白 PNG）
@@ -99,7 +101,7 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 窄屏通过横向滚动保留最低阅读宽度，点击可打开原图；材料掩膜可以折叠展开。
 不再生成独立方向图。
 
-- **绘图引擎**：Matplotlib Agg。每个实际 CSV 单元以毫米矩形加入
+- **绘图引擎**：Matplotlib Agg。每个实际 MaterialMap JSON 单元以毫米矩形加入
   `PolyCollection`，三个方向分别读取对应物性列，不再使用手工像素填色或点阵字体。
 - **布局**：独立的层名标题、Z/类型/单元数信息行、三个子图区域和一条底部公共色条。
   布局以物理图幅定义，`--heatmap-panel-width` 只控制输出分辨率。
@@ -108,17 +110,17 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
   默认范围为本层三个方向的联合最小/最大值；`--shared-scale` 使用所选层的联合范围。
   公共色条给出五个刻度和 `W/(m·K)` 单位。均匀层显示单色条、唯一数值及 uniform 标记。
 - **无单元**：浅灰表示该层没有输出单元，图内有独立图例；灰色不会被解释为低热导率。
-- **坐标与比例**：显示毫米坐标和 X/Y 标签，所有面板取相同 CSV 范围、相同等比例轴。
-  完全无任何层单元的位置不会出现在 CSV 范围里，整板范围仍以 JSON/meta 和掩膜为准。
-- **网格**：`--heatmap-grid` 按存在的 CSV 单元绘制细边界；不存在该层的位置不画格线。
+- **坐标与比例**：显示毫米坐标和 X/Y 标签，所有面板取相同 MaterialMap JSON 范围、相同等比例轴。
+  完全无任何层单元的位置不会出现在 MaterialMap JSON 范围里，整板范围仍以 JSON/运行诊断和掩膜为准。
+- **网格**：`--heatmap-grid` 按存在的 MaterialMap JSON 单元绘制细边界；不存在该层的位置不画格线。
   绘图不会聚合、插值或平滑物性，输出分辨率较低时微小单元仍可能看不清。
-- **Z 信息**：绝对 Z 起止值来自 CSV，`?` 与 thickness unknown 明确标识未知厚度。
+- **Z 信息**：绝对 Z 起止值来自 region bounds，null 表示未知；热图不把 null 解释成零厚度。
   层名直接画入图头。系统存在中文字体时优先使用 Microsoft YaHei 或 Noto Sans CJK SC。
 
 ## 4. 实现与依赖
 
 - `src/odbpp/png.py` 负责标准库 PNG 编码；掩膜输出保持既有最近邻逻辑。
-- `src/odbpp/visualize.py` 负责 CSV 读取、Matplotlib Figure/Agg 绘图及图例 HTML。
+- `src/odbpp/visualize.py` 负责 JSON 读取、Matplotlib Figure/Agg 绘图及图例 HTML。
   旧色阶、像素网格映射、Canvas heatmap 绘制和独立方向图逻辑已删除。
 - Matplotlib 为运行时依赖，因为默认 equivalent/heatmap 命令会使用它；
   `uv sync --all-extras` 同步锁文件和开发依赖。
@@ -128,14 +130,14 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 ## 5. 失败与诊断
 
 - 等效致命（矩形化不通过、`grid.cell_without_pixel`、钻孔跨度未知）时
-  **不写任何 CSV，也不写任何 PNG**：掩膜先写成 `<name>.png.tmp`，
+  **不写任何 MaterialMap JSON，也不写任何 PNG**：掩膜先写成 `<name>.png.tmp`，
   整轮成功后统一 `rename`，因此不会留下半张图。
-- 图像渲染失败（磁盘、权限、CSV 结构不符）**不影响交付**：CSV 与 meta 已经写出，
+- 图像渲染失败（磁盘、权限、MaterialMap JSON 结构不符）**不影响交付**：MaterialMap JSON 与独立运行诊断 已经写出，
   CLI 记 `visualize.failed` 警告并继续返回。
-- odbpp heatmap 校验列和数值，逐行读取实际毫米矩形边界。
-  v4 的 region 内网格允许局部区间相互交错，不要求全板同一索引矩阵。
-- 无法解析的数值（空、`NaN`、非正数）在热图里**留空并计数**，
-  CLI 以一行 warning 报出，不会画成一个假的值。
+- odbpp heatmap 校验 region、XY 网格线和固定五项物性数组，按行主序还原实际毫米矩形。
+  全部 region 必须遵守共同的全局笛卡尔栅；同层 region 不能重叠。
+- 无法解析、非有限或非正的物性，以及缺少 / 多余条目均直接拒绝。
+  不跳过错误行，防止后续物性错位。
 
 ## 6. 验证（`tests/test_visualize.py`）
 
@@ -149,23 +151,23 @@ uv run --all-extras python -m odbpp heatmap build/ks-eq/PCB.MaterialMap.csv \
 | 掩膜不欠采样 | 163 × 43 mm、400 × 400 光栅的两个轴各至少 1:1（1509 × 400），比例仍等于板 |
 | 两轴缩放 | `resampled_rows` 顶行在前、两轴独立放大；尺寸为 0 报错 |
 | 间距缺失时 | 只有 `auto_mask_scale`（各向同性整数倍）可用，不假装知道比例 |
-| CSV 读取 | 局部矩形/层序/行数还原；缺列、非数字均拒绝；坏值计数留空 |
+| JSON 读取 | 局部矩形/层序/行数还原；缺字段、非数字均拒绝；错误物性、缺少或多余条目均拒绝，不跳过 |
 | 热图 | 一层一张、三面板由绘图对象的实际包围盒定位，布局无重叠，公共色条对应物性范围 |
 | 热图方向 | 铜在上半 → 图像上半为色标高端（与掩膜同向） |
 | 共享色标 | 单层尺度下全铜层居中；共享尺度下全铜层等于高端 |
 | 覆盖 | 另一层覆盖、本层不覆盖的列画成 `n/a` |
 | 文件名 | `A/B`、`A:B`、`A_B-2` 与只差大小写的层名均不会互相覆盖；掩膜、热图及图例链接一致 |
-| CLI | `equivalent` 生成 masks/heatmaps/gallery，默认材料警告可在 stderr 看到；关图选项不生成；致命轮次不留 PNG/临时文件；`heatmap` 只读 CSV；缺文件退出码 2 |
+| CLI | `equivalent` 生成 masks/heatmaps/gallery，默认材料警告可在 stderr 看到；关图选项不生成；致命轮次不留 PNG/临时文件；`heatmap` 只读 MaterialMap JSON；缺文件退出码 2 |
 
 ## 7. 已知限制
 
-1. 热图只能画 CSV 里存在的单元；完全无层覆盖的区域不出现在图上（掩膜 PNG 兜底）。
+1. 热图只能画 MaterialMap JSON 里存在的单元；完全无层覆盖的区域不出现在图上（掩膜 PNG 兜底）。
 2. 色标是线性、逐层自适应的；跨层比较需显式 `--shared-scale`。
    实测上铜（385）与 FR4（0.3）相隔三个量级，线性色标会把中间段全部压暗，
    因此**层内**看图案用默认逐层尺度，**跨层**看谁导电用 `--shared-scale`，
-   两者都不能代替 CSV 里的数字。
+   两者都不能代替 MaterialMap JSON 里的数字。
 3. 只有 `kx/ky/kz`；密度、比热尚未出图。
-4. 坐标刻度用于定位；精确数值与单元边界仍应配合 CSV 与 SVG 预览核对。
+4. 坐标刻度用于定位；精确数值与单元边界仍应配合 MaterialMap JSON 与 SVG 预览核对。
 5. 图例页与热图 `n/a` 的语义依赖灰度/配色区分，打印成黑白会退化——
    因此 `n/a` 同时写在图例页与文档里，而不是只靠颜色。
 6. 掩膜/热图的分辨率与网格数、光栅数无关（掩膜默认长边约 1400 px，

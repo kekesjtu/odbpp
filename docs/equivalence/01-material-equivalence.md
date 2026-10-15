@@ -1,15 +1,17 @@
+> 当前正式输出已改为单个 region 层级 JSON，字段、行主序和未知 Z 规则见[MaterialMap 当前格式](09-region-materialmap.md)。下文的算法及历史测量继续有效；旧 CSV 字段/旁车描述已由该格式替代。
+
 # MaterialMap 当前接口与物性模型
 
 当前实现以 [内接架构说明](05-inscribed-architecture.md) 为准。
 解析器输出一个物理 step 的[当前中间 JSON](07-intermediate-json.md)；等效器输出
-odbpp/materialmap-5 CSV/meta。JSON 是两个模块之间唯一的数据接口。
+region 层级 MaterialMap JSON。JSON 是两个模块之间唯一的数据接口。
 
 ## 完整实体单元
 
 region 是内接二维矩形加所属物理层完整绝对 Z 区间的三维几何块。
 物性网格完全位于单个 region 内，所有 region 边界传播为全局笛卡尔轴线，常规档位依据
 板型与图案尺度给出物理尺寸；专家可控制上下限。逐层实体存在性在几何规划时确定；不会生成部分覆盖单元。
-domain_area_mm2=cell_area_mm2、domain_coverage=1、partial_domain=false。
+内部检查保持 domain_area_mm2=cell_area_mm2、domain_coverage=1、partial_domain=false；这些统计不再写入正式 MaterialMap。
 密度和比热作用于完整单元体积，禁止按覆盖率缩减质量。
 
 ## 材料统计与公式
@@ -37,9 +39,9 @@ W/(m·K)、kg/m³、J/(kg·K)。使用默认值警告且记录来源；
     uv run --all-extras odbpp equivalent --from-json out/<case>/<step>.json --grid-level standard -o out/<case>
 
 geometry 不读取光栅配置。采样不足提示提高分辨率，不改变坐标。
-旧 --rectify-tolerance 和覆盖率质量语义已退役。CSV 的实际毫米边界是
+旧 --rectify-tolerance 和覆盖率质量语义已退役。JSON 网格线还原的实际毫米边界是
 全局单元几何；x_lines/y_lines 为共同的完整轴线集合。
-厚度缺失时保留 best-effort Z、thickness_known=false 和来源。
+中间 JSON / 运行诊断保留 best-effort Z、可信标记和来源；正式 MaterialMap 的未知 Z 使用 null。
 
 完整算法、默认预算、诊断与限制见 [05](05-inscribed-architecture.md)。
 真实案例重导出、前后性能与收敛证据见

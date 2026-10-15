@@ -140,5 +140,5 @@ region 是用于近似 PCB 板型的最小三维几何建模块；物性网格�
 5. 官方规范中的 `.layer_dielectric` 仅用于非铜层：DIELECTRIC、SOLDERMASK、SOLDER PASTE。
 6. 优质 `cases/` 应符合官方文件规范。
 7. 使用中文回复用户。
-8. JSON 与 SVG/HTML 预览中，板内且有实体的层必须给出绝对 Z 起止（mm，自叠层顶面向下）；厚度数据缺失时给出 best-effort 位置并显式标记 `thickness_known=false`，不得静默当作实测值。
+8. 中间 JSON 与 SVG/HTML 预览中，板内且有实体的层必须给出绝对 Z 起止（mm，自叠层顶面向下）；厚度数据缺失时给出 best-effort 位置并显式标记 `thickness_known=false`，不得静默当作实测值。
 9. 英制 `.copper_weight` 按内置默认铜密度 8.96 g/cm³ 换算厚度，用于绝对 Z；输出需记录 `thickness_source` 与 `assumed_density_g_cm3`，且保留 `kind`/`unit` 以区分物理量。

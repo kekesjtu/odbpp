@@ -1,3 +1,5 @@
+> 当前正式输出已改为单个 region 层级 JSON，字段、行主序和未知 Z 规则见[MaterialMap 当前格式](09-region-materialmap.md)。下文的算法及历史测量继续有效；旧 CSV 字段/旁车描述已由该格式替代。
+
 # 04 · v3 单元尺寸约束修复的历史记录（2026-09-30）
 
 以下是 materialmap-3 的历史测量，不是当前架构。其像素驱动矩形化、
@@ -27,7 +29,7 @@ ceil(L/max) ≤ n ≤ floor(L/min)
 对极小尺寸输入先检查像素容量，避免尝试创建超大网格。
 
 meta 升级为 `odbpp/materialmap-3`，记录 `size_constraints_mm`、
-`actual_edge_range_mm` 和实际网格线。CSV 列布局保持不变，热图仍直接读取 CSV。
+`actual_edge_range_mm` 和实际网格线。MaterialMap JSON 从这些网格线还原单元，热图直接读取该 JSON。
 复用缓存时必须匹配新 schema 与各轴上下限；旧结果不能误复用。
 
 ## region 分区图与统计
@@ -73,7 +75,7 @@ meta 升级为 `odbpp/materialmap-3`，记录 `size_constraints_mm`、
 | KiCad native/clean 14 个小板 | 4×2 | 5 | 5 |
 
 生成 67556 行物性数据、81 张掩膜、81 张逐层三方向热图。
-逐行检查尺寸上下限（CSV 坐标保留四位小数，比较采用 0.0001 mm 容差）、
+逐行检查尺寸上下限（历史 CSV 对照采用对应坐标舍入容差；当前 JSON 保存实际轴线）、
 有限正数及材料范围；meta 的未舍入网格边长符合上下限。
 272 个文件链接全部有效。刚挠板 `DIELECTRIC_3` 热图的中央区域已出现纵向格线。
 
