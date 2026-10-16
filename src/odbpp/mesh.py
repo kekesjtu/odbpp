@@ -1,7 +1,6 @@
 """Geometry-only mesh presets and downstream raster capacity planning."""
 from dataclasses import replace
 import math
-from .grid import size_pair
 
 MIN_SAMPLES_PER_AXIS = 8
 DEFAULT_RASTER_LONG_SIDE = 4096

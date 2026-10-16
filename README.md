@@ -207,7 +207,7 @@ for layer in step.layers:
 | **`grid.py`** | **整板网格**：region 边界强制格线，按单元尺寸上下限独立细分各强制区间 |
 | **`raster.py`** | **光栅化**：region 边界扫描线 + even-odd 像素中心判定；`LayerMask` 同时供等效与掩膜 PNG 使用 |
 | **`materials.py`** | **两相材料**：铜/基底默认值（带来源）、逐层 > 全局 > 默认的优先级与警告 |
-| **`png.py`** | **图像编码**：零依赖的 8 位灰度/RGB PNG 写入器 + RGB 画布 + 5×7 点阵字体 |
+| **`png.py`** | **图像编码**：零依赖的 8 位灰度/RGB PNG 写入器；热图布局与文字由 Matplotlib 渲染 |
 | **`visualize.py`** | **等效结果可视化**：掩膜 PNG、`kx`/`ky`/`kz` 热图、图例页，并从已写出的 MaterialMap JSON 读取 |
 | **`equiv.py`** | **物性等效（数据流 4-5）**：逐层光栅 + 钻孔覆盖 + 串并联公式，按层缓冲输出 region JSON |
 | `cli.py` | `python -m odbpp` 子命令 |

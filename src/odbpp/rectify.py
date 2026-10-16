@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
+from typing import Optional
 
 from .clipper import Region, Ring, union
 from .diagnostics import RECTIFY_AREA_ERROR, RECTIFY_EMPTY_PROFILE, Diagnostics

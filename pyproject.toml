@@ -23,10 +23,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Validation/topology helpers used by the tests and tools, not by the pipeline
-# itself; the parser and the exporter no longer depend on them at runtime.
-geometry = ["shapely>=2.0", "numpy>=1.26"]
-parse = ["lxml>=5.0"]
 tools = [
     "pypdf>=4.0",
 ]

@@ -21,10 +21,6 @@ from odbpp.equiv import EquivalenceOptions, equivalence_from_document, write_mat
 from odbpp.grid import GridOptions
 from odbpp.materials import MaterialBook
 from odbpp.png import (
-    FONT_HEIGHT,
-    Canvas,
-    draw_text,
-    text_width,
     write_greyscale_png,
     write_rgb_png,
 )
@@ -135,7 +131,6 @@ def run(document_dict, *, px=4, py=4, max_cell_mm=None, mask_sink=None):
                          max_cell_mm=max_cell_mm or (10/px, 10/py)),
         materials=MaterialBook(),
         rectify=RectifyOptions(tolerance_mm=0.01),
-        warn_partial_domains=False,
     )
     return equivalence_from_document(document_dict, options,
                                      diagnostics=Diagnostics(),
@@ -143,7 +138,7 @@ def run(document_dict, *, px=4, py=4, max_cell_mm=None, mask_sink=None):
 
 
 # ---------------------------------------------------------------------------
-# PNG encoder and canvas
+# PNG encoder
 # ---------------------------------------------------------------------------
 
 class TestPngWriter:
@@ -174,48 +169,6 @@ class TestPngWriter:
     def test_zero_sized_images_are_refused(self, tmp_path):
         with pytest.raises(ValueError):
             write_rgb_png(str(tmp_path / "bad.png"), 0, 1, [])
-
-
-class TestCanvas:
-    def test_rect_and_blit_row_compose_the_expected_pixels(self, tmp_path):
-        canvas = Canvas(4, 2, (255, 255, 255))
-        canvas.rect(1, 0, 3, 1, (10, 20, 30))
-        canvas.blit_row(1, 2, bytes((1, 2, 3, 4, 5, 6)))
-        path = tmp_path / "canvas.png"
-        canvas.save(str(path))
-        _, _, colour, rows = decode_png(path)
-        assert colour == 2
-        assert [rgb(rows, x, 0) for x in range(4)] == [
-            (255, 255, 255), (10, 20, 30), (10, 20, 30), (255, 255, 255)]
-        assert [rgb(rows, x, 1) for x in range(4)] == [
-            (255, 255, 255), (255, 255, 255), (1, 2, 3), (4, 5, 6)]
-
-    def test_frame_is_one_pixel_and_rect_is_clipped(self, tmp_path):
-        canvas = Canvas(5, 4, (0, 0, 0))
-        canvas.frame(1, 1, 4, 3, (9, 9, 9))
-        canvas.rect(-5, -5, 100, 100, (7, 7, 7))  # fully outside except clipped
-        path = tmp_path / "frame.png"
-        canvas.save(str(path))
-        _, _, _, rows = decode_png(path)
-        assert rgb(rows, 1, 1) == (7, 7, 7)
-        assert rgb(rows, 0, 0) == (7, 7, 7)  # the big rect overrode everything
-
-    def test_text_draws_ink_and_unknown_characters_stay_visible(self, tmp_path):
-        canvas = Canvas(text_width("12.3", 2) + 8, FONT_HEIGHT * 2 + 4,
-                        (255, 255, 255))
-        draw_text(canvas, 2, 2, "12.3", (0, 0, 0), 2)
-        draw_text(canvas, 2, FONT_HEIGHT * 2 + 1, "\u4e2d", (0, 0, 0), 1)
-        path = tmp_path / "text.png"
-        canvas.save(str(path))
-        _, _, _, rows = decode_png(path)
-        assert colour_counts(rows, (0, 0, 0)) > 40
-        # The tofu box for an unsupported character is a hollow rectangle.
-        assert rgb(rows, 3, FONT_HEIGHT * 2 + 1) == (0, 0, 0)
-
-    def test_text_width_accounts_for_the_trailing_gap(self):
-        assert text_width("", 2) == 0
-        assert text_width("1", 1) == 5
-        assert text_width("12", 2) == 2 * 6 * 2 - 2
 
 
 # ---------------------------------------------------------------------------

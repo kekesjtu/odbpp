@@ -6,10 +6,9 @@ as few equal cells as its maximum size permits, provided the minimum size holds.
 
 from __future__ import annotations
 
-from bisect import bisect_right
 import math
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Sequence
+from typing import Optional, Sequence
 
 from .diagnostics import (
     GRID_SIZE_INCOMPATIBLE,

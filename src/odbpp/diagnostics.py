@@ -205,7 +205,6 @@ GRID_CELL_WITHOUT_PIXEL = "grid.cell_without_pixel"
 EQUIV_LAYER_FAILED = "equiv.layer_failed"
 EQUIV_LAYER_SKIPPED = "equiv.layer_skipped"
 EQUIV_MISSING_DOMAIN = "equiv.missing_domain"
-EQUIV_DIELECTRIC_FEATURES = "equiv.dielectric_features_ignored"
 EQUIV_DRILL_SPAN_UNKNOWN = "equiv.drill_span_unknown"
 #: A drill had no copper-plane span in the document, so it was matched to a
 #: layer by absolute Z alone (safe only when the layer thickness is known).
@@ -214,7 +213,6 @@ EQUIV_DRILL_Z_FALLBACK = "equiv.drill_match_z_fallback"
 #: Topology is authoritative; the disagreement signals an unreliable best-effort Z.
 EQUIV_DRILL_Z_MISMATCH = "equiv.drill_z_mismatch"
 EQUIV_LAYER_Z_UNKNOWN = "equiv.layer_z_unknown"
-EQUIV_PARTIAL_DOMAIN = "equiv.partial_domain"
 EQUIV_LAYER_EMPTY = "equiv.layer_empty"
 
 # Materials (AGENTS 等效器输入与材料规则 4-5).

@@ -489,10 +489,6 @@ def _polarity(token: Token, *, path: Optional[str], line_no: int, line: str) -> 
     )
 
 
-def _yn(token: Token) -> bool:
-    return token.text.strip().upper().startswith("Y")
-
-
 def _parse_orientation(
     tokens: list[Token],
     pos: int,

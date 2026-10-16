@@ -54,7 +54,8 @@ def test_material_branch_uses_no_complex_booleans(monkeypatch):
     import odbpp.equiv as module
     def forbidden(*args): raise AssertionError("material boolean")
     for name in ("union","difference","intersection"):
-        monkeypatch.setattr(module,name,forbidden)
+        # Guard future module-level calls without requiring unused imports.
+        monkeypatch.setattr(module,name,forbidden,raising=False)
     d=build_document(layers=[{"name":"CU","type":"SIGNAL","polygons":[
            rect(0,0,10,10),hole(2,2,8,8),rect(4,4,6,6)]}])
     r=equivalence_from_document(d,EquivalenceOptions(GridOptions(200,200)))

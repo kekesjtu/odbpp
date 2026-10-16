@@ -91,13 +91,12 @@ def drill_document(**kwargs):
 
 
 def run(document, *, px=10, py=10, max_cell_mm=None, tolerance=0.01,
-        materials=None, diagnostics=None, warn_partial=False):
+        materials=None, diagnostics=None):
     options = EquivalenceOptions(
         grid=GridOptions(px=px, py=py, min_cell_mm=0.001,
                          max_cell_mm=max_cell_mm or (10/px, 10/py)),
         materials=materials or MaterialBook(diagnostics=diagnostics),
         rectify=RectifyOptions(tolerance_mm=tolerance),
-        warn_partial_domains=warn_partial,
     )
     return equivalence_from_document(document, options, diagnostics=diagnostics)
 
@@ -210,7 +209,7 @@ class TestPixelSampling:
 class TestPartialDomain:
     def test_a_partial_cell_reports_coverage_instead_of_a_full_cell(self):
         # The shared grid cell is the whole 10x10 board, but the layer's own
-        # computational domain covers only the left half.  The CSV must not
+        # computational domain covers only the left half.  The result must not
         # imply the cell is solid FR4 over its full area.
         domains = [
             {"id": "step_profile", "source": "step_profile",              "polygons": [rect(0, 0, 10, 10)]},
@@ -221,7 +220,7 @@ class TestPartialDomain:
              "polygons": []}])
         diagnostics = Diagnostics()
         result = run(document, px=10, py=10, max_cell_mm=10,
-                     diagnostics=diagnostics, warn_partial=True)
+                     diagnostics=diagnostics)
         cell = result.cells[0]
         assert cell.x0 == 0.0 and cell.x1 == pytest.approx(5.0)
         assert cell.cell_area_mm2 == pytest.approx(50.0)
@@ -230,7 +229,7 @@ class TestPartialDomain:
         assert cell.partial_domain is False
         assert "equiv.partial_domain" not in diagnostics.codes()
 
-    def test_partial_coverage_is_warned_by_default(self):
+    def test_layer_domain_produces_complete_cells_with_default_options(self):
         domains = [
             {"id": "step_profile", "source": "step_profile",              "polygons": [rect(0, 0, 10, 10)]},
             {"id": "half", "source": "layer_profile", "polygons": [rect(0, 0, 5, 10)]},
@@ -244,8 +243,9 @@ class TestPartialDomain:
             materials=MaterialBook(diagnostics=diagnostics),
             rectify=RectifyOptions(tolerance_mm=0.01),
         )
-        assert options.warn_partial_domains is True
-        equivalence_from_document(document, options, diagnostics=diagnostics)
+        result = equivalence_from_document(document, options, diagnostics=diagnostics)
+        assert not result.fatal and result.cells
+        assert all(c.x1 <= 5.0 and c.domain_coverage == 1.0 for c in result.cells)
         assert "equiv.partial_domain" not in diagnostics.codes()
 
     def test_a_fully_covered_cell_has_unit_coverage(self):

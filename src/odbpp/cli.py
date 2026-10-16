@@ -575,7 +575,6 @@ def _run_equivalent(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         unique_image_stem,
         write_gallery_html,
         write_layer_mask,
-        z_text,
     )
 
     # --- the intermediate document (the only interface the equivalence has) --

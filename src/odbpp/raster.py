@@ -112,15 +112,6 @@ class RasterAxis:
                 "count": self.count}
 
 
-def fill_row(spans: Iterable[tuple[float, float]], axis: RasterAxis,
-             row: bytearray) -> None:
-    """Set the bytes of *row* whose pixel centres fall inside *spans*."""
-    for span in spans:
-        a0, a1 = span_to_pixels(span, axis)
-        if a1 > a0:
-            row[a0:a1] = b"\x01" * (a1 - a0)
-
-
 class LayerMask:
     """One layer's black/white raster at the base pixel resolution.
 

@@ -188,7 +188,6 @@ class LayerPreview:
         """Interpreted ``.layer_dielectric`` as a :class:`~odbpp.stackup.Thickness`."""
         if self.stackup is None:
             return None
-        from .stackup import Thickness  # noqa: F401 - documents the return type
         return self.stackup.thickness(self.layer)
 
     def copper_weight(self):

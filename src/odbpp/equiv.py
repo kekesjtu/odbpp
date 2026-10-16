@@ -4,13 +4,11 @@ Properties apply to complete cells and complete physical layer Z intervals.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
 
-from .clipper import Region, Ring, difference, intersection, union, region_from_rings
+from .clipper import Region, region_from_rings
 from .diagnostics import (
-    EQUIV_DIELECTRIC_FEATURES,
     EQUIV_DRILL_SPAN_UNKNOWN,
     EQUIV_DRILL_Z_FALLBACK,
     EQUIV_DRILL_Z_MISMATCH,
@@ -19,7 +17,6 @@ from .diagnostics import (
     EQUIV_LAYER_SKIPPED,
     EQUIV_LAYER_Z_UNKNOWN,
     EQUIV_MISSING_DOMAIN,
-    EQUIV_PARTIAL_DOMAIN,
     GRID_CELL_WITHOUT_PIXEL,
     Diagnostics,
 )
@@ -84,9 +81,6 @@ class EquivalenceOptions:
     grid: GridOptions
     materials: MaterialBook = field(default_factory=MaterialBook)
     rectify: RectifyOptions = field(default_factory=RectifyOptions)
-    #: Emit a warning for partially covered cells (on by default; a run that
-    #: silently drops board-outside area is worse than one noisy line).
-    warn_partial_domains: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,11 +240,6 @@ def _r(value: float, digits: int = 4) -> float:
     return 0.0 if out == 0.0 else out
 
 
-def _series(phi: float, k1: float, k2: float) -> float:
-    """Series conductivity of a row/column with black fraction *phi*."""
-    return 1.0 / (phi / k1 + (1.0 - phi) / k2)
-
-
 def _region_from_polygons(polygons: Sequence[Mapping[str, Any]]) -> Region:
     rings: list[tuple[Sequence[tuple[float, float]], bool]] = []
     for polygon in polygons or ():
@@ -259,8 +248,7 @@ def _region_from_polygons(polygons: Sequence[Mapping[str, Any]]) -> Region:
     return region_from_rings(rings)
 
 
-def rectify_step_outline(step: Mapping[str, Any], px: int, py: int,
-                         options: RectifyOptions, *,
+def rectify_step_outline(step: Mapping[str, Any], options: RectifyOptions, *,
                          diagnostics: Optional[Diagnostics] = None) -> RectifyResult:
     """Prepare the same outline for equivalence and batch grid planning."""
     step_domain = _domain_index(step).get(step.get("profile_domain_id"))
@@ -456,9 +444,9 @@ def _merge_spans(spans):
     return out
 
 
-def _evaluate_layer(name, type_name, domain, black, drill_names, z_start, z_end,
+def _evaluate_layer(name, type_name, domain, black, z_start, z_end,
                     thickness_known, materials, grid, x_axis, y_axis, diagnostics,
-                    emit, *, warn_partial, mask=None, step_domain=None,
+                    emit, *, mask=None, step_domain=None,
                     sampling_plan=None):
     """Independent full-board scanlines; integrate complete Cartesian cells."""
     import numpy as np
@@ -541,7 +529,7 @@ def plan_geometry(step, options, diagnostics):
     """Common physical XY partition and explicit layer-domain membership, no pixels."""
     from shapely.geometry import box
     from shapely.ops import unary_union
-    rectification=rectify_step_outline(step,0,0,options.rectify,diagnostics=diagnostics)
+    rectification=rectify_step_outline(step,options.rectify,diagnostics=diagnostics)
     domains=_domain_index(step)
     profile_id=step.get("profile_domain_id")
     ids={row.get("domain_id") for row in step.get("layers",[])
@@ -847,11 +835,10 @@ def equivalence_from_document(
         domain_grid, sampling_plan = domain_sampling[domain_id]
         mask = LayerMask(px, py) if mask_sink is not None else None
         cell_count, partial, no_pixel = _evaluate_layer(
-            name, type_name, domain, black, report.drill_overlays,
+            name, type_name, domain, black,
             z_start, z_end, thickness_known, materials,
             domain_grid,
             x_axis, y_axis, diags, emit,
-            warn_partial=options.warn_partial_domains,
             mask=mask,
             step_domain=step_domain,
             sampling_plan=sampling_plan,
