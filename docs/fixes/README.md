@@ -2,9 +2,10 @@
 
 这里记录已确认问题的根因、修改和验证结果，文件从 `01` 连续编号。
 原始问题及复审证据见 [`../reviews/`](../reviews/README.md)，其编号独立。
-旧修复记录中的 `tools/review_*.py`、`tools/benchmark_export.py` 是当时的
+旧修复记录中的 `tools/review_*.py`、`tools/validate_*.py`、`tools/benchmark_export.py` 是当时的
 一次性审阅/性能测量命令，脚本已退役；
-当前验证以 `tests/` 和 `tools/sync_out.py` 为准。
+历史脚本可从对应 Git 提交读取，验证报告继续保留；
+当前验证以 `tests/`、`tools/sync_out.py` 和 `tools/audit_out.py` 为准。
 
 | 修复 | 对应审阅 | 内容 |
 |---|---|---|
@@ -26,3 +27,4 @@
 | [16 移除根 diagnostics](16-remove-root-diagnostics.md) | 用户明确精简接口 | 中间 JSON 不携带根诊断，保留内部诊断及逐层失败语义，同步注释代码与全部案例 |
 | [17 Region MaterialMap JSON](17-region-materialmap.md) | 用户确认的输出格式精简 | 单个层级 JSON、未知 Z、行主序物性、严格读取与热图、全案例对照 |
 | [18 DRILL 深度推导](18-drill-derived-z.md) | 用户要求删除冗余字段 | DRILL 不导出 Z，由 copper_span 端点铜层推导，铜层自身 Z 保留 |
+| [19 项目清理](19-project-cleanup.md) | 用户要求清理过程文件、死代码与临时脚本 | 移除旧画布与闲置依赖、退役阶段脚本、保留独立输出审计并清除历史临时产物 |

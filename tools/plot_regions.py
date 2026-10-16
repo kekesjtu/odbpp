@@ -13,7 +13,6 @@ from pathlib import Path
 import statistics
 import xml.etree.ElementTree as ET
 
-from odbpp.equiv import rectify_step_outline
 from odbpp.rectify import Rect, RectifyOptions
 
 

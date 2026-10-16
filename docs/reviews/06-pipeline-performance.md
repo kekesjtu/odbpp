@@ -118,3 +118,6 @@ uv run --all-extras python tools/validate_performance_sampling.py --baseline-ref
 清理限制：执行策略拒绝了临时目录的递归清理和三个已知临时脚本的逐文件删除，
 仅返回 `blocked by policy`，未提供具体原因。重复基准产物、源码快照及脚本仍保留在
 Git 忽略的 `build/performance-*` 与 `build/` 中；报告和正式案例输出均已独立保存。
+
+2026-10-16 后续清理：上述基线副本、重复产物和临时脚本已删除，报告与正式输出保留。
+清理范围和回归结果见 [19 项目清理](../fixes/19-project-cleanup.md)。

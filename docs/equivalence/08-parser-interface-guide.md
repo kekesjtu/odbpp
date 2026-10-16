@@ -426,7 +426,7 @@ uv run --all-extras python -c "from odbpp.intermediate import write_schema; writ
 uv run --all-extras python -m pytest tests/test_intermediate.py tests/test_export.py tests/test_kicad_positive_cases.py tests/test_drill_policy.py
 # 接口或几何输出发生变化时，再重导出真实案例并核查等效结果：
 uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid
-uv run --all-extras python tools/validate_architecture.py --audit-out
+uv run --all-extras python tools/audit_out.py
 ```
 
 交付前逐项确认：毫米数字与原点一致；岛 / 孔已规整；每个物理层有独立可引用计算域；介质 JSON 未扣 DRILL；铜层未被 DRILL 改写；真实 profile 孔洞保留；Z 与厚度来源明确；必要跨度已解算；完整层目录及失败原因未隐藏。

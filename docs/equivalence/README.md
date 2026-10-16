@@ -28,6 +28,10 @@
 当前中间格式：[07 中间 JSON 与 Pydantic 边界](07-intermediate-json.md)，
 文本定义：[intermediate.schema](../intermediate.schema)。
 
+当前维护工具见 [tools/README.md](../../tools/README.md)。阶段迁移的 `validate_*.py`
+脚本已退役，表内 JSON 报告作为历史证据保留；持续回归使用 pytest，最终产物核查使用
+`uv run --all-extras python tools/audit_out.py`。
+
 解析审计字段移除验证：[remove-parse-info-validation.json](remove-parse-info-validation.json)。
 
 根诊断移除验证：[remove-root-diagnostics-validation.json](remove-root-diagnostics-validation.json)。

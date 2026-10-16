@@ -105,9 +105,12 @@ JSON Schema 可描述类型和基本范围；Python 自定义校验器中的跨�
 JSON Schema，以上语义及 tests/test_intermediate.py 同时维护。
 Pydantic 模型不用于阶段内任意可变状态，也不使用跳过验证的构造来接收外部文件。
 
-真实案例前后对照工具为 `tools/validate_intermediate.py`，报告见
+真实案例前后对照使用过一次性工具 `tools/validate_intermediate.py`，报告见
 `intermediate-validation.json`。独立进程比较原始浮点物性、CSV、掩膜、region/网格坐标，
 并分开记录 export/import 时间、JSON 大小与峰值内存。全案例最终结果使用 sync_out 更新。
 
 DRILL 作用域变更单独以 `tools/validate_drill_policy.py` 对照基线 `9db11c7`，
 记录于 `drill-policy-validation.json`；先前接口精简的历史对照不作为新材料规则的物性相等要求。
+
+上述阶段迁移脚本已退役，验证报告保留；当前验证入口为 pytest、
+`tools/sync_out.py` 和 `tools/audit_out.py`。历史脚本可从对应 Git 提交读取。

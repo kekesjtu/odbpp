@@ -112,18 +112,14 @@ def worker(args):
             mask_sink=sink))
         durations["masks"] = mask_time
         durations["equivalent"] = durations.pop("equivalent_and_masks") - mask_time
-        csv = output / (source.stem + ".MaterialMap.json")
-        timed("csv", lambda: write_materialmap(result, str(csv)))
+        materialmap = output / (source.stem + ".MaterialMap.json")
+        timed("materialmap", lambda: write_materialmap(result, str(materialmap)))
         meta = output / "diagnostics" / "run.json"
         meta.parent.mkdir(exist_ok=True)
-        from odbpp import equiv as equiv_module
-        if hasattr(equiv_module, "write_run_report"):
-            equiv_module.write_run_report(result, str(meta), source_path=str(source))
-        else:
-            # A historical isolated baseline owns its former diagnostics layout.
-            meta.write_text(json.dumps(result.metadata(),indent=1)+"\n",encoding="utf-8")
-        images = timed("heatmaps", lambda: render_heatmaps(str(csv), str(output / "heatmaps")))
-        artefacts.extend([csv, meta] + [Path(image.path) for image in images.images])
+        from odbpp.equiv import write_run_report
+        write_run_report(result, str(meta), source_path=str(source))
+        images = timed("heatmaps", lambda: render_heatmaps(str(materialmap), str(output / "heatmaps")))
+        artefacts.extend([materialmap, meta] + [Path(image.path) for image in images.images])
         record.update(fatal=result.fatal, regions=len(result.rectification.rectangles),
                       cells=result.cell_count, raster=[result.raster_px, result.raster_py])
     record["peak_memory_bytes"] = peak_memory_bytes()

@@ -120,10 +120,9 @@ uv run --all-extras odbpp heatmap out/<case>/<step>.MaterialMap.json --grid
 uv sync --all-extras
 uv run --all-extras python -m pytest
 uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid
-uv run --all-extras python tools/validate_architecture.py --audit-out
-uv run --all-extras python tools/validate_materialmap.py --baseline-ref 51c268b
+uv run --all-extras python tools/audit_out.py
 ```
 
 格式迁移的逐案例归一化对照、独立进程原始物性 / 掩膜 / 几何对照和最终全输出核查分别记录于 `materialmap-format-validation.json`、`materialmap-process-validation.json`、`output-validation.json`。历史 CSV 修复记录保留，当前字段定义以本文与 `materialmap.py` 为准。
 
-DRILL 后续不再导出可推导的 Z。为继续复现旧 CSV 基线，`validate_materialmap.py` 仅在隔离的历史读取器测试输入中，由端点铜层重建旧字段；当前解析器、等效器及正式 JSON 不包含该兼容路径。
+DRILL 不再导出可推导的 Z。格式迁移时的一次性 `validate_materialmap.py` 已退役，原始验证报告继续保留；需要复核历史过程时从对应 Git 提交读取脚本，当前回归使用 pytest 与 `tools/audit_out.py`。
