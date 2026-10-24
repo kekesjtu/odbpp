@@ -57,4 +57,6 @@ external/             只读参考项目
 out/                  按 case 存放最终结果
 ```
 
+`cases/` 整目录不纳入 Git，已有本地样本保留。使用真实案例的命令前需自行准备输入；缺少本地样本时，相关 pytest 测试跳过，`tests/fixtures/` 中的合成样本仍随源码提供。
+
 完整边界、参数、输出发布和分发设计见 [独立 CLI 文档](docs/equivalence/10-independent-clis.md)。物理方法见 [等效器说明](docs/equivalence/01-material-equivalence.md)、[MaterialMap](docs/equivalence/09-region-materialmap.md)，模型字段见 [接口说明](docs/equivalence/07-intermediate-json.md)。维护命令见 [tools/README.md](tools/README.md)。旧 `odbpp` 命令和根 `src/odbpp` 已移除。

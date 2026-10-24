@@ -47,12 +47,13 @@ git add -f docs/ODB++_Format_User_Guide.pdf
 
 ### 重新获取与校验
 
-```bash
-python tools/fetch_spec.py            # 下载到 docs/ 并校验 MD5
-python tools/fetch_spec.py --verify   # 只校验现有文件
+从上表的官方下载地址获取 PDF，保存到 `docs/ODB++_Format_User_Guide.pdf`，再核对摘要：
+
+```powershell
+Get-FileHash -LiteralPath docs/ODB++_Format_User_Guide.pdf -Algorithm MD5
 ```
 
-脚本会校验 MD5；若不是上表中的值，说明官方已更新规范，
+若 MD5 不是上表中的值，应先确认文件来源及规范修订情况，
 **必须重新走一遍调研**（单位制、符号表、层子类型都可能变动）。
 
 ## `docs/research/`
@@ -72,8 +73,8 @@ python tools/fetch_spec.py --verify   # 只校验现有文件
 ## 本项目对规范的引用约定
 
 文档与代码中引用规范时，一律使用 `p.<PDF 页码>`，例如
-「单位双轨制见 p.36 / p.166」。这些页码可通过
-`python tools/extract_spec_text.py --page 36 36` 直接复核。
+「单位双轨制见 p.36 / p.166」。使用本地 PDF 阅读器直接跳转到相应 PDF 页码复核。
+原规范下载、PDF 文本提取和案例普查脚本已退役，历史实现保留在 Git 历史中。
 
 ## 当前中间 JSON
 

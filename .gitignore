@@ -3,6 +3,9 @@ build/
 .tmp_research/
 out/
 
+# Local PCB samples and their auxiliary files are not distributed with source.
+/cases/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -25,12 +28,7 @@ Thumbs.db
 # See "external/README.md" for the fetch commands.
 external/*/
 
-# ODB++ sidecar checksums (`.features.sum`, `.profile.sum`, ...) emitted by some CAM
-# tools. Deliberately NOT ignored globally: when a case ships them they are part of
-# the sample and must be preserved byte-for-byte. Only derived copies are ignored.
-out/**/*.sum
-
 # Vendor specification PDF: 7.9 MB binary, Siemens copyright. Kept in the working
-# tree but not versioned; re-fetch and verify with `python tools/fetch_spec.py`.
+# tree but not versioned; source and checksum are documented in docs/README.md.
 docs/ODB++_Format_User_Guide.pdf
 docs/*.pdf

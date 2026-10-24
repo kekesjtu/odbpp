@@ -1,3 +1,0 @@
-# KiCad CLI creates these disposable sidecars next to a standalone board.
-sources/*.kicad_pro
-sources/*.kicad_prl

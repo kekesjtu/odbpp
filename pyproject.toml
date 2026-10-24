@@ -6,7 +6,6 @@ requires-python = ">=3.10"
 dependencies = ["pcbkit", "pcbeq"]
 
 [project.optional-dependencies]
-tools = ["pypdf>=4.0"]
 test = ["pytest>=8.0"]
 
 [tool.uv]

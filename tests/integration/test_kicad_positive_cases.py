@@ -1,6 +1,6 @@
 """Independent, design-derived assertions for the small KiCad 10 ODB++ set.
 
-Ordinary pytest reads committed ZIPs; neither KiCad nor pcbnew is required.
+Ordinary pytest reads local ZIPs; neither KiCad nor pcbnew is required.
 Negative polarity, layer profiles, and recursive symbols remain in handwritten
 fixtures because KiCad does not produce them for these boards.
 """
@@ -25,6 +25,14 @@ EXPORTS = (
     "four-layer-drills-mm",
 )
 BOARD_BOUNDS = (0.0, -10.0, 20.0, 0.0)  # KiCad Y-down -> ODB++ Y-up
+
+
+@pytest.fixture(autouse=True)
+def require_local_case_suite():
+    missing = [f"{group}/{case}.zip" for group in ("native", "clean") for case in EXPORTS
+               if not (ROOT / group / f"{case}.zip").is_file()]
+    if missing:
+        pytest.skip("local KiCad cases are not available: " + ", ".join(missing))
 
 
 def load(case: str, group: str = "clean"):

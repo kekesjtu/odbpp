@@ -4,8 +4,7 @@
 parser 当前采取的读法与验证状态。目的是：任何一条结论被后续数据推翻时，都能
 立即定位到「哪一行代码按哪个假设写的」。
 
-页码一律引用 `docs/ODB++_Format_User_Guide.pdf`（Release 8.1 Update 4），可用
-`python tools/extract_spec_text.py --page <n> <n>` 复核。
+页码一律引用 `docs/ODB++_Format_User_Guide.pdf`（Release 8.1 Update 4），可在本地 PDF 阅读器中直接跳转复核。
 
 状态标记：
 

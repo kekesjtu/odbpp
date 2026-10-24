@@ -19,21 +19,11 @@ Release 8.1 Update 4, Siemens, 2024-07-16）为**唯一权威依据**。
 问题审阅与性能测量已移至 [`../reviews/`](../reviews/README.md)，修复记录已移至
 [`../fixes/`](../fixes/README.md)。本目录只保留格式、样本、开源参考及实现假设的调研材料。
 
-## 复现调研结论的工具
+## 复核调研结论
 
-```bash
-# 把 515 页 PDF 转成可 grep 的带页码文本（输出到 build/，不入库）
-python tools/extract_spec_text.py
-
-# 按页码引用规范原文
-python tools/extract_spec_text.py --page 36 41
-
-# 全文检索（带页码）
-python tools/extract_spec_text.py --grep "copper weight"
-
-# 对 cases/ 做图元/极性/符号统计
-python tools/census_cases.py
-```
+规范来源与摘要见 [docs/README.md](../README.md)，页码可直接在本地 PDF 阅读器中核对。
+早期规范下载、文本提取和案例普查脚本已移除，历史实现可以从 Git 历史恢复。
+当前 CLI 开发与验证工具见 [tools/README.md](../../tools/README.md)。`cases/` 是不入库的本地样本目录。
 
 ## 三条最需要在实现中守住的结论
 
