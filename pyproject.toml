@@ -1,46 +1,26 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "odbpp"
+name = "pcb-development"
 version = "0.1.0"
-description = "ODB++ v8.1 parser: archive to normalised, all-positive, millimetre polygon model"
-readme = "docs/README.md"
+description = "Private development workspace for pcbkit and pcbeq"
 requires-python = ">=3.10"
-license = { text = "Proprietary" }
-authors = [{ name = "kekesjtu", email = "mydearlong@sjtu.edu.cn" }]
-dependencies = [
-    "pydantic>=2.12,<3",
-    # Core, not optional: ``odbpp/__init__.py`` imports the geometry layer
-    # unconditionally, so every command -- including the pure-inventory ones --
-    # needs pyclipper importable.  Leaving it in an extra made a plain
-    # a base installation produce a package that cannot even be imported.
-    "pyclipper>=1.3.0.post6",
-    "shapely>=2.0",
-    "numpy>=1.26",
-    "matplotlib>=3.9",
-]
+dependencies = ["pcbkit", "pcbeq"]
 
 [project.optional-dependencies]
-tools = [
-    "pypdf>=4.0",
-]
+tools = ["pypdf>=4.0"]
 test = ["pytest>=8.0"]
 
-[project.scripts]
-odbpp = "odbpp.cli:main"
+[tool.uv]
+package = false
 
-[tool.setuptools]
-package-dir = { "" = "src" }
+[tool.uv.workspace]
+members = ["packages/pcbkit", "packages/pcbeq"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.uv.sources]
+pcbkit = { workspace = true }
+pcbeq = { workspace = true }
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-# --basetemp keeps scratch trees inside the (gitignored) build/ directory instead
-# of the system temp dir; that also avoids a Windows permission trap when a
-# previous run's temp root is left locked.
+pythonpath = [".", "packages/pcbeq/tests", "packages/pcbkit/tests"]
+testpaths = ["tests", "packages/pcbkit/tests", "packages/pcbeq/tests"]
 addopts = "-q --basetemp=build/pytest-tmp"
 filterwarnings = ["error"]

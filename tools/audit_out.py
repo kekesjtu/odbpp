@@ -15,12 +15,12 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
     """Reconstruct row-major JSON cells and independently audit vector/sampling invariants."""
     import math
     from shapely.geometry import box
-    from odbpp.equiv import _region_from_polygons, pipeline_fingerprint
-    from odbpp.rectify import profile_shape
-    from odbpp.materialmap import read_document, iter_cells
-    from odbpp.raster import RasterAxis
+    from pcbeq.equiv import _region_from_polygons, pipeline_fingerprint
+    from pcbeq.rectify import profile_shape
+    from pcbeq.materialmap import read_document, iter_cells
+    from pcbeq.raster import RasterAxis
     records=[]
-    for path in sorted(out_dir.rglob("*.MaterialMap.json")):
+    for path in sorted(out_dir.rglob("materialmap.json")):
         directory=path.parent
         meta=json.loads((directory/"diagnostics/run.json").read_text(encoding="utf-8"))
         materialmap=read_document(path)
@@ -28,7 +28,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         assert meta["drill_model"]=="solid_copper" and meta["drill_scope"]=="dielectric_only"
         assert all(not l["drill_overlays"] for l in meta["layers"] if l["type"]!="DIELECTRIC")
         assert not any(d["level"]=="error" for d in meta["diagnostics"])
-        document=json.loads(path.with_name(path.name.replace(".MaterialMap.json",".json")).read_text(encoding="utf-8"))
+        document=json.loads((directory.parent / "pcbkit/intermediate.json").read_text(encoding="utf-8"))
         step=document["steps"][0]
         domains={d["id"]:profile_shape(_region_from_polygons(d["polygons"])) for d in step["domains"]}
         reports={l["name"]:l for l in meta["layers"] if l["status"]=="equivalent"}
