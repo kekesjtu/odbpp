@@ -2,7 +2,7 @@
 
 解析器开发人员可先阅读[开发指南与完整注释代码](08-parser-interface-guide.md)，本文作为字段参考。
 
-解析器导出与等效器导入共用 `src/odbpp/intermediate.py` 中的 Pydantic 模型。
+解析器导出与等效器导入共用 `contracts/intermediate.py` 中的 Pydantic 模型。
 项目始终只有一套当前格式；不保存或比较 schema/generator 版本，不维护旧结构兼容分支。
 格式变化时同步调整全部调用方并重新导出案例。结构不完整、类型错误和必要语义错误仍明确报错。
 
@@ -10,7 +10,7 @@
 声明 JSON Schema 标准语法，不是业务版本。重新生成：
 
 ```powershell
-uv run --all-extras python -c "from odbpp.intermediate import write_schema; write_schema('docs/intermediate.schema')"
+uv run --all-extras python -c "from pcbkit.intermediate import write_schema; write_schema('docs/intermediate.schema')"
 ```
 
 ## 数据流与职责
@@ -92,11 +92,13 @@ SVG/HTML 在局部绘图副本中对介质做 difference；该副本不能导出
 ## 使用与验证
 
 ```python
-from odbpp import load_job, build_step_preview, step_to_document, write_document, read_document
+from pcbkit import load_job, build_step_preview, step_to_document, write_document
 
 job = load_job("cases/kicad-kitchen-sink")
 board = step_to_document(job, build_step_preview(job))
 write_document(board, "build/board.json")
+# 下游独立进程使用自己的模型读取文件。
+from pcbeq.intermediate import read_document
 board = read_document("build/board.json")
 # equivalence_from_document(board, options) 或传入合法当前格式的普通字典。
 ```

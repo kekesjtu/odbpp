@@ -1,0 +1,958 @@
+{
+  "date": "2026-10-24",
+  "full_pytest": {
+    "passed": 800,
+    "elapsed_s": 305.5
+  },
+  "final_cli_publication_regression": {
+    "passed": 45,
+    "elapsed_s": 25.26
+  },
+  "distribution": {
+    "separate_installations": true,
+    "sdist_rebuilt": true,
+    "source_removed_before_consumer": true
+  },
+  "repeated_process_benchmark": {
+    "measurement": "CLI wall time including imports, IO and all requested images",
+    "cases": {
+      "minimal-test-odb": {
+        "runs": [
+          {
+            "durations_s": {
+              "pcbkit": 0.6072023000001536,
+              "pcbeq": 3.7090375999996468
+            },
+            "peak_memory_bytes": {
+              "pcbkit": 35250176,
+              "pcbeq": 220733440
+            },
+            "files": {
+              "pcbkit/intermediate.json": "64cba950f451d870d977535cc0a9c2243b551942da3c433884868a3fea2d2934",
+              "pcbeq/materialmap.json": "2d68455bdbe2b6826fe61deac1417c92e7fb07dbbe9b5800cd60baa00271bd84",
+              "pcbeq/masks/bottom.png": "0f5bbc8f64d37a30d682a847c855da818597a9228774e431f88e2b2404890d6e",
+              "pcbeq/masks/top.png": "b36840485d0bafe49dc709db1d1e155bf69df82bb4115b3c3dc523f886cc095a"
+            },
+            "regions": 1,
+            "cells": 80,
+            "raster": [
+              400,
+              400
+            ]
+          },
+          {
+            "durations_s": {
+              "pcbkit": 0.5832290999996985,
+              "pcbeq": 3.998891999999614
+            },
+            "peak_memory_bytes": {
+              "pcbkit": 34885632,
+              "pcbeq": 220315648
+            },
+            "files": {
+              "pcbkit/intermediate.json": "64cba950f451d870d977535cc0a9c2243b551942da3c433884868a3fea2d2934",
+              "pcbeq/materialmap.json": "2d68455bdbe2b6826fe61deac1417c92e7fb07dbbe9b5800cd60baa00271bd84",
+              "pcbeq/masks/bottom.png": "0f5bbc8f64d37a30d682a847c855da818597a9228774e431f88e2b2404890d6e",
+              "pcbeq/masks/top.png": "b36840485d0bafe49dc709db1d1e155bf69df82bb4115b3c3dc523f886cc095a"
+            },
+            "regions": 1,
+            "cells": 80,
+            "raster": [
+              400,
+              400
+            ]
+          }
+        ],
+        "median_s": {
+          "pcbkit": 0.5952156999999261,
+          "pcbeq": 3.8539647999996305
+        }
+      }
+    }
+  },
+  "baseline_comparisons": [
+    {
+      "case": "designodb-rigidflex",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": false,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "designodb-rigidflex.tgz",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-kitchen-sink",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-video-odb.tgz",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "minimal-test-odb",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/native/four-layer-drills-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/native/outline-only-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/native/pad-shapes-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/native/through-hole-in",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/native/through-hole-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/native/tracks-arcs-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/native/zone-hole-rotation-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/clean/four-layer-drills-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/clean/outline-only-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/clean/pad-shapes-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-in",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/clean/tracks-arcs-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    },
+    {
+      "case": "kicad-positive/clean/zone-hole-rotation-mm",
+      "intermediate_geometry_equal": true,
+      "materialmap_content_equal": true,
+      "materialmap_bytes_equal": true,
+      "material_masks_bytes_equal": true,
+      "regions_equal": true,
+      "global_grid_coordinates_equal": true,
+      "raster_equal": true
+    }
+  ],
+  "cases": [
+    {
+      "case": "designodb-rigidflex",
+      "elapsed_s": {
+        "pcbkit": 87.10096870000007,
+        "pcbeq": 17.561956699999882
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 1650864128,
+        "pcbeq": 959459328
+      },
+      "regions": 45,
+      "xy_cells": 4262,
+      "raster": [
+        4096,
+        1089
+      ]
+    },
+    {
+      "case": "designodb-rigidflex.tgz",
+      "elapsed_s": {
+        "pcbkit": 86.97886659999995,
+        "pcbeq": 15.248257100000046
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 1655906304,
+        "pcbeq": 959344640
+      },
+      "regions": 45,
+      "xy_cells": 4262,
+      "raster": [
+        4096,
+        1089
+      ]
+    },
+    {
+      "case": "kicad-kitchen-sink",
+      "elapsed_s": {
+        "pcbkit": 0.8106981000000815,
+        "pcbeq": 5.516106300000047
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 47190016,
+        "pcbeq": 267481088
+      },
+      "regions": 78,
+      "xy_cells": 4217,
+      "raster": [
+        4096,
+        2595
+      ]
+    },
+    {
+      "case": "kicad-positive/clean/four-layer-drills-mm",
+      "elapsed_s": {
+        "pcbkit": 0.5044032999999217,
+        "pcbeq": 6.837527099999988
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34848768,
+        "pcbeq": 240857088
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/clean/outline-only-mm",
+      "elapsed_s": {
+        "pcbkit": 0.6794100999995862,
+        "pcbeq": 4.3981519999997545
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34717696,
+        "pcbeq": 217325568
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/clean/pad-shapes-mm",
+      "elapsed_s": {
+        "pcbkit": 0.5599166000001787,
+        "pcbeq": 4.294980200000282
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34734080,
+        "pcbeq": 217411584
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-in",
+      "elapsed_s": {
+        "pcbkit": 0.5046388999999181,
+        "pcbeq": 4.2191907000001265
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34807808,
+        "pcbeq": 217800704
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-mm",
+      "elapsed_s": {
+        "pcbkit": 0.49550090000002456,
+        "pcbeq": 4.324030700000094
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34656256,
+        "pcbeq": 217518080
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/clean/tracks-arcs-mm",
+      "elapsed_s": {
+        "pcbkit": 0.5493271999998797,
+        "pcbeq": 4.471359699999994
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34639872,
+        "pcbeq": 217391104
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/clean/zone-hole-rotation-mm",
+      "elapsed_s": {
+        "pcbkit": 0.5024934000002759,
+        "pcbeq": 4.2137064999997165
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34598912,
+        "pcbeq": 217559040
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/native/four-layer-drills-mm",
+      "elapsed_s": {
+        "pcbkit": 0.6014270999999098,
+        "pcbeq": 8.444484699999975
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34906112,
+        "pcbeq": 240652288
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/native/outline-only-mm",
+      "elapsed_s": {
+        "pcbkit": 0.5364632000000711,
+        "pcbeq": 4.713364400000046
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34811904,
+        "pcbeq": 217628672
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/native/pad-shapes-mm",
+      "elapsed_s": {
+        "pcbkit": 0.4696791999999732,
+        "pcbeq": 4.161668100000043
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34787328,
+        "pcbeq": 217473024
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/native/through-hole-in",
+      "elapsed_s": {
+        "pcbkit": 0.528344300000299,
+        "pcbeq": 4.195636899999954
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34746368,
+        "pcbeq": 217767936
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/native/through-hole-mm",
+      "elapsed_s": {
+        "pcbkit": 0.512151399999766,
+        "pcbeq": 4.492182899999989
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34660352,
+        "pcbeq": 217567232
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/native/tracks-arcs-mm",
+      "elapsed_s": {
+        "pcbkit": 0.8237257000000682,
+        "pcbeq": 5.667145899999923
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34869248,
+        "pcbeq": 217628672
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-positive/native/zone-hole-rotation-mm",
+      "elapsed_s": {
+        "pcbkit": 0.7178392999999232,
+        "pcbeq": 5.408901700000115
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34717696,
+        "pcbeq": 217673728
+      },
+      "regions": 1,
+      "xy_cells": 4186,
+      "raster": [
+        4096,
+        2048
+      ]
+    },
+    {
+      "case": "kicad-video-odb.tgz",
+      "elapsed_s": {
+        "pcbkit": 15.61587980000013,
+        "pcbeq": 8.365617399999792
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 339095552,
+        "pcbeq": 357990400
+      },
+      "regions": 6,
+      "xy_cells": 3441,
+      "raster": [
+        4096,
+        1401
+      ]
+    },
+    {
+      "case": "minimal-test-odb",
+      "elapsed_s": {
+        "pcbkit": 0.5230555999996795,
+        "pcbeq": 5.157670699999926
+      },
+      "peak_memory_bytes": {
+        "pcbkit": 34979840,
+        "pcbeq": 201388032
+      },
+      "regions": 1,
+      "xy_cells": 4176,
+      "raster": [
+        4096,
+        3277
+      ]
+    }
+  ],
+  "output_audit": [
+    {
+      "case": "designodb-rigidflex/pcbeq",
+      "region_count": 45,
+      "physical_region_count": 487,
+      "nx": 145,
+      "ny": 56,
+      "grid_cells": 4262,
+      "material_rows": 66274,
+      "raster": [
+        4096,
+        1089
+      ],
+      "minimum_samples_per_axis": 16,
+      "area_loss_mm2": 202.1117130350002,
+      "layer_count": 19,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "designodb-rigidflex.tgz/pcbeq",
+      "region_count": 45,
+      "physical_region_count": 487,
+      "nx": 145,
+      "ny": 56,
+      "grid_cells": 4262,
+      "material_rows": 66274,
+      "raster": [
+        4096,
+        1089
+      ],
+      "minimum_samples_per_axis": 16,
+      "area_loss_mm2": 202.1117130350002,
+      "layer_count": 19,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-kitchen-sink/pcbeq",
+      "region_count": 78,
+      "physical_region_count": 234,
+      "nx": 104,
+      "ny": 63,
+      "grid_cells": 4217,
+      "material_rows": 12651,
+      "raster": [
+        4096,
+        2595
+      ],
+      "minimum_samples_per_axis": 20,
+      "area_loss_mm2": 1023.2521087315918,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/four-layer-drills-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 7,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 29302,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 7,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/outline-only-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/pad-shapes-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-in/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/tracks-arcs-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/clean/zone-hole-rotation-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/four-layer-drills-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 7,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 29302,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 7,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/outline-only-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/pad-shapes-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/through-hole-in/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/through-hole-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/tracks-arcs-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-positive/native/zone-hole-rotation-mm/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 3,
+      "nx": 91,
+      "ny": 46,
+      "grid_cells": 4186,
+      "material_rows": 12558,
+      "raster": [
+        4096,
+        2048
+      ],
+      "minimum_samples_per_axis": 44,
+      "area_loss_mm2": 0.0,
+      "layer_count": 3,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "kicad-video-odb.tgz/pcbeq",
+      "region_count": 6,
+      "physical_region_count": 42,
+      "nx": 112,
+      "ny": 39,
+      "grid_cells": 3441,
+      "material_rows": 24087,
+      "raster": [
+        4096,
+        1401
+      ],
+      "minimum_samples_per_axis": 29,
+      "area_loss_mm2": 1380.9196815319187,
+      "layer_count": 7,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    },
+    {
+      "case": "minimal-test-odb/pcbeq",
+      "region_count": 1,
+      "physical_region_count": 2,
+      "nx": 72,
+      "ny": 58,
+      "grid_cells": 4176,
+      "material_rows": 8352,
+      "raster": [
+        4096,
+        3277
+      ],
+      "minimum_samples_per_axis": 56,
+      "area_loss_mm2": 0.0,
+      "layer_count": 2,
+      "drill_scope": "dielectric_only",
+      "copper_drill_overlays_ignored": true,
+      "all_checks_passed": true
+    }
+  ],
+  "notes": [
+    "MaterialMap content is compared after JSON decoding; historical pretty-printing can differ.",
+    "Source paths are excluded from intermediate geometry comparison.",
+    "Peak memory is measured inside each actual CLI interpreter; wall time includes process startup and requested rendering."
+  ]
+}

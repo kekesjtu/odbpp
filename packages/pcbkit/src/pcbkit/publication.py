@@ -7,6 +7,13 @@ from pathlib import Path
 import tempfile
 
 
+def public_path(path, args) -> str:
+    """Display delivered locations rather than temporary staging paths."""
+    relative = Path(path).relative_to(args.out)
+    relative = getattr(args, "_output_names", {}).get(relative.as_posix(), relative)
+    return str(Path(args._final_out) / relative)
+
+
 class OutputRun:
     def __init__(self, directory: str | Path):
         self.directory = Path(directory).resolve()

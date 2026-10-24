@@ -5,6 +5,8 @@
 
 | 文档 | 内容 |
 |---|---|
+| [10-independent-clis.md](10-independent-clis.md) | 当前 pcbkit/pcbeq 独立分发、唯一契约、进程管道、输出与验证 |
+| [independent-clis-validation.json](independent-clis-validation.json) | 800 项回归、独立 wheel/sdist 安装、19 个真实 case 的几何/物性/掩膜对照与运行资源记录 |
 | [09-region-materialmap.md](09-region-materialmap.md) | 当前正式 MaterialMap：region 层级 JSON、六边界、未知 Z、XY 网格线、行主序五项物性、热图及独立诊断 |
 | [08-parser-interface-guide.md](08-parser-interface-guide.md) | 面向 ODB++ 几何解析器开发人员：接口职责、导出约束、完整 JSON 示例与中文注释版 intermediate.py |
 | [drill-policy-validation.json](drill-policy-validation.json) | 未扣孔介质 JSON、仅介质 DRILL 采样的真实案例前后对照，铜层无 DRILL 参考与几何不变检查 |

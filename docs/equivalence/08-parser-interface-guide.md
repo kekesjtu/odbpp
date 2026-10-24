@@ -2,7 +2,7 @@
 
 本文面向负责 ODB++ 文本读取、符号展开、图元极性及几何规整的开发人员。目标是明确解析器需要交付什么数据、为何需要这些字段，以及如何通过当前 `intermediate.py` 输出可被等效器正确理解的实体模型。
 
-源码依据：[`src/odbpp/intermediate.py`](../../src/odbpp/intermediate.py)。本指南对应移除 `parse_info` 后的当前实现；附录包含完整源码，仅增加中文注释，不改变任何可执行语句。
+源码依据：[`contracts/intermediate.py`](../../contracts/intermediate.py)。本指南对应移除 `parse_info` 后的当前实现；附录包含完整源码，仅增加中文注释，不改变任何可执行语句。
 
 ## 1. 接口在流水线中的作用
 
@@ -385,9 +385,9 @@ profile 的真实孔洞 / 挖空始终保留在 domain 中。DRILL 与真实孔�
 
 ```python
 from pathlib import Path
-from odbpp import load_job, build_step_preview
-from odbpp.export import step_to_document
-from odbpp.intermediate import read_document, write_document
+from pcbkit import load_job, build_step_preview
+from pcbkit.export import step_to_document
+from pcbkit.intermediate import read_document, write_document
 
 Path("build").mkdir(exist_ok=True)
 job = load_job("cases/kicad-kitchen-sink")
@@ -403,7 +403,7 @@ restored = read_document("build/pcb.json")  # 相同模型读取与验证
 
 ```python
 from pathlib import Path
-from odbpp.intermediate import BoardDocument, write_document
+from pcbkit.intermediate import BoardDocument, write_document
 
 # payload 是你的解析器构造的完整当前格式 dict。
 # 大文件可按层构造 LayerModel，避免未验证坐标树与模型坐标树同时长期驻留。
@@ -422,7 +422,7 @@ write_document(document, "build/pcb.json")
 
 ```powershell
 uv sync --all-extras
-uv run --all-extras python -c "from odbpp.intermediate import write_schema; write_schema('docs/intermediate.schema')"
+uv run --all-extras python -c "from pcbkit.intermediate import write_schema; write_schema('docs/intermediate.schema')"
 uv run --all-extras python -m pytest tests/test_intermediate.py tests/test_export.py tests/test_kicad_positive_cases.py tests/test_drill_policy.py
 # 接口或几何输出发生变化时，再重导出真实案例并核查等效结果：
 uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid

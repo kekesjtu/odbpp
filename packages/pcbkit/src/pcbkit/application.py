@@ -225,6 +225,9 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
         print(f"error: no such step: {args.step!r}", file=sys.stderr)
         return 2
 
+    args._output_names = {f"{step.name}.json": "intermediate.json",
+                          f"{step.name}.svg": "preview.svg", f"{step.name}.html": "preview.html"}
+
     preview_options = PreviewOptions(
         tessellation=TessellationOptions(sagitta_mm=args.sagitta),
         layers=args.layer,
@@ -281,7 +284,8 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
     print(layer_summary_lines(preview))
     print()
     for path in outputs.all_paths():
-        print(f"wrote {path} ({os.path.getsize(path) / 1e6:.2f} MB)")
+        from .publication import public_path
+        print(f"wrote {public_path(path, args)} ({os.path.getsize(path) / 1e6:.2f} MB)")
 
     if args.no_diagnostics:
         return 1 if diagnostics.errors else 0
@@ -306,6 +310,7 @@ def _run_export(job: Job, args: argparse.Namespace, diagnostics: Diagnostics) ->
         with OutputRun(directory) as output:
             staged_args = argparse.Namespace(**vars(args))
             staged_args.out = str(output.path)
+            staged_args._final_out = str(directory)
             code = _export_to_stage(job, staged_args, diagnostics)
             if code == 2:
                 return code

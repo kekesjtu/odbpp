@@ -5,6 +5,7 @@ import sys
 from typing import Optional, Sequence
 from . import __version__
 from .diagnostics import MATERIALS_DEFAULT_USED, VISUALIZE_FAILED, Diagnostics
+from .publication import public_path
 
 
 def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
@@ -179,8 +180,8 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         else:
             print(f"  {report.name:<24}{report.type:<14} {report.status}: "
                   f"{report.reason}")
-    print(f"wrote {map_path} ({os.path.getsize(map_path) / 1e6:.2f} MB)")
-    print(f"wrote {report_path} "
+    print(f"wrote {public_path(map_path, args)} ({os.path.getsize(map_path) / 1e6:.2f} MB)")
+    print(f"wrote {public_path(report_path, args)} "
           f"({os.path.getsize(report_path) / 1e6:.2f} MB)")
     if mask_jobs:
         zooms = {image.isotropic_zoom for image in mask_images}
@@ -190,7 +191,7 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
             widest = max(image.width for image in mask_images)
             tallest = max(image.height for image in mask_images)
             shape = (f"up to {widest}x{tallest} px, board proportions kept")
-        print(f"wrote {len(mask_jobs)} raster mask(s) -> {masks_dir} "
+        print(f"wrote {len(mask_jobs)} raster mask(s) -> {public_path(masks_dir, args)} "
               f"({shape}; black=copper/drill, white=base, grey=no domain)")
 
     # --- pictures of what was written --------------------------------------
@@ -218,7 +219,7 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
                                      options=options_for_maps)
             images = report.images
             print(f"wrote {len(images)} heat map(s) -> "
-                  f"{os.path.join(out_dir, 'heatmaps')}")
+                  f"{public_path(os.path.join(out_dir, 'heatmaps'), args)}")
             if report.data.skipped_invalid:
                 print(f"warning: {report.data.skipped_invalid} JSON row(s) were "
                       f"unusable and left blank in the heat maps",
@@ -233,7 +234,7 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
                     entries,
                     note=_gallery_note(result, args),
                 )
-                print(f"wrote {gallery_path}")
+                print(f"wrote {public_path(gallery_path, args)}")
                 links = []
                 if args.regions:
                     links.append('<a href="regions/regions.svg">Region geometry</a>')
@@ -276,6 +277,7 @@ def run(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
         with OutputRun(directory) as output:
             staged_args = argparse.Namespace(**vars(args))
             staged_args.out = str(output.path)
+            staged_args._final_out = str(directory)
             code = _run_to_stage(staged_args, diagnostics)
             if code:
                 return code
