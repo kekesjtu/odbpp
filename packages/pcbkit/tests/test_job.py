@@ -4,8 +4,8 @@ These cover the cross-file rules that no single parser owns:
 
 * the matrix is the authoritative layer list (research 03 R2);
 * entity lookup is case insensitive (R1);
-* AGENTS constraint 3 (layer profile, then step profile, never a silent fallback);
-* AGENTS constraint 4 (everything downstream is millimetres);
+* requirements.md parser constraint 3 (layer profile, then step profile, never a silent fallback);
+* requirements.md parser constraint 4 (everything downstream is millimetres);
 * drills take their plating from the tool, not from the layer name (R5).
 """
 
@@ -73,7 +73,7 @@ class TestNegativePolarityFixture:
 
 
 class TestLayerProfileConstraint:
-    """AGENTS constraint 3."""
+    """requirements.md parser constraint 3."""
 
     def test_a_layer_profile_takes_priority_over_the_step_profile(self):
         job = load_job(str(fixture_path("fx_negative_layer")))

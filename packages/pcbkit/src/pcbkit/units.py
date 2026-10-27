@@ -172,7 +172,7 @@ class UnitScope:
         Always 12-mil units, independent of ``UNITS`` (spec p.174).
 
         Currently unused in production code: ``width_factor`` only appears on
-        ``T`` (text) records, which are out of scope (AGENTS constraint 6).  It
+        ``T`` (text) records, which are out of scope (requirements.md parser constraint 6).  It
         is kept because the rule is a units rule, so this is where a future text
         implementation should look rather than rediscovering the trap.
         """

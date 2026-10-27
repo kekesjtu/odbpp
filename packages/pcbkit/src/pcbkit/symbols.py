@@ -16,7 +16,7 @@ so recognition must be a **strict parse of the whole name**, never a prefix
 match.  ``cases/designodb-rigidflex`` contains nine user-defined symbols whose
 names begin with ``s`` -- the reserved square prefix -- so a "starts with `s`"
 heuristic silently mis-renders them as squares.  See
-``docs/research/03-case-inventory.md`` §4.2(a).
+``docs/research/case-inventory.md`` §符号与覆盖边界.
 
 User-defined symbols may reference other user-defined symbols, so loading is
 recursive and needs cycle detection (the spec forbids cycles at p.37, but a

@@ -35,4 +35,4 @@ tests/fixtures/** -text -diff
 # one thing a reviewer needs to read. Later rules win.
 tests/fixtures/*.md text eol=lf diff
 tests/fixtures/**/*.md text eol=lf diff
-docs/Flotherm_reference_MaterialMap.csv filter=lfs diff=lfs merge=lfs -text
+docs/reference/Flotherm_reference_MaterialMap.csv filter=lfs diff=lfs merge=lfs -text

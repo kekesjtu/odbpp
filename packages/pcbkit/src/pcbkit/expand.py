@@ -19,7 +19,7 @@ the file itself does not provide:
 
 4. **Polarity.**  Records are drawn in file order, positives adding and
    negatives erasing (spec p.39).  The result must be a fully positive polygon
-   set (AGENTS constraint 2).
+   set (requirements.md parser constraint 2).
 
 Batching
 --------
@@ -724,13 +724,13 @@ def expand_layer(
     expander: Expander,
     options: Optional[ExpandOptions] = None,
 ) -> LayerGeometry:
-    """Compose one layer into a fully positive region (AGENTS constraint 2).
+    """Compose one layer into a fully positive region (requirements.md parser constraint 2).
 
     The starting point depends on what the layer *is*, which is a distinction
     worth spelling out because getting it wrong is dramatic rather than subtle:
 
     ``DIELECTRIC``
-        Starts from the base polygon of AGENTS constraint 3 -- the layer's own
+        Starts from the base polygon of requirements.md parser constraint 3 -- the layer's own
         ``profile``, else the step profile.  The constraint is worded for
         dielectric layers specifically ("the dielectric layer's base polygon
         inherits the board outline"), and it is right: a dielectric layer

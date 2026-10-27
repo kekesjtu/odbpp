@@ -119,7 +119,7 @@ MATRIX_FORM_MISSING_DIELECTRIC = "matrix.form_missing_dielectric"
 
 # attribute definitions (misc/sysattr*, misc/userattr)
 ATTR_DUPLICATE_DEFINITION = "attr.duplicate_definition"
-#: AGENTS note 5 / spec p.231: ``.layer_dielectric`` is a non-copper field.
+#: requirements.md non-copper thickness rule / spec p.231: ``.layer_dielectric`` is a non-copper field.
 ATTR_LAYER_DIELECTRIC_ON_COPPER = "attr.layer_dielectric_on_copper"
 
 # features / profile records (research 01 §4.4)
@@ -137,12 +137,12 @@ SYMBOL_UNKNOWN = "symbol.unknown"
 SYMBOL_SHADOWS_STANDARD = "symbol.shadows_standard"
 SYMBOL_UNSUPPORTED_SHAPE = "symbol.unsupported_shape"
 
-# step header (AGENTS constraint 1: no nested/arrayed steps)
+# step header (requirements.md parser constraint 1: no nested/arrayed steps)
 STEP_NESTED_REPEAT = "stephdr.nested_repeat"
 STEP_MULTIPLE = "stephdr.multiple_steps"
 STEP_DIR_MISSING = "stephdr.missing_dir"
 
-# layer profile (AGENTS constraint 3: layer profile, then step profile,
+# layer profile (requirements.md parser constraint 3: layer profile, then step profile,
 # hard error when a layer profile exists but is unusable)
 LAYER_PROFILE_MISSING_BOTH = "layer_profile.missing"
 LAYER_PROFILE_INVALID = "layer_profile.invalid"
@@ -151,7 +151,7 @@ LAYER_PROFILE_INVALID = "layer_profile.invalid"
 TOOLS_NO_UNITS = "tools.no_units"
 TOOLS_DUPLICATE_NUM = "tools.duplicate_num"
 
-# stackup / Z intervals (AGENTS constraint 3: a dielectric is perforated by the
+# stackup / Z intervals (requirements.md parser constraint 3: a dielectric is perforated by the
 # drills whose Z interval overlaps it)
 STACKUP_DIELECTRIC_SPAN_UNKNOWN = "stackup.dielectric_span_unknown"
 STACKUP_DRILL_SPAN_UNKNOWN = "stackup.drill_span_unknown"
@@ -181,7 +181,7 @@ EXPORT_DEGENERATE_RING = "export.degenerate_ring"
 # material equivalence (data-flow steps 4-5)
 # --------------------------------------------------------------------------
 
-# Board outline rectangularisation (AGENTS 外轮廓矩形化与网格 1-2).
+# Board outline rectangularisation (requirements.md 外轮廓矩形化与网格 1-2).
 RECTIFY_EMPTY_PROFILE = "rectify.empty_profile"
 RECTIFY_NO_RECTANGLES = "rectify.no_rectangles"
 RECTIFY_AREA_ERROR = "rectify.area_error"
@@ -196,7 +196,7 @@ RECTIFY_AREA_WARNING = "rectify.area_warning"
 #: trustworthy (a piece of the outline is simply not representable).
 RECTIFY_SLAB_AMBIGUOUS = "rectify.slab_ambiguous"
 
-# Board grid allocation (AGENTS 外轮廓矩形化与网格 3-5).
+# Board grid allocation (requirements.md 外轮廓矩形化与网格 3-5).
 GRID_SIZE_INCOMPATIBLE = "grid.size_incompatible"
 GRID_NO_BOARD_CELLS = "grid.no_board_cells"
 GRID_CELL_WITHOUT_PIXEL = "grid.cell_without_pixel"
@@ -215,7 +215,7 @@ EQUIV_DRILL_Z_MISMATCH = "equiv.drill_z_mismatch"
 EQUIV_LAYER_Z_UNKNOWN = "equiv.layer_z_unknown"
 EQUIV_LAYER_EMPTY = "equiv.layer_empty"
 
-# Materials (AGENTS 等效器输入与材料规则 4-5).
+# Materials (requirements.md 等效器输入与材料规则 4-5).
 MATERIALS_DEFAULT_USED = "materials.default_used"
 MATERIALS_INVALID = "materials.invalid"
 

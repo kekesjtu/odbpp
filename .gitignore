@@ -29,6 +29,6 @@ Thumbs.db
 external/*/
 
 # Vendor specification PDF: 7.9 MB binary, Siemens copyright. Kept in the working
-# tree but not versioned; source and checksum are documented in docs/README.md.
-docs/ODB++_Format_User_Guide.pdf
-docs/*.pdf
+# tree but not versioned; source and checksum are in docs/reference/README.md.
+docs/reference/ODB++_Format_User_Guide.pdf
+docs/reference/*.pdf

@@ -1,6 +1,6 @@
 """Job assembly: turn an archive into a resolved product model.
 
-This is the orchestrator.  It applies the three AGENTS constraints that are
+This is the orchestrator.  It applies the three parser requirements that are
 cross-file concerns rather than per-file syntax:
 
 * **Constraint 1** -- only the single-board step is parsed; nested step arrays
@@ -12,7 +12,7 @@ cross-file concerns rather than per-file syntax:
   no downstream code sees a raw unit.
 
 It also applies the two robustness rules discovered by measuring the cases
-(``docs/research/03-case-inventory.md``):
+(``docs/research/case-inventory.md``):
 
 * **R1** -- entity lookup is case insensitive, because the matrix writes
   ``F.CU`` where the directory is ``f.cu``.
@@ -132,7 +132,7 @@ def _load(archive: OdbArchive, source: str, opts: LoadOptions, diags: Diagnostic
         diags.warn(
             STEP_MULTIPLE,
             f"job declares {len(step_refs)} steps ({', '.join(repr(s.name) for s in step_refs)}); "
-            f"AGENTS constraint 1 targets a single board step -- select one with --step",
+            f"requirements.md parser constraint 1 targets a single board step -- select one with --step",
             f"{root}/matrix/matrix",
         )
 
@@ -279,7 +279,7 @@ def _load_step(
             diags.warn(
                 LAYER_DIR_ORPHAN,
                 f"layer directory {dir_name!r} is not registered in the matrix; "
-                f"ignored (matrix is authoritative, AGENTS/research 03 R2)",
+                f"ignored (matrix is authoritative, requirements.md and case-inventory research)",
                 f"{layers_rel}/{dir_name}",
             )
 
@@ -343,7 +343,7 @@ def _load_layer(
                 default_scope=job.info.units, diagnostics=diags,
             )
 
-    # AGENTS constraint 3, layer half: a layer profile, when present, is the
+    # requirements.md parser constraint 3, layer half: a layer profile, when present, is the
     # base polygon.  A present-but-unparseable profile is a recorded error, not a
     # silent fallback.
     profile_rel = f"{layer_rel}/profile"
@@ -365,7 +365,7 @@ def _load_layer(
             diags.error(
                 LAYER_PROFILE_INVALID,
                 f"layer {ref.name!r} profile exists but is unusable: {layer.profile_error}; "
-                f"refusing to fall back to the step profile (AGENTS constraint 3)",
+                f"refusing to fall back to the step profile (requirements.md parser constraint 3)",
                 profile_rel,
             )
 

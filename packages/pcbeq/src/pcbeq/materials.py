@@ -1,6 +1,6 @@
 """Two-material model: copper (black) and base laminate (white).
 
-AGENTS 等效器输入与材料规则 4-5.  The equivalence formulas need, for each of the
+requirements.md 等效器输入与材料规则 4-5.  The equivalence formulas need, for each of the
 two phases, a thermal conductivity, a density and a specific heat.  The user may
 set them globally or per layer; when they do not, this module supplies a
 *project default with a recorded source* and says so out loud.

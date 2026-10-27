@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-28",
+  "scope": "documentation organization, requirement preservation and reference paths",
+  "source_commit": "e28735a",
+  "requirements_source_commit": "fadf325",
+  "preservation": {
+    "original_files": 81,
+    "all_files_retained": true,
+    "requirements_body_preserved": true,
+    "acceptance_body_preserved": true,
+    "physical_notes_preserved": 4,
+    "archive_manifest": "docs/archive/manifest.json",
+    "archived_markdown_changes": "relative links, line endings and trailing whitespace; original prose preserved",
+    "original_reports": 24
+  },
+  "documentation": {
+    "current_markdown_documents": 30,
+    "local_links_checked_before_this_report_link": 341,
+    "missing_local_links": 0,
+    "intermediate_json_example_valid": true,
+    "materialmap_example_valid": true,
+    "contract_sync_check_passed": true,
+    "reference_csv_lfs_filter_confirmed": true,
+    "local_spec_pdf_ignore_rule_confirmed": true
+  },
+  "python_changes": {
+    "files": 28,
+    "allowed_changes": [
+      "requirements and research references in comments, docstrings and diagnostic strings",
+      "schema documentation target path",
+      "default validation report paths"
+    ],
+    "ast_comparison_after_allowed_string_substitutions_passed": true
+  },
+  "regression": {
+    "command": "uv run --all-extras pytest --basetemp=build/pytest-doc-rewrite",
+    "environment": {
+      "UV_CACHE_DIR": "build/uv-cache",
+      "TEMP": "build/docs-rewrite-temp",
+      "TMP": "build/docs-rewrite-temp"
+    },
+    "passed": 832,
+    "seconds": 236.01
+  }
+}

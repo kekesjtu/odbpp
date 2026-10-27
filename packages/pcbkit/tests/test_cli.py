@@ -217,7 +217,7 @@ class TestExport:
         assert not (tmp_path / "intermediate.json").exists()
 
     def test_a_broken_layer_profile_still_exports_the_rest(self, capsys, tmp_path):
-        # AGENTS constraint 3 makes the bad layer a hard error for that layer, and
+        # requirements.md parser constraint 3 makes the bad layer a hard error for that layer, and
         # the other layers must still render: a preview missing one layer is far
         # more useful than no preview.
         code, _out, err = run(capsys, "export",

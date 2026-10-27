@@ -1,6 +1,6 @@
 """The layer stack: spans, overlaps, thickness and copper-weight semantics.
 
-AGENTS constraint 3 needs two facts about a dielectric layer that no single file
+requirements.md parser constraint 3 needs two facts about a dielectric layer that no single file
 states: which copper planes it sits between, and which drills pass through it.
 These tests build the stack by hand so the overlap logic is pinned independently
 of any case board, then check the unit conversions that the export used to drop.
@@ -108,7 +108,7 @@ class TestDrillSpans:
         assert "stackup.drill_span_unknown" in diagnostics.codes()
 
     def test_rout_layers_have_no_span_and_no_warning(self):
-        # ROUT is a milling contour, not a drilled hole; AGENTS constraint 3
+        # ROUT is a milling contour, not a drilled hole; requirements.md parser constraint 3
         # projects *drills* into dielectrics.
         diagnostics = Diagnostics()
         step = stacked_step()
@@ -188,7 +188,7 @@ class TestThickness:
         assert "stackup.thickness_unknown" in diagnostics.codes()
 
     def test_the_field_on_copper_is_flagged_as_a_spec_deviation(self):
-        # AGENTS note 5 / spec p.231: .layer_dielectric is defined for non-copper
+        # requirements.md non-copper thickness rule / spec p.231: .layer_dielectric is defined for non-copper
         # layers, but KiCad exports write it on copper too.
         diagnostics = Diagnostics()
         step = stacked_step()
@@ -275,7 +275,7 @@ class TestAbsoluteZ:
         # Silkscreen and solder paste are printed on the board, not part of its
         # laminate; their absent thickness must not invalidate the copper Z.
         # Their *own* extent is another matter: an assumed zero is unknown and
-        # has to say so (AGENTS note 8), while the copper below stays known.
+        # has to say so (requirements.md absolute-Z rule), while the copper below stays known.
         step = self._sized_step()
         step.layers.insert(0, layer("F.SILK", LayerType.SILK_SCREEN, 0))
         step.layers.insert(1, layer("F.PASTE", LayerType.SOLDER_PASTE, 0))

@@ -5,7 +5,7 @@ Two artefacts: standard-library mask PNGs and Matplotlib conductivity figures:
 * **material masks** -- one greyscale PNG per equivalented layer, containing
   exactly the black/white raster the formulas integrate over.  A reviewer can
   then *look* at what produced the numbers instead of inferring it from the JSON
-  (AGENTS 验证要求 3: never judge the equivalence from a picture alone, but do
+  (requirements.md 验证要求 3: never judge the equivalence from a picture alone, but do
   look at it);
 * **conductivity heat maps** -- one PNG per layer with ``kx``, ``ky`` and ``kz``
   side by side on a shared colour scale, plus a small gallery HTML that names
@@ -25,7 +25,7 @@ value                   tone    meaning
 
 Grey is not a third material.  A cell outside a layer's computational domain is
 where the layer does not exist, and the equivalence never counts it as FR4
-(AGENTS constraint 7); the picture keeps that distinction visible.
+(requirements.md parser constraint 7); the picture keeps that distinction visible.
 """
 
 from __future__ import annotations

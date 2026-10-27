@@ -7,7 +7,7 @@ only place that decides *what a layer's area actually is*.
 Design notes
 ------------
 **Millimetres, always.**  Input may be ``INCH`` or ``MM``; the model is metric
-(AGENTS constraint 4).  No unit is ever reported as a raw file value.
+(requirements.md parser constraint 4).  No unit is ever reported as a raw file value.
 
 **Positive only.**  Every ring that comes out is a real boundary: islands wound
 clockwise, holes counter-clockwise (spec p.39).  A renderer needs no fill-rule
@@ -150,7 +150,7 @@ class LayerPreview:
         return not self.geometry.region
 
     def layer_attributes(self) -> dict[str, str]:
-        """Layer-level attributes worth surfacing, per AGENTS note 4.
+        """Layer-level attributes worth surfacing, per requirements.md thickness-unit rules.
 
         ``.layer_dielectric`` is a *Layer*-class field and is meaningful only for
         non-copper layers; ``.copper_weight`` changes physical meaning with the
@@ -158,7 +158,7 @@ class LayerPreview:
         *interpreted* values are separate fields -- see
         :meth:`normalised_attributes` -- because a single number cannot carry
         both the raw file text and the millimetre value without inviting
-        exactly the confusion AGENTS note 4 warns about.
+        exactly the confusion requirements.md thickness-unit rules warns about.
         """
         wanted = (".layer_dielectric", ".copper_weight", ".layer_sequence",
                   ".dielectric_name", ".polarity")
@@ -229,7 +229,7 @@ class StepPreview:
     #: preview.
     empty_layers: list[str] = field(default_factory=list)
     #: Layers that could not be composed at all, e.g. an unusable layer profile
-    #: (AGENTS constraint 3).  Their absence from the drawing is a bug or a data
+    #: (requirements.md parser constraint 3).  Their absence from the drawing is a bug or a data
     #: problem, not a property of the board.
     failed_layers: list[str] = field(default_factory=list)
     #: The step's resolved layer stack (copper order, dielectric/drill Z spans,
@@ -336,7 +336,7 @@ def iter_step_previews(
             geometry = expand_layer(layer, step, expander=expander,
                                     options=opts.expand_options())
         except LayerProfileError as exc:
-            # AGENTS constraint 3: a layer profile that exists but is unusable is
+            # requirements.md parser constraint 3: a layer profile that exists but is unusable is
             # a hard error.  The loader has already reported *why* (as
             # layer_profile.invalid, with the profile's own path); what is
             # reported here is the consequence -- this layer is absent from the
@@ -655,7 +655,7 @@ def _region_polygons_json(region, round_digits: int) -> list[dict]:
 def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], dict]:
     """The computational domains available to this step, and which layer uses which.
 
-    AGENTS constraint 7: a material-equivalence consumer needs each physical
+    requirements.md parser constraint 7: a material-equivalence consumer needs each physical
     layer's two-dimensional calculation domain separately from its material
     *pattern*.  The copper polygons are a pattern -- where the metal is -- and
     they say nothing about where the layer exists at all.  This array is that

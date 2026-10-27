@@ -10,7 +10,7 @@ and a 0.05 mm pad corner want very different tessellation.  Everything here
 takes an explicit ``sagitta_mm`` -- the maximum allowed distance between the true
 curve and its chord.
 
-**Native symbol expansion.**  AGENTS constraint 5 requires ``r``/``s``/``rect``/
+**Native symbol expansion.**  requirements.md parser constraint 5 requires ``r``/``s``/``rect``/
 ``oval`` (and their close relatives) to be expanded from their *name* rather
 than looked up in ``symbols/``.  :func:`standard_symbol_geometry` turns a parsed
 :class:`~pcbkit.symbols.StandardSymbol` into a :class:`~pcbkit.model.SurfaceGeometry`

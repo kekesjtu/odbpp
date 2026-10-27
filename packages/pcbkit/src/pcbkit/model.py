@@ -12,7 +12,7 @@ resolved product model: layers in matrix order, each with its parsed geometry
 and its resolved base polygon.
 
 Units: every length field in the semantic layer is already in **millimetres**,
-because AGENTS constraint 4 requires metric output.  Raw float values are kept
+because requirements.md parser constraint 4 requires metric output.  Raw float values are kept
 alongside where losing the original would make debugging painful.
 """
 
@@ -99,7 +99,7 @@ class LayerType(str, Enum):
     def is_non_copper_material(self) -> bool:
         """Layers for which ``.layer_dielectric`` carries a material thickness.
 
-        AGENTS note 4 / spec p.231: ``.layer_dielectric`` is meaningful for
+        requirements.md thickness-unit rules / spec p.231: ``.layer_dielectric`` is meaningful for
         DIELECTRIC and SOLDER_MASK (material thickness) and SOLDER_PASTE
         (stencil thickness) -- never for copper.
         """
@@ -354,7 +354,7 @@ class Matrix:
 class StepRepeat:
     """A nested step array entry.
 
-    AGENTS constraint 1 excludes panel matrices and nested references, so these
+    requirements.md parser constraint 1 excludes panel matrices and nested references, so these
     are recorded only so that the exclusion can be reported (spec p.139).
     """
 
@@ -551,7 +551,7 @@ class Layer:
     attribute_scope: Optional[UnitScope] = None
     #: Raw ``features`` file contents, or ``None`` when the layer has none.
     features: Optional[object] = None  # pcbkit.features.FeatureFile
-    #: Layer-level profile.  Per AGENTS constraint 3 this takes priority over
+    #: Layer-level profile.  Per requirements.md parser constraint 3 this takes priority over
     #: the step profile as the base polygon.
     profile: Optional[SurfaceGeometry] = None
     profile_error: Optional[str] = None
@@ -586,7 +586,7 @@ class Layer:
 
 @dataclass
 class Step:
-    """A single physical board step (AGENTS constraint 1: no panel arrays)."""
+    """A single physical board step (requirements.md parser constraint 1: no panel arrays)."""
 
     name: str
     dir_name: str = ""
@@ -619,7 +619,7 @@ class Step:
         return {l.name: l for l in self.layers}
 
     def base_geometry(self, layer: Layer) -> SurfaceGeometry:
-        """Base polygon for *layer* per AGENTS constraint 3.
+        """Base polygon for *layer* per requirements.md parser constraint 3.
 
         Priority: the layer's own profile, else the step profile.  A layer
         profile that exists but could not be parsed raises

@@ -211,7 +211,7 @@ class TestPolarity:
 
 
 class TestBaseGeometry:
-    """AGENTS constraint 3 decides which layers start from a filled outline."""
+    """requirements.md parser constraint 3 decides which layers start from a filled outline."""
 
     def test_a_dielectric_layer_starts_from_the_profile(self):
         _job, step, expander, _diag = load("fx_negative_layer")
@@ -238,7 +238,7 @@ class TestBaseGeometry:
 
 
 # ---------------------------------------------------------------------------
-# AGENTS constraint 3: drills projected through a dielectric
+# requirements.md parser constraint 3: drills projected through a dielectric
 # ---------------------------------------------------------------------------
 
 def _square_profile(x0: float, y0: float, x1: float, y1: float):

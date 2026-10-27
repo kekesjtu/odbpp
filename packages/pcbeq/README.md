@@ -8,7 +8,7 @@ pcbeq run intermediate.json -o result --max-boundary-retreat-mm 0.2 --max-area-l
 pcbeq run intermediate.json -o result --px 4096 --py 4096 --max-cell-mm 2 3
 ```
 
-光栅 Px/Py 表示整板各方向像素数，必须一起提供。默认采用密集光栅；网格档位与专家最大尺寸互斥。最小网格参数、下限约束及冲突诊断已删除，短的强制区间直接保留。region 和全局网格由物理几何决定，显式光栅不足时仍报错。
+光栅 Px/Py 表示整板各方向像素数，必须一起提供。默认采用密集光栅；网格档位与专家最大尺寸互斥。网格按最大边长细分，短的强制区间直接保留。region 和全局网格由物理几何决定，显式光栅不足时报错。
 
 region 采用真实 Y 区间竖条阶梯划分，通过受约束的相邻区间合并减少几何块。
 

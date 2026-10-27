@@ -1,7 +1,7 @@
 """Material equivalence: formulas, grid, rectification, drills and materials.
 
 Most tests build the ``current intermediate`` document directly, because that document
-*is* the interface between the parser and the equivalence (AGENTS: 中间 JSON 是
+*is* the interface between the parser and the equivalence (requirements.md: 中间 JSON 是
 解析器与等效器之间唯一的数据接口).  A few use the real cases to make sure the
 document the parser actually writes is accepted.
 """

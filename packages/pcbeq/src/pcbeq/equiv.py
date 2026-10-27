@@ -279,7 +279,7 @@ def _single_step(document: Mapping[str, Any]) -> Mapping[str, Any]:
     if len(steps) != 1:
         raise EquivalenceError(
             f"the preview document must contain exactly one step, found {len(steps)}; "
-            f"AGENTS constraint 1 excludes panel arrays")
+            f"requirements.md parser constraint 1 excludes panel arrays")
     return steps[0]
 
 
@@ -965,7 +965,7 @@ def equivalence_from_document(
             reports.append(report)
             diags.error(EQUIV_MISSING_DOMAIN,
                         f"layer {name!r} has no usable computational domain: "
-                        f"{report.reason}; AGENTS constraint 7 forbids "
+                        f"{report.reason}; requirements.md parser constraint 7 forbids "
                         f"substituting its copper polygons")
             continue
 

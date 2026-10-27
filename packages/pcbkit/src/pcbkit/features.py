@@ -1043,7 +1043,7 @@ def parse_profile(
 
     A profile is exactly one surface feature (spec p.138, p.181).  More than one
     is reported rather than silently merged, because it changes the base-polygon
-    semantics that AGENTS constraint 3 relies on.
+    semantics that requirements.md parser constraint 3 relies on.
     """
     parsed = parse_feature_file(
         archive, relpath, default_scope=default_scope,

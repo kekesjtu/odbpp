@@ -50,7 +50,7 @@ class TestDocument:
         assert document["units"] == "mm"
 
     def test_input_units_are_recorded_separately_from_output_units(self):
-        # AGENTS constraint 4: the output is always mm, so which system the input
+        # requirements.md parser constraint 4: the output is always mm, so which system the input
         # used is a provenance fact rather than a property of the numbers.
         job, preview, _diag = preview_of("minimal-test-odb")
         document = step_to_json(job, preview)
@@ -283,7 +283,7 @@ class TestLayerJson:
         assert "is_flex" not in data["SILK_1"]
 
     def test_layer_attributes_are_filtered_to_the_meaningful_ones(self):
-        # AGENTS note 4: .layer_dielectric is meaningful only for non-copper
+        # requirements.md thickness-unit rules: .layer_dielectric is meaningful only for non-copper
         # layers, and .copper_weight changes physical meaning with the unit
         # system, so both are surfaced as authored for the consumer to interpret.
         _job, preview, _diag = preview_of("fx_negative_layer")
@@ -361,7 +361,7 @@ class TestStreaming:
 
 class TestFailureHandling:
     def test_a_broken_layer_profile_does_not_stop_the_other_layers(self):
-        # AGENTS constraint 3 makes an unusable layer profile a hard error, but
+        # requirements.md parser constraint 3 makes an unusable layer profile a hard error, but
         # hard for *that layer*: one bad layer should not cost the whole preview.
         diagnostics = Diagnostics()
         job = load_job(str(fixture_path("fx_bad_layer_profile")),
@@ -447,7 +447,7 @@ def test_layer_summary_lines_mentions_every_layer():
 # ---------------------------------------------------------------------------
 
 class TestStackupJson:
-    """AGENTS constraint 3, and AGENTS note 4's two unit semantics.
+    """requirements.md parser constraint 3, and requirements.md thickness-unit rules's two unit semantics.
 
     The JSON is the contract: it has to carry enough to rebuild the stack, and
     every attribute-derived number has to state what it was interpreted as.
@@ -477,7 +477,7 @@ class TestStackupJson:
         assert stackup[4]["copper_index"] == 0
 
     def test_a_decorative_layer_with_geometry_but_no_thickness_says_so(self):
-        # AGENTS note 8: solder paste carries real geometry yet no stated
+        # requirements.md absolute-Z rule: solder paste carries real geometry yet no stated
         # thickness, so its absolute Z is a best-effort zero that must be
         # marked unknown -- while the copper plane below it stays known.
         _job, preview, _diag = preview_of(
@@ -622,7 +622,7 @@ class TestSerialisedTopology:
 
 
 class TestComputationalDomains:
-    """AGENTS constraint 7: the JSON states each layer's calculation domain.
+    """requirements.md parser constraint 7: the JSON states each layer's calculation domain.
 
     A copper layer's polygons are a *pattern*; they do not say where the layer
     exists.  The domain array is that answer, and it follows the constraint 3

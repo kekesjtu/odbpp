@@ -351,7 +351,7 @@ def parse_step_header(
     """Parse ``steps/<step>/stephdr`` (spec p.139).
 
     Nested step arrays (``DX``/``DY``/``NX``/``NY``) are recorded and reported,
-    never applied: AGENTS constraint 1 restricts this parser to the single-board
+    never applied: requirements.md parser constraint 1 restricts this parser to the single-board
     step and excludes panel matrices.
     """
     rel = f"{step_rel}/stephdr"
@@ -388,7 +388,7 @@ def parse_step_header(
         diagnostics.warn(
             STEP_NESTED_REPEAT,
             f"step {step_rel.rsplit('/', 1)[-1]!r} declares {len(header.repeats)} nested "
-            f"step repeat(s); AGENTS constraint 1 excludes panel arrays, so they are ignored",
+            f"step repeat(s); requirements.md parser constraint 1 excludes panel arrays, so they are ignored",
             rel,
         )
 

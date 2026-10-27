@@ -20,7 +20,7 @@ def expected_files() -> dict[Path, bytes]:
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema_bytes = (json.dumps(schema, ensure_ascii=False, indent=2) + "\n").encode()
     files = {ROOT / "contracts/intermediate.schema": schema_bytes,
-             ROOT / "docs/intermediate.schema": schema_bytes}
+             ROOT / "docs/interfaces/intermediate.schema": schema_bytes}
     for package in ("pcbkit", "pcbeq"):
         files[ROOT / f"packages/{package}/src/{package}/intermediate.py"] = source.read_bytes()
     return files

@@ -2,7 +2,7 @@
 
 The parser knows the matrix row order, each layer's ``TYPE`` and the drill
 layers' ``START_NAME``/``END_NAME``.  It does **not** know, without a stack
-model, whether a hole in ``D_3_8`` passes through ``DIELECTRIC_5``.  AGENTS
+model, whether a hole in ``D_3_8`` passes through ``DIELECTRIC_5``.  requirements.md
 constraint 3 requires that judgement for dielectric display cutouts and
 solid-copper dielectric sampling. The intermediate geometry stays uncut;
 copper artwork and its sampling are independent of DRILL projections.
@@ -134,7 +134,7 @@ class Thickness:
     scope: str
     unit_system: str
     #: True when the field is being read on a layer class the spec does not
-    #: define it for (AGENTS note 5: ``.layer_dielectric`` is a non-copper field).
+    #: define it for (requirements.md non-copper thickness rule: ``.layer_dielectric`` is a non-copper field).
     spec_deviation: bool = False
 
     def as_dict(self) -> dict:
@@ -278,7 +278,7 @@ class Stackup:
         """Z interval of a dielectric sheet or a drill, else ``None``.
 
         ``ROUT`` is excluded on purpose: it is a milling contour rather than a
-        drilled hole, and AGENTS constraint 3 projects *drills* into dielectrics.
+        drilled hole, and requirements.md parser constraint 3 projects *drills* into dielectrics.
         """
         if layer.type is LayerType.DIELECTRIC:
             return self.dielectric_span(layer)
@@ -351,7 +351,7 @@ class Stackup:
                 f"dielectric-on-copper:{layer.name}",
                 ATTR_LAYER_DIELECTRIC_ON_COPPER,
                 f"copper layer {layer.name!r} declares .layer_dielectric="
-                f"{raw!r}; spec p.231 / AGENTS note 5 define that field for "
+                f"{raw!r}; spec p.231 / requirements.md non-copper thickness rule define that field for "
                 f"non-copper layers, so the value is emitted but flagged "
                 f"spec_deviation=true",
                 layer.dir_name or None,

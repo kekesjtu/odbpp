@@ -75,7 +75,7 @@ class SymbolCycleError(OdbError):
 class LayerProfileError(OdbError):
     """A layer profile exists but cannot be used as a base polygon.
 
-    Per AGENTS constraint 3 a present-but-unparseable layer profile is a hard
+    Per requirements.md parser constraint 3 a present-but-unparseable layer profile is a hard
     error: silently falling back to the step profile would fabricate geometry
     that does not exist on that layer.
     """

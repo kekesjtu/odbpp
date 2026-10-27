@@ -1,6 +1,6 @@
 """Scanline rasterisation of regions onto the shared pixel raster.
 
-The equivalence formulas are defined on a pixel block (AGENTS 公式推导 2.2), so
+The equivalence formulas are defined on a pixel block (requirements.md 公式推导 2.2), so
 the material pattern of a layer has to be sampled at pixel centres.  Doing that
 naively -- a point-in-polygon test per pixel per layer -- is both slow and
 ambiguous about holes, so this module converts a :class:`~pcbeq.clipper.Region`
@@ -8,9 +8,9 @@ into a list of boundary edges and answers "which pixels on this scanline are
 inside?" with an even-odd crossing count.
 
 Why even-odd is correct here: composed regions are fully positive
-(AGENTS constraint 2) and Clipper emits non-overlapping nested rings, so island
+(requirements.md parser constraint 2) and Clipper emits non-overlapping nested rings, so island
 and hole nesting alternates.  The fill therefore never depends on the order the
-rings happen to be in -- which is exactly the trap AGENTS constraint 6 warns
+rings happen to be in -- which is exactly the trap requirements.md parser constraint 6 warns
 about.
 
 The raster itself is only ever materialised one pixel row at a time
@@ -123,7 +123,7 @@ class LayerMask:
     * :attr:`WHITE` (255) -- base laminate, material 2, inside the layer's
       computational domain;
     * :attr:`OUTSIDE` (160) -- no computational domain here: board-outside or
-      void.  It is *not* a third material; AGENTS constraint 7 forbids counting
+      void.  It is *not* a third material; requirements.md parser constraint 7 forbids counting
       it as base laminate, and the equivalence never does.
 
     Rows are stored bottom-up (``row * px + column``, row 0 at the smallest
