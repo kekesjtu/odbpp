@@ -27,7 +27,7 @@ from .grid import BoardGrid, GridOptions, build_grid
 from .materials import MaterialBook, ResolvedMaterials
 from .raster import LayerMask, RasterAxis, region_edges
 from .rectify import (Rect, RectifyOptions, RectifyResult, rectify_region,
-                      profile_shape, _topology, boundary_retreat)
+                      profile_shape, profile_region, _topology, boundary_retreat)
 
 __all__ = [
     "EquivalenceOptions",
@@ -545,6 +545,141 @@ def plan_geometry(step, options, diagnostics):
     return geometry,membership
 
 
+def _merge_active_partition(rectangles, membership, physical_domains):
+    """Drop no-material reference pieces and exactly merge equal layer memberships.
+
+    No boundary is rounded or moved. Each physical domain's modeled union must
+    remain unchanged; the step profile is a planning/raster reference, not a layer.
+    """
+    tagged=[]
+    for rid,rect in enumerate(rectangles):
+        owners=tuple(key for key,ids in membership.items() if rid in ids)
+        if physical_domains.intersection(owners):
+            tagged.append((rect,owners))
+    removed=len(rectangles)-len(tagged)
+    initial=len(tagged)
+    while True:
+        count=len(tagged)
+        for axis in (0,1):
+            groups={}
+            for r,owners in tagged:
+                key=(owners,r.y0,r.y1) if axis==0 else (owners,r.x0,r.x1)
+                groups.setdefault(key,[]).append(r)
+            merged=[]
+            for key,values in groups.items():
+                values.sort(key=lambda r:r.x0 if axis==0 else r.y0)
+                current=values[0]
+                for r in values[1:]:
+                    adjacent=current.x1==r.x0 if axis==0 else current.y1==r.y0
+                    if adjacent:
+                        current=Rect(current.x0,current.y0,r.x1,current.y1) if axis==0 else Rect(current.x0,current.y0,current.x1,r.y1)
+                    else:
+                        merged.append((current,key[0]));current=r
+                merged.append((current,key[0]))
+            tagged=merged
+        if len(tagged)==count:
+            break
+    tagged.sort(key=lambda item:(item[0].bounds,item[1]))
+    result=[r for r,_ in tagged]
+    members={key:[i for i,(_,owners) in enumerate(tagged) if key in owners] for key in membership}
+    return result,members,{"reference_only_pieces_removed":removed,"exact_membership_merges":initial-len(result)}
+
+
+def _coarsen_shared_partition(rectangles, membership, originals, options):
+    """Merge adjacent true intervals while preserving each layer's membership.
+
+    Differing layer memberships retain their mandatory X seam. Both sides can
+    still use their common Y interval, provided every affected domain passes
+    its own complete geometric constraints. No arbitrary Y lattice is used.
+    """
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+    from .rectify import MERGE_AXIS_CLEARANCE_MM
+    owners=[frozenset(key for key,ids in membership.items() if i in ids) for i in range(len(rectangles))]
+    models={key:unary_union([box(*rectangles[i].bounds) for i in ids]) for key,ids in membership.items()}
+    accepted=rejected=0
+    def score(rows):
+        xs={v for r in rows for v in (r.x0,r.x1)}
+        ys=sorted({v for r in rows for v in (r.y0,r.y1)})
+        crowded=sum(b-a<MERGE_AXIS_CLEARANCE_MM for a,b in zip(ys,ys[1:]))
+        return len(xs)+len(ys),crowded,len(rows)
+    for _ in range(256):
+        before=score(rectangles)
+        proposals=[]
+        columns={}
+        for i,r in enumerate(rectangles):
+            columns.setdefault((r.x0,r.x1),[]).append(i)
+        blocks=[]
+        for (x0,x1),indices in columns.items():
+            current=[]
+            high=None
+            for i in sorted(indices,key=lambda i:rectangles[i].y0):
+                r=rectangles[i]
+                if current and r.y0!=high:
+                    blocks.append((Rect(x0,rectangles[current[0]].y0,x1,high),current))
+                    current=[]
+                current.append(i);high=r.y1
+            blocks.append((Rect(x0,rectangles[current[0]].y0,x1,high),current))
+        for left,li in blocks:
+            for right,ri in blocks:
+                if left.x1!=right.x0:
+                    continue
+                low,high=max(left.y0,right.y0),min(left.y1,right.y1)
+                if high<=low or (left.y0==right.y0 and left.y1==right.y1):
+                    continue
+                affected=set(li+ri)
+                # Sharing one limiting edge can remove a propagated axis even
+                # when sharing both edges would exceed the contour budget.
+                for merge_low,merge_high in ((True,True),(True,False),(False,True)):
+                    replacements={i:Rect(rectangles[i].x0,
+                        max(low,rectangles[i].y0) if merge_low else rectangles[i].y0,
+                        rectangles[i].x1,min(high,rectangles[i].y1) if merge_high else rectangles[i].y1)
+                        for i in affected}
+                    kept=[(replacements.get(i,r),owners[i]) for i,r in enumerate(rectangles)
+                          if i not in affected or replacements[i].height>0]
+                    candidate=[r for r,_ in kept]
+                    members={key:[i for i,(_,tags) in enumerate(kept) if key in tags] for key in membership}
+                    candidate,members,_=_merge_active_partition(candidate,members,set(originals))
+                    after=score(candidate)
+                    if after>=before:
+                        continue
+                    cost=sum(rectangles[i].area-max(0,replacements[i].area) for i in affected)
+                    crowded_removed=before[1]-after[1]
+                    proposals.append((0 if crowded_removed>0 else 1,
+                                      cost/max(1,crowded_removed),cost,len(proposals),
+                                      affected,replacements,candidate,members))
+        changed=False
+        for _,_,_,_,affected,replacements,candidate,members in sorted(proposals):
+            losses={i:box(*rectangles[i].bounds).difference(box(*r.bounds)) if r.height>0
+                    else box(*rectangles[i].bounds) for i,r in replacements.items()}
+            updates={}
+            checked=set()
+            for key in set().union(*(owners[i] for i in affected)):
+                lost=unary_union([patch for k,patch in losses.items() if key in owners[k]])
+                model=models[key].difference(lost);source=originals[key]
+                identity=(source.wkb,model.wkb)
+                if identity not in checked:
+                    checked.add(identity)
+                    if (source.difference(model).area>source.area*options.max_relative_area_error+1e-8
+                            or model.difference(source).area>1e-8
+                            or not boundary_retreat(source,model,options.max_boundary_retreat_mm,measure=False)["within_limit"]
+                            or not _topology(source,model)["preserved"]):
+                        break
+                updates[key]=model
+            else:
+                rectangles=candidate;membership=members;models.update(updates)
+                owners=[frozenset(key for key,ids in membership.items() if k in ids)
+                        for k in range(len(rectangles))]
+                accepted+=1;changed=True
+                break
+            rejected+=1
+        if not changed:
+            break
+    return rectangles,membership,{"accepted_adjacent_common_intervals":accepted,
+        "constraint_rejections":rejected,"maximum_accepted_merges":256,
+        "endpoint_source":"adjacent true interval intersection"}
+
+
 def _plan_geometry_once(step, options, diagnostics):
     """Common physical XY partition and explicit layer-domain membership, no pixels."""
     from shapely.geometry import box
@@ -557,11 +692,12 @@ def _plan_geometry_once(step, options, diagnostics):
          (row.get("type") in COPPER_TYPES or row.get("type")==DIELECTRIC_TYPE)}
 
     step_original=profile_shape(_region_from_polygons(domains[profile_id].get("polygons")))
-    basis_options=replace(options.rectify,basis_mm=step_original.bounds)
+    basis_options=replace(options.rectify,basis_mm=step_original.bounds,
+        reference_x_lines_mm=tuple(sorted({v for r in rectification.rectangles for v in (r.x0,r.x1)})),
+        reference_y_lines_mm=tuple(sorted({v for r in rectification.rectangles for v in (r.y0,r.y1)})))
     originals={profile_id:step_original}
     plans={profile_id:rectification}
     effective_regions={profile_id:_region_from_polygons(domains[profile_id].get("polygons"))}
-    from .geometry import region_from_rings
     from copy import deepcopy
     dedup={step_original.wkb:rectification}
     for domain_id in sorted(ids-{profile_id,None}):
@@ -571,9 +707,7 @@ def _plan_geometry_once(step, options, diagnostics):
         if original.is_empty or original.area <= 0:
             raise EquivalenceError(f"domain {domain_id!r} has no physical area within the step profile")
         originals[domain_id]=original
-        components=[original] if original.geom_type=="Polygon" else list(original.geoms)
-        region=region_from_rings([(tuple(p.exterior.coords)[:-1],False) for p in components]+
-                                [(tuple(h.coords)[:-1],True) for p in components for h in p.interiors])
+        region=profile_region(original)
         effective_regions[domain_id]=region
         if original.wkb not in dedup:
             dedup[original.wkb]=rectify_region(region,basis_options,diagnostics=diagnostics)
@@ -626,6 +760,58 @@ def _plan_geometry_once(step, options, diagnostics):
             if model.covers(shape): membership[key].append(rid)
             elif model.intersection(shape).area > 1e-8:
                 diagnostics.error("equiv.domain_partition",f"domain {key!r} partially covers region {rid} {r.bounds}")
+                rectification.ok=False
+    physical_domains=ids.intersection(originals)
+    if physical_domains:
+        reference_area=step_model.area
+        reference_loss=rectification.lost_area_mm2
+        rectangles,membership,cleanup=_merge_active_partition(rectangles,membership,physical_domains)
+        supported=unary_union([originals[key] for key in physical_domains])
+        shared_sources={**originals,profile_id:supported}
+        rectangles,membership,shared_merging=_coarsen_shared_partition(
+            rectangles,membership,shared_sources,options.rectify)
+        rectangles,membership,final_cleanup=_merge_active_partition(rectangles,membership,physical_domains)
+        active=unary_union([box(*r.bounds) for r in rectangles])
+        topology=_topology(supported,active)
+        contour=boundary_retreat(supported,active,options.rectify.max_boundary_retreat_mm)
+        loss=supported.difference(active).area
+        gained=active.difference(supported).area
+        budget=supported.area*options.rectify.max_relative_area_error
+        good=topology["preserved"] and contour["within_limit"] and loss<=budget+1e-8 and gained<=1e-8
+        if not good:
+            diagnostics.error("equiv.domain_geometry",f"supported physical-domain union: loss={loss:g} budget={budget:g}; boundary={contour}; topology={topology}")
+            rectification.ok=False
+        # All active-domain geometry is unchanged by cleanup. The root model
+        # measures actual supported entities; full step bounds still size raster.
+        rectification.original_area_mm2=supported.area
+        rectification.rectified_area_mm2=active.area
+        rectification.lost_area_mm2=loss;rectification.gained_area_mm2=gained
+        rectification.relative_error=loss/supported.area
+        rectification.net_area_error_mm2=active.area-supported.area
+        rectification.shape_deviation_mm2=loss+gained
+        rectification.region=profile_region(active)
+        rectification.audit.update({"modeling_source":"supported_physical_domain_union",
+            "active_physical_domain_ids":sorted(physical_domains),
+            "reference_step_model_area_mm2":reference_area,"reference_step_loss_mm2":reference_loss,
+            "area_budget_mm2":budget,"topology":topology,"boundary_retreat":contour,
+            "active_partition_cleanup":cleanup,"shared_interval_merging":shared_merging,
+            "final_exact_cleanup":final_cleanup})
+        audit[profile_id].update({"effective_domain":"supported physical-domain union within original step profile",
+            "shared_membership_source":"supported_physical_domain_union",
+            "shared_original_area_mm2":supported.area,"shared_model_area_mm2":active.area,
+            "shared_loss_area_mm2":loss,"shared_topology":topology,
+            "shared_boundary_retreat":contour,"ok":good})
+        for key in physical_domains-{profile_id}:
+            model=unary_union([box(*rectangles[i].bounds) for i in membership[key]])
+            source=originals[key]
+            contour=boundary_retreat(source,model,options.rectify.max_boundary_retreat_mm)
+            topology=_topology(source,model)
+            loss=source.difference(model).area
+            good=topology["preserved"] and contour["within_limit"] and loss<=source.area*options.rectify.max_relative_area_error+1e-8
+            audit[key].update({"shared_model_area_mm2":model.area,"shared_loss_area_mm2":loss,
+                "shared_boundary_retreat":contour,"shared_topology":topology,"ok":good})
+            if not good:
+                diagnostics.error("equiv.domain_geometry",f"domain {key!r}: final shared merge failed validation")
                 rectification.ok=False
     rectification.rectangles=rectangles
     partition=unary_union([box(*r.bounds) for r in rectangles])

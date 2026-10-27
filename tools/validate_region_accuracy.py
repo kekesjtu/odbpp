@@ -110,6 +110,10 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
     domain_checks = []
     for domain_id,ids in membership.items():
         source = domains[domain_id].intersection(board)
+        audit = geometry.audit["domains"][domain_id]
+        if audit.get("shared_membership_source") == "supported_physical_domain_union":
+            source = unary_union([domains[key].intersection(board)
+                                  for key in geometry.audit["active_physical_domain_ids"]])
         modeled = unary_union([box(*geometry.rectangles[i].bounds) for i in ids])
         assert modeled.difference(source).area <= 1e-8
         loss = source.area-modeled.area
@@ -121,7 +125,6 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
         for a,b in pairs:
             assert a.buffer(retreat,quad_segs=128).covers(b)
             assert b.buffer(retreat,quad_segs=128).covers(a)
-        audit = geometry.audit["domains"][domain_id]
         assert audit["shared_topology"]["preserved"]
         domain_checks.append({"domain":domain_id,"area_loss_ratio":loss/source.area,
             "retreat_upper_mm":audit["shared_boundary_retreat"]["max_distance_upper_mm"],

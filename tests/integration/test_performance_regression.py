@@ -33,8 +33,7 @@ def test_active_edges_match_unindexed_scanlines_at_vertices_and_repeated_rows():
         assert scan.spans_at(y) == spans_at(edges,y)
 
 
-@pytest.mark.parametrize("orthogonal", [False, True])
-def test_indexed_envelopes_match_full_profile_scans(orthogonal):
+def test_indexed_envelopes_match_full_profile_scans():
     region = region_from_rings([
         ([(0,0),(11,0),(10,8),(6,10),(0,9)], False),
         ([(2,2),(4,2),(4,5),(2,5)], True),
@@ -47,14 +46,13 @@ def test_indexed_envelopes_match_full_profile_scans(orthogonal):
             for x in (left+(right-left)*1e-8,right-(right-left)*1e-8):
                 value = _crossings(region.rings,x)
                 spans = value if spans is None else _intersect_spans(spans,value)
-        expected = []
-        for low,high in spans or []:
-            if not orthogonal:
-                low = math.ceil(low/.5-1e-7)*.5
-                high = math.floor(high/.5+1e-7)*.5
-            if high>low+1e-8:
-                expected.append((round(low,9),round(high,9)))
-        assert _envelope(region,a,b,.5,0,orthogonal,index) == expected
+        expected = [(low,high) for low,high in spans or [] if high>low+1e-8]
+        actual = _envelope(region,a,b,index)
+        assert len(actual) == len(expected)
+        # The unindexed reference probes near each endpoint; the actual
+        # implementation evaluates exact one-sided limits instead.
+        for got,want in zip(actual,expected):
+            assert got == pytest.approx(want,rel=0,abs=2e-7)
 
 
 @pytest.mark.parametrize("text", ["", " \t", "P\t1  2\t0 P 0;1=3;;ID=7",
@@ -103,15 +101,13 @@ def test_pad_cache_ends_with_run_and_returned_regions_are_independent(monkeypatc
     assert len(calls) == 4
 
 
-def test_profile_probe_rounding_at_large_coordinates_keeps_endpoint_edges():
+def test_profile_exact_endpoint_limits_at_large_coordinates():
     from pcbkit.clipper import Region, Ring
     source = Region([Ring(((1e6,0),(1e6+.01,1),(1e6+.02,0)),False)])
     a,b = 1e6+.005,1e6+.01
-    left = _crossings(source.rings,a+(b-a)*1e-8)
-    right = _crossings(source.rings,b-(b-a)*1e-8)
-    expected = [(round(lo,9),round(hi,9)) for lo,hi in _intersect_spans(left,right)]
-    assert expected
-    assert _envelope(source,a,b,.5,0,True,_ProfileIndex(source)) == expected
+    actual = _envelope(source,a,b,_ProfileIndex(source))
+    assert len(actual) == 1
+    assert actual[0] == pytest.approx((0,(a-1e6)/((1e6+.01)-1e6)))
 
 
 def test_standard_symbol_cache_separates_units_and_parameter_views():

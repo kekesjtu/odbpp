@@ -41,6 +41,9 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
         for domain_id,members in ids.items():
             source=domains[domain_id].intersection(domains[step["profile_domain_id"]])
+            if geometry_audit["domains"][domain_id].get("shared_membership_source") == "supported_physical_domain_union":
+                source=unary_union([domains[key].intersection(domains[step["profile_domain_id"]])
+                                    for key in geometry_audit["active_physical_domain_ids"]])
             modeled=unary_union([region_shapes[rid] for rid in members])
             assert source.area-modeled.area<=source.area*ratio+1e-8
             pairs=_boundary_pairs(source,modeled)

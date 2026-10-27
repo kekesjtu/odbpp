@@ -212,3 +212,74 @@ def test_shared_domain_retry_reduces_coarsening_without_relaxing_user_budgets(mo
     assert [o.coarsening_retreat_mm for o in attempts] == [3.0,1.5]
     assert all(o.max_boundary_retreat_mm == 3.0 and o.max_relative_area_error == .05 for o in attempts)
     assert len(geometry.audit["shared_domain_replanning"]) == 2
+
+
+def test_exact_shared_cleanup_preserves_every_physical_domain_union():
+    from shapely.ops import unary_union
+    from pcbeq.equiv import _merge_active_partition
+    from pcbeq.rectify import Rect
+    rows=[Rect(0,0,1,2),Rect(1,0,2,1),Rect(1,1,2,2),Rect(2,0,3,2),Rect(3,0,4,2)]
+    members={"step":list(range(5)),"left":[1,2,3],"right":[4]}
+    result,actual,audit=_merge_active_partition(rows,members,{"left","right"})
+    assert audit=={"reference_only_pieces_removed":1,"exact_membership_merges":2}
+    for key in ("left","right"):
+        before=unary_union([box(*rows[i].bounds) for i in members[key]])
+        after=unary_union([box(*result[i].bounds) for i in actual[key]])
+        assert before.symmetric_difference(after).area==0
+    assert [r.bounds for r in result]==[(1,0,3,2),(3,0,4,2)]
+
+
+def test_shared_common_interval_merge_handles_stacked_layer_memberships():
+    from shapely.ops import unary_union
+    from pcbeq.equiv import _coarsen_shared_partition
+    from pcbeq.rectify import Rect,RectifyOptions,boundary_retreat
+    rows=[Rect(0,0,1,1.23456),Rect(1,0,2,1.23457),Rect(1,1.23457,2,1.23459)]
+    members={"step":[0,1,2],"flex":[0,1],"rigid":[1,2]}
+    originals={key:unary_union([box(*rows[i].bounds) for i in ids]) for key,ids in members.items()}
+    result,actual,audit=_coarsen_shared_partition(rows,members,originals,RectifyOptions())
+    assert audit["accepted_adjacent_common_intervals"]==1
+    assert [r.bounds for r in result]==[(0,0,1,1.23456),(1,0,2,1.23456)]
+    assert actual["flex"]==[0,1] and actual["rigid"]==[1]
+    for key,source in originals.items():
+        modeled=unary_union([box(*result[i].bounds) for i in actual[key]])
+        assert modeled.difference(source).area==0
+        assert source.difference(modeled).area<=source.area*.05
+        assert boundary_retreat(source,modeled,3)["within_limit"]
+
+
+def test_shared_common_interval_merge_cannot_disconnect_a_branch():
+    from shapely.ops import unary_union
+    from pcbeq.equiv import _coarsen_shared_partition
+    from pcbeq.rectify import Rect,RectifyOptions
+    rows=[Rect(0,0,1,1),Rect(1,0,2,.4),Rect(1,.6,2,1)]
+    members={"board":[0,1,2]}
+    source=unary_union([box(*r.bounds) for r in rows])
+    result,_,audit=_coarsen_shared_partition(rows,members,{"board":source},
+                                           RectifyOptions(max_relative_area_error=.9))
+    assert [r.bounds for r in result]==[r.bounds for r in rows]
+    assert audit["constraint_rejections"]>0
+
+
+def test_sharing_one_true_limit_does_not_force_an_excessive_other_edge_retreat():
+    from shapely.ops import unary_union
+    from pcbeq.equiv import _coarsen_shared_partition
+    from pcbeq.rectify import Rect,RectifyOptions
+    rows=[Rect(0,0,1,10),Rect(1,.001,2,14)]
+    source=unary_union([box(*r.bounds) for r in rows])
+    result,_,audit=_coarsen_shared_partition(rows,{"board":[0,1]},
+                                           {"board":source},RectifyOptions())
+    assert [r.bounds for r in result]==[(0,.001,1,10),(1,.001,2,14)]
+    assert audit["accepted_adjacent_common_intervals"]==1
+
+
+def test_reference_only_step_pieces_do_not_create_material_or_resize_raster():
+    domains=[{"id":"step_profile","source":"step_profile","polygons":[rect(0,0,10,10)]},
+             {"id":"left","source":"layer_profile","polygons":[rect(0,0,5,10)]}]
+    document=build_document(domains=domains,layers=[
+        {"name":"LEFT","type":"SIGNAL","domain_id":"left","polygons":[]}])
+    result=equivalence_from_document(document,EquivalenceOptions(GridOptions(200,200)))
+    assert not result.fatal
+    assert result.board_bounds_mm==(0,0,10,10)
+    assert [r.bounds for r in result.rectification.rectangles]==[(0,0,5,10)]
+    assert all(c.x1<=5 for c in result.cells)
+    assert result.rectification.relative_error==0
