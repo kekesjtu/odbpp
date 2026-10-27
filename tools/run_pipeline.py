@@ -86,6 +86,8 @@ def build_parser():
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     parser.add_argument("--min-cell-mm", type=float, nargs="+")
     parser.add_argument("--max-cell-mm", type=float, nargs="+")
+    parser.add_argument("--max-boundary-retreat-mm", type=float)
+    parser.add_argument("--max-area-loss-ratio", type=float)
     parser.add_argument("--materials", type=Path)
     parser.add_argument("--heatmap-grid", action="store_true")
     return parser
@@ -94,7 +96,8 @@ def build_parser():
 def forwarded(args) -> tuple[list[str], list[str]]:
     groups = []
     for names in (("step", "sagitta_mm", "digits"),
-                  ("px", "py", "grid_level", "min_cell_mm", "max_cell_mm", "materials", "heatmap_grid")):
+                  ("px", "py", "grid_level", "min_cell_mm", "max_cell_mm", "materials", "heatmap_grid",
+                   "max_boundary_retreat_mm", "max_area_loss_ratio")):
         options = []
         for name in names:
             value = getattr(args, name, None)

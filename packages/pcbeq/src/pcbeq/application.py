@@ -92,9 +92,9 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
                              auto_raster=args.px is None),
             materials=MaterialBook(config or None, diagnostics=diagnostics),
             rectify=RectifyOptions(
+                max_boundary_retreat_mm=args.max_boundary_retreat_mm,
                 tolerance_mm=args.rectify_tolerance,
                 max_relative_area_error=args.max_area_error_ratio,
-                max_absolute_area_error_mm2=args.max_area_error_mm2,
             ),
 
         )

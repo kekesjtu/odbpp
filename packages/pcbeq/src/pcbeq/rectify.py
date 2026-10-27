@@ -5,16 +5,20 @@ from __future__ import annotations
 import math
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Optional
 
 from .geometry import Region, Ring, union
 from .diagnostics import RECTIFY_AREA_ERROR, RECTIFY_EMPTY_PROFILE, Diagnostics
 
 __all__ = ["Rect", "RectifyOptions", "RectifyResult", "rectify_region",
-           "DEFAULT_TOLERANCE_MM", "perimeter"]
+           "DEFAULT_TOLERANCE_MM", "DEFAULT_MAX_BOUNDARY_RETREAT_MM",
+           "boundary_retreat", "perimeter"]
 
 #: Initial physical boundary step; adaptive refinement never reads pixels.
 DEFAULT_TOLERANCE_MM = 0.5
+DEFAULT_MAX_BOUNDARY_RETREAT_MM = 0.5
+MAX_INITIAL_BANDS = 10000
 
 
 @dataclass(frozen=True)
@@ -53,28 +57,31 @@ class Rect:
 
 @dataclass(frozen=True)
 class RectifyOptions:
-    """Internal physical geometry policy; never derived from pixels."""
+    """Two public error budgets, plus internal physical planning limits."""
 
+    max_boundary_retreat_mm: float = DEFAULT_MAX_BOUNDARY_RETREAT_MM
     tolerance_mm: Optional[float] = None
     #: Reject the result when lost or gained area exceeds this fraction of the
     #: original outline area.
     max_relative_area_error: float = 0.05
-    #: Optional absolute floor for internal diagnostics. Disabled by default so
-    #: the 5% limit applies even to small boards.
-    max_absolute_area_error_mm2: float = 0.0
-    min_step_mm: float = 0.0625
-    max_refinement_rounds: int = 8
+    min_step_mm: float = 1e-5
+    max_refinement_rounds: int = 20
+    max_refinement_steps: int = 10000
     basis_mm: Optional[tuple[float, float, float, float]] = None
 
     def __post_init__(self) -> None:
+        if not math.isfinite(self.max_boundary_retreat_mm) or self.max_boundary_retreat_mm <= 0:
+            raise ValueError("max_boundary_retreat_mm must be finite and positive")
         if self.tolerance_mm is not None and (not math.isfinite(self.tolerance_mm) or self.tolerance_mm <= 0.0):
             raise ValueError(f"tolerance_mm must be positive, got {self.tolerance_mm!r}")
-        if not math.isfinite(self.max_relative_area_error) or self.max_relative_area_error < 0.0:
-            raise ValueError("max_relative_area_error cannot be negative")
-        if not math.isfinite(self.max_absolute_area_error_mm2) or self.max_absolute_area_error_mm2 < 0.0:
-            raise ValueError("max_absolute_area_error_mm2 must be finite and nonnegative")
+        if not math.isfinite(self.max_relative_area_error) or not 0 <= self.max_relative_area_error < 1:
+            raise ValueError("max_relative_area_error must be finite and in [0, 1)")
         if not math.isfinite(self.min_step_mm) or self.min_step_mm <= 0:
             raise ValueError("min_step_mm must be finite and positive")
+        for name in ("max_refinement_rounds", "max_refinement_steps"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a nonnegative integer")
 
 
 @dataclass
@@ -113,7 +120,7 @@ class RectifyResult:
 
     def as_dict(self) -> dict:
         return {
-            "strategy": "inscribed-vertical-staircase-v3",
+            "strategy": "inscribed-vertical-staircase-worst-first",
             "audit": self.audit,
             "tolerance_mm": self.tolerance_mm,
             "rectangle_count": len(self.rectangles),
@@ -162,7 +169,11 @@ def profile_shape(region):
 
 
 def _components(shape):
-    return [] if shape.is_empty else ([shape] if shape.geom_type == "Polygon" else list(shape.geoms))
+    if shape.is_empty:
+        return []
+    if shape.geom_type == "Polygon":
+        return [shape]
+    return [p for g in getattr(shape, "geoms", ()) for p in _components(g)]
 
 
 def _topology_source(original):
@@ -200,6 +211,122 @@ def _topology(original, model, source=None):
             "preserved": all(n == 1 for n in matches + hole_matches)
                          and len(targets) == len(sources) and len(model_holes) == len(holes)
                          and positive and core_preserved}
+
+
+@lru_cache(maxsize=16)
+def _distance_tube(line, limit):
+    # Shapely geometries are immutable: keys include the full contour and radius.
+    return line.buffer(limit, quad_segs=32)
+
+
+def _line_within(a, b, limit):
+    """Continuous, conservative two-sided distance test, not vertex sampling.
+
+    Round polygonal buffers are INSCRIBED in the mathematical distance tube.
+    Coverage therefore certifies an upper bound, rather than accepting a sparse
+    Hausdorff estimate. Both line directions are tested, including segment interiors.
+    """
+    if a.equals(b):
+        return True
+    if a.is_empty or b.is_empty or a.hausdorff_distance(b) > limit:
+        return False
+    return _distance_tube(b,limit).covers(a) and _distance_tube(a,limit).covers(b)
+
+
+def _line_bounds(a, b, limit):
+    if a.equals(b):
+        return 0.0, 0.0
+    if a.is_empty or b.is_empty:
+        return math.inf, math.inf
+    low = a.hausdorff_distance(b)  # GEOS vertex estimate is only a LOWER bound.
+    vertex_lower = low
+    high = limit if _line_within(a,b,limit) else max(limit*2, low * 1.01)
+    for _ in range(64):
+        if _line_within(a, b, high):
+            break
+        high *= 2
+    else:
+        raise ValueError("cannot certify contour distance within numeric range")
+    # Report a certified upper bound, with at most 0.1% of the requested
+    # tolerance as measurement uncertainty (apart from buffer conservatism).
+    accuracy = max(1e-9, limit * .001)
+    for _ in range(48):
+        if high - low <= accuracy:
+            break
+        mid = (low + high) / 2
+        if _line_within(a, b, mid):
+            high = mid
+        else:
+            low = mid
+    return vertex_lower, high
+
+
+def _retreat_witness(a, b, upper, limit):
+    """Locate the extremal segment through the continuous distance tube, not a grid."""
+    import numpy as np
+    import shapely
+    threshold = max(0., upper-max(1e-9, limit*.002))
+    candidates = []
+    for source, target in ((a,b),(b,a)):
+        outside = source.difference(target.buffer(threshold, quad_segs=32))
+        samples = []
+        for part in getattr(outside, "geoms", (outside,)):
+            coordinates = shapely.get_coordinates(part)
+            if not len(coordinates):
+                continue
+            samples.append(coordinates)
+            if len(coordinates)>1 and part.geom_type in ("LineString", "LinearRing"):
+                samples.append((coordinates[:-1]+coordinates[1:])/2)
+        if not samples:
+            continue
+        points = np.concatenate(samples)
+        distances = shapely.distance(shapely.points(points), target)
+        i = int(np.argmax(distances))
+        candidates.append((float(distances[i]),float(points[i,0]),float(points[i,1])))
+    return max(candidates) if candidates else None
+
+
+def _boundary_pairs(original, model):
+    """Match each island exterior and hole; never match a hole to a board edge."""
+    from shapely.geometry import Polygon
+    targets = _components(model)
+    pairs = []
+    for source in _components(original):
+        matches = [t for t in targets if source.covers(t.representative_point())]
+        if len(matches) != 1:
+            return None
+        target = matches[0]
+        pairs.append((source.exterior, target.exterior))
+        holes = [Polygon(h) for h in target.interiors]
+        if len(source.interiors) != len(holes):
+            return None
+        for hole in source.interiors:
+            matches = [h for h in holes if h.covers(Polygon(hole))]
+            if len(matches) != 1:
+                return None
+            pairs.append((hole, matches[0].exterior))
+    if len(targets) != len(_components(original)):
+        return None
+    return pairs
+
+
+def boundary_retreat(original, model, limit, *, measure=True):
+    """Audit full corresponding contours of the UNION, excluding region seams."""
+    pairs = _boundary_pairs(original, model)
+    valid = pairs is not None and bool(pairs)
+    within = valid and all(_line_within(a, b, limit) for a, b in pairs)
+    bounds = [_line_bounds(a, b, limit) for a, b in pairs] if measure and valid else []
+    worst = max(range(len(bounds)), key=lambda i:bounds[i][1]) if bounds else None
+    witness = (_retreat_witness(*pairs[worst],bounds[worst][1],limit)
+               if worst is not None and bounds[worst][1]>limit else None)
+    return {"metric": "symmetric_euclidean_corresponding_contours",
+            "max_allowed_mm": limit, "within_limit": within,
+            "contour_pairs": len(pairs) if valid else 0,
+            "max_distance_lower_mm": max((p[0] for p in bounds), default=None),
+            "max_distance_upper_mm": max((p[1] for p in bounds), default=None),
+            "worst_location_mm": list(witness[1:]) if witness else None,
+            "measurement_resolution_mm": max(1e-9, limit * .001),
+            "verification": "continuous two-sided inscribed distance tubes, quad_segs=32"}
 
 
 def _intersect_spans(a, b):
@@ -274,7 +401,8 @@ def _pack(bands):
     return [Rect(a,l,b,h) for a,b,spans in merged for l,h in spans]
 
 
-def _coarsen(envelopes, original, allowed, step, origin, topology_source=None):
+def _coarsen(envelopes, original, allowed, step, origin, topology_source=None,
+             max_boundary_retreat_mm=DEFAULT_MAX_BOUNDARY_RETREAT_MM):
     """Spend boundary-loss budget to reduce globally propagated axis lines.
 
     Every candidate is a subset of the already inscribed model. Narrow spans
@@ -296,11 +424,21 @@ def _coarsen(envelopes, original, allowed, step, origin, topology_source=None):
         ys = {v for r in rects for v in (r.y0, r.y1)}
         return (len(xs) + len(ys), len(rects))
 
-    def acceptable(bands):
-        _, model = packed(bands)
-        return (original.area - model.area <= allowed + 1e-8
-                and model.difference(original).area <= 1e-8
-                and _topology(original, model, topology_source)["preserved"])
+    rejection_counts = {"area": 0, "boundary": 0, "topology": 0}
+
+    def acceptable(bands, model=None):
+        if model is None:
+            _, model = packed(bands)
+        if original.area - model.area > allowed + 1e-8 or model.difference(original).area > 1e-8:
+            rejection_counts["area"] += 1
+            return False
+        if not boundary_retreat(original, model, max_boundary_retreat_mm, measure=False)["within_limit"]:
+            rejection_counts["boundary"] += 1
+            return False
+        if not _topology(original, model, topology_source)["preserved"]:
+            rejection_counts["topology"] += 1
+            return False
+        return True
 
     before = score(envelopes)
     chosen = envelopes
@@ -365,11 +503,17 @@ def _coarsen(envelopes, original, allowed, step, origin, topology_source=None):
             # A batch can cut a protected branch. Recheck individual changes;
             # reject them rather than spending area budget on topology loss.
             chosen = bands
+            _, chosen_model = packed(chosen)
             accepted = 0
             for i, band in sorted(selected.items(), reverse=True):
                 candidate = chosen[:i] + [band] + chosen[i+2:]
-                if acceptable(candidate):
+                removed = unary_union([box(a,l,b,h) for a,b,spans in chosen[i:i+2]
+                                       for l,h in spans]).difference(
+                    unary_union([box(band[0],l,band[1],h) for l,h in band[2]]))
+                candidate_model = chosen_model.difference(removed)
+                if acceptable(candidate, candidate_model):
                     chosen = candidate
+                    chosen_model = candidate_model
                     accepted += 1
                 else:
                     rejected_topology += 1
@@ -381,7 +525,9 @@ def _coarsen(envelopes, original, allowed, step, origin, topology_source=None):
                     "axis_score_before": list(before),
                     "axis_score_after": list(score(chosen)),
                     "merged_adjacent_pairs": merged_pairs,
-                    "topology_rejected_merges": rejected_topology}
+                    "topology_rejected_merges": rejected_topology,
+                    "constraint_rejections": rejection_counts,
+                    "all_constraints_rechecked": True}
 
 
 def rectify_region(region, options=None, *, diagnostics=None):
@@ -399,55 +545,128 @@ def rectify_region(region, options=None, *, diagnostics=None):
     x0,y0,x1,y1 = original.bounds
     if opts.tolerance_mm is None:
         basis = opts.basis_mm or original.bounds
-        step = max(DEFAULT_TOLERANCE_MM, min(basis[2]-basis[0], basis[3]-basis[1])/32)
+        step = min(max(DEFAULT_TOLERANCE_MM, min(basis[2]-basis[0], basis[3]-basis[1])/32),
+                   opts.max_boundary_retreat_mm/2)
     orthogonal = all(abs(a-c)<1e-9 or abs(b-d)<1e-9 for r in region.rings
                      for (a,b),(c,d) in zip(tuple(r.points),tuple(r.points[1:])+tuple(r.points[:1])))
     if orthogonal:
         breaks = sorted({x for r in region.rings for x,y in r.points})
     else:
         bx0,by0,bx1,by1 = opts.basis_mm or original.bounds
-        count = max(1,math.ceil((bx1-bx0)/step))
+        requested = (bx1-bx0)/step
+        if not math.isfinite(requested) or requested > MAX_INITIAL_BANDS:
+            diags.error(RECTIFY_AREA_ERROR,
+                f"X interval [{bx0:g}, {bx1:g}] mm, length={bx1-bx0:g} mm: "
+                f"retreat limit={opts.max_boundary_retreat_mm:g} mm requires {requested:g} "
+                f"initial bands; internal resource limit={MAX_INITIAL_BANDS}")
+            return RectifyResult([],step,original.area,0,original.area,0,1,False,
+                                 audit={"termination":"initial band resource limit"})
+        count = max(1,math.ceil(requested))
         breaks = [bx0+(bx1-bx0)*i/count for i in range(count+1)]
         y0 = by0
-    bands = [(a,b,step) for a,b in zip(breaks,breaks[1:])]
-    allowed = max(opts.max_absolute_area_error_mm2,opts.max_relative_area_error*original.area)
+    allowed = opts.max_relative_area_error * original.area
+    limit = opts.max_boundary_retreat_mm
+
+    @dataclass
+    class Band:
+        a: float
+        b: float
+        pitch: float
+        depth: int
+        spans: list
+        loss: float
+
+        @property
+        def envelope(self):
+            return self.a, self.b, self.spans
+
+    def make_band(a, b, pitch, depth):
+        spans = _envelope(region, a, b, pitch, y0, orthogonal, profile_index)
+        actual = original.intersection(box(a, y0-1, b, y1+1))
+        actual = unary_union([p for p in _components(actual) if p.geom_type == "Polygon"])
+        modeled = unary_union([box(a, low, b, high) for low, high in spans])
+        loss = max(0., actual.area-modeled.area)
+        return Band(a, b, pitch, depth, spans, loss)
+
+    bands = [make_band(a, b, step, 0) for a, b in zip(breaks, breaks[1:])]
     history = []
-    for iteration in range(opts.max_refinement_rounds+1):
-        envelopes = [(a,b,_envelope(region,a,b,pitch,y0,orthogonal,profile_index)) for a,b,pitch in bands]
-        slab_rects = [Rect(a,l,b,h) for a,b,spans in envelopes for l,h in spans]
-        model = unary_union([box(*r.bounds) for r in slab_rects])
-        topology = _topology(original,model,topology_source)
-        lost = original.difference(model).area
-        outside = model.difference(original).area
-        history.append({"round":iteration,"band_count":len(bands),"lost_area_mm2":lost,
-                        "topology_preserved":topology["preserved"]})
-        if topology["preserved"] and lost <= allowed and outside <= 1e-8: break
-        refined,changed = [],False
-        for (a,b,pitch),(_,_,spans) in zip(bands,envelopes):
-            covered = sum((h-l)*(b-a) for l,h in spans)
-            actual = original.intersection(box(a,y0,b,y1)).area
-            if actual-covered > 1e-8 and pitch/2 >= opts.min_step_mm-1e-9 and not orthogonal:
-                mid=(a+b)/2
-                refined.extend([(a,mid,pitch/2),(mid,b,pitch/2)])
-                changed=True
-            else: refined.append((a,b,pitch))
-        if not changed: break
-        bands=refined
+    termination = "constraints_satisfied"
+    for iteration in range(opts.max_refinement_steps+1):
+        model = unary_union([box(*r.bounds) for r in _pack([p.envelope for p in bands])])
+        contour = boundary_retreat(original, model, limit, measure=False)
+        if not contour["within_limit"] and contour["contour_pairs"]:
+            contour = boundary_retreat(original, model, limit)
+        error = (limit if contour["within_limit"] else contour["max_distance_upper_mm"]) or 0.
+        location = contour["worst_location_mm"]
+        if not contour["contour_pairs"] and not model.is_empty:
+            # Topology has not converged: use global union boundaries for a
+            # spatial refinement witness; final acceptance still pairs contours.
+            _, error = _line_bounds(original.boundary, model.boundary, limit)
+            witness = _retreat_witness(original.boundary, model.boundary,error,limit)
+            location = list(witness[1:]) if witness else None
+        worst = max(bands, key=lambda p: (p.loss, -p.a))
+        lost = sum(p.loss for p in bands)
+        reason = "boundary" if error > limit else "area"
+        if reason == "boundary" and location:
+            x = location[0]
+            candidates = [p for p in bands if p.a-1e-9<=x<=p.b+1e-9 and p.loss>1e-12]
+            if candidates:
+                worst = max(candidates, key=lambda p: (p.loss,-p.a))
+        if error <= limit and lost <= allowed+1e-8:
+            topology = _topology(original, model, topology_source)
+            if topology["preserved"] and contour["within_limit"]:
+                break
+            reason = "topology" if not topology["preserved"] else "global_boundary"
+        if reason != "boundary":
+            candidates = ([p for p in bands if not p.spans and p.loss > 0]
+                          if reason == "topology" else [])
+            worst = max(candidates or bands, key=lambda p: (p.loss, -p.a))
+        if (orthogonal or (allowed == 0 and not orthogonal)
+                or worst.depth >= opts.max_refinement_rounds
+                or worst.pitch/2 < opts.min_step_mm
+                or (worst.b-worst.a)/2 < opts.min_step_mm
+                or iteration == opts.max_refinement_steps or worst.loss <= 1e-12):
+            termination = (f"cannot refine {reason}: X=[{worst.a:.9g}, {worst.b:.9g}] mm, "
+                           f"length={worst.b-worst.a:.9g} mm, pitch={worst.pitch:.9g} mm, "
+                           f"contour retreat upper={error:.9g} mm, "
+                           f"limit={limit:g} mm, minimum step={opts.min_step_mm:g} mm, "
+                           f"depth={worst.depth}/{opts.max_refinement_rounds}, "
+                           f"steps={iteration}/{opts.max_refinement_steps}")
+            break
+        history.append({"iteration":iteration, "reason":reason,
+                        "x_interval_mm":[worst.a,worst.b], "band_count":len(bands),
+                        "selected_retreat_upper_mm":error,
+                        "worst_retreat_upper_mm":error,
+                        "worst_location_mm":location,
+                        "lost_area_mm2":lost, "selected_loss_mm2":worst.loss})
+        mid = (worst.a+worst.b)/2
+        i = bands.index(worst)
+        bands[i:i+1] = [make_band(worst.a, mid, worst.pitch/2, worst.depth+1),
+                        make_band(mid, worst.b, worst.pitch/2, worst.depth+1)]
+    envelopes = [p.envelope for p in bands]
+    model = unary_union([box(*r.bounds) for r in _pack(envelopes)])
+    topology = _topology(original, model, topology_source)
+    lost = original.difference(model).area
+    outside = model.difference(original).area
+    contour = boundary_retreat(original, model, limit, measure=False)
     coarsening = {}
-    if topology["preserved"] and lost <= allowed and outside <= 1e-8:
+    if topology["preserved"] and lost <= allowed+1e-8 and outside <= 1e-8 and contour["within_limit"]:
         origin = (opts.basis_mm or original.bounds)[1]
-        envelopes, coarsening = _coarsen(envelopes, original, allowed, step, origin, topology_source)
+        envelopes, coarsening = _coarsen(envelopes, original, allowed, step, origin,
+                                         topology_source, max_boundary_retreat_mm=limit)
         model = unary_union([box(*r.bounds) for r in _pack(envelopes)])
         topology = _topology(original,model,topology_source)
         lost = original.difference(model).area
         outside = model.difference(original).area
     rectangles = _pack(envelopes)
-    ok = topology["preserved"] and lost <= allowed+1e-8 and outside <= 1e-8
+    contour = boundary_retreat(original, model, limit)
+    ok = (topology["preserved"] and lost <= allowed+1e-8 and outside <= 1e-8
+          and contour["within_limit"])
     if not ok:
         diags.error(RECTIFY_AREA_ERROR,
                     f"profile bounds={original.bounds}: inscribed feature/area constraints failed; "
-                    f"loss={lost:g} mm2 budget={allowed:g}; topology={topology}; "
-                    f"minimum internal step={opts.min_step_mm:g} mm")
+                    f"loss={lost:g} mm2 budget={allowed:g}; contour={contour}; "
+                    f"topology={topology}; {termination}")
     rectified = union(Region([Ring(tuple(r.ring_points()),False) for r in rectangles]))
     return RectifyResult(rectangles,step,original.area,model.area,lost,outside,
                          lost/original.area,ok,net_area_error_mm2=model.area-original.area,
@@ -456,8 +675,15 @@ def rectify_region(region, options=None, *, diagnostics=None):
                                 abs(sum(r.area for r in rectangles)-model.area)<1e-7,
                                 "area_budget_mm2":allowed,
                                 "relative_area_budget":opts.max_relative_area_error,
+                                "boundary_retreat":contour,
                                 "min_step_mm":opts.min_step_mm,
-                                "initial_scale_rule":"max(0.5 mm, shorter board side / 32)",
+                                "max_refinement_depth":opts.max_refinement_rounds,
+                                "max_refinement_steps":opts.max_refinement_steps,
+                                "max_initial_bands":MAX_INITIAL_BANDS,
+                                "refinement_priority":"worst full-contour retreat/limit first; then largest area loss",
+                                "termination":termination,
+                                "refinement_count":len(history),
+                                "initial_scale_rule":"min(max(0.5 mm, shorter board side / 32), max boundary retreat / 2)",
                                 "coarsening":coarsening,
                                 "topology":topology,"local_refinement":history})
 

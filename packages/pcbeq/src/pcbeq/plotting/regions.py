@@ -94,18 +94,21 @@ def plot_regions(document: dict, directory: Path, *, metadata: dict) -> dict:
     information.text(0,1,
         f"{len(rects)} rectangle regions\n"
         f"Physical initial step: {actual['tolerance_mm']:.4g} mm\n"
+        f"Retreat limit: {actual['audit']['boundary_retreat']['max_allowed_mm']:.4g} mm\n"
+        f"Retreat upper: {actual['audit']['boundary_retreat']['max_distance_upper_mm']:.4g} mm\n"
+        f"Area budget: {actual['audit']['relative_area_budget']:.2%}\n"
         f"Forced lines: X={stats['forced_x_lines']}, Y={stats['forced_y_lines']}\n\n"
         f"Area min / median / max:\n{min(areas):.3g} / {statistics.median(areas):.3g} / {max(areas):.3g} mm²\n"
         f"Shortest edge min: {min(shortest):.4g} mm\n"
         f"Short edge < 1 mm: {stats['short_edge_below_1mm_count']} regions\n"
         f"Area < 1 mm²: {stats['area_below_1mm2_count']} regions\n\n"
-        f"Loss: {actual['lost_area_mm2']:.4g} mm²\n"
+        f"Loss: {actual['lost_area_mm2']:.4g} mm² ({actual['relative_area_error']:.2%})\n"
         f"Inscribed: {actual['audit']['inscribed']}\n"
         f"Topology preserved: {actual['audit']['topology']['preserved']}\n\n"
         "Black lines = region borders\nRed dashed = original profile\n"
         "Colors represent region area,\nnot thermal conductivity.\n"
         "All region IDs and sizes: CSV\nHover regions in SVG for details.",
-        va="top",fontsize=10,linespacing=1.5)
+        va="top",fontsize=9,linespacing=1.3)
     histogram.hist(shortest,bins=15,color="#478cab",edgecolor="white")
     histogram.set_xlabel("Shorter edge / mm"); histogram.set_ylabel("Region count")
     histogram.set_title("Region size distribution",fontsize=11)

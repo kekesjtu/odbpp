@@ -160,3 +160,32 @@ def test_cli_default_preset_and_invalid_combinations(tmp_path):
     assert meta["grid"]["mesh_configuration"]["preset"]=="standard"
     assert meta["grid"]["layout"]=="global-cartesian"
     assert meta["raster"]["px"]>=4096
+
+
+def test_cli_accuracy_parameters_validate_and_reach_published_diagnostics(tmp_path):
+    from pcbeq.cli import main
+    import json
+    document = build_document(layers=[{"name":"CU","type":"SIGNAL","polygons":[]}])
+    source = tmp_path/"board.json"
+    source.write_text(json.dumps(document),encoding="utf-8")
+    output = tmp_path/"result"
+    common = ["run",str(source),"-o",str(output),"--no-raster-png","--no-heatmap",
+              "--no-gallery","--no-regions","--no-grids"]
+    for extra in (["--max-boundary-retreat-mm","0"], ["--max-boundary-retreat-mm","nan"],
+                  ["--max-area-loss-ratio","1"], ["--max-area-loss-ratio","-0.1"]):
+        assert main(common+extra) == 2
+    assert main(common+["--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"]) == 0
+    report = json.loads((output/"diagnostics/run.json").read_text(encoding="utf-8"))
+    audit = report["rectification"]["audit"]
+    assert audit["boundary_retreat"]["max_allowed_mm"] == .15
+    assert audit["relative_area_budget"] == .01
+    assert all(d["shared_boundary_retreat"]["within_limit"] for d in audit["domains"].values())
+
+
+def test_pipeline_forwards_both_region_accuracy_controls():
+    from tools.run_pipeline import build_parser,forwarded
+    args = build_parser().parse_args(["board.zip","-o","out/example",
+        "--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"])
+    parser_args,equivalent_args = forwarded(args)
+    assert not parser_args
+    assert equivalent_args == ["--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"]

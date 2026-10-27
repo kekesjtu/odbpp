@@ -33,10 +33,11 @@ def build_parser():
                       help="maximum cell edge, one value or X Y (default 5 mm)")
     p_eq.add_argument("--diagnostic-geometry-step-mm", dest="rectify_tolerance",
                       type=float, default=None, help=argparse.SUPPRESS)
-    p_eq.add_argument("--diagnostic-area-error-ratio", dest="max_area_error_ratio",
-                      type=float, default=0.05, help=argparse.SUPPRESS)
-    p_eq.add_argument("--diagnostic-area-error-mm2", dest="max_area_error_mm2",
-                      type=float, default=0.0, help=argparse.SUPPRESS)
+    p_eq.add_argument("--max-boundary-retreat-mm", type=float, default=0.5, metavar="MM",
+                      help="maximum full-contour inward approximation distance (default: 0.5 mm)")
+    p_eq.add_argument("--max-area-loss-ratio", dest="max_area_error_ratio",
+                      type=float, default=0.05, metavar="RATIO",
+                      help="maximum lost area / original effective domain area, in [0,1) (default: 0.05)")
     p_eq.add_argument("--materials", default=None, metavar="FILE",
                       help="JSON material configuration (global and per-layer "
                            "overrides)")

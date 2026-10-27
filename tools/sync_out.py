@@ -63,11 +63,14 @@ def existing_preview(directory, source):
         return None
 
 def existing_equivalence(directory, preview, *, px, py, min_cell_mm=.1, max_cell_mm=5,
-                         grid_level=None, draw_grid=False):
+                         grid_level=None, draw_grid=False, max_boundary_retreat_mm=.5,
+                         max_area_loss_ratio=.05):
     try:
         cache = json.loads((directory / "pipeline/cache.json").read_text(encoding="utf-8"))
         requested = {"px": px, "py": py, "min": sizes(min_cell_mm, .1), "max": sizes(max_cell_mm, 5),
-                     "grid_level": grid_level, "draw_grid": draw_grid}
+                     "grid_level": grid_level, "draw_grid": draw_grid,
+                     "max_boundary_retreat_mm":max_boundary_retreat_mm,
+                     "max_area_loss_ratio":max_area_loss_ratio}
         if cache["equivalent"] != fingerprint("pcbeq") or cache["requested"] != requested:
             return None
         if cache["json_sha256"] != hashlib.sha256(preview.read_bytes()).hexdigest():
@@ -121,6 +124,8 @@ def main():
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     parser.add_argument("--min-cell-mm", nargs="+", type=float)
     parser.add_argument("--max-cell-mm", nargs="+", type=float)
+    parser.add_argument("--max-boundary-retreat-mm", type=float, default=.5)
+    parser.add_argument("--max-area-loss-ratio", type=float, default=.05)
     args = parser.parse_args()
     if (args.px is None) != (args.py is None) or (args.px is not None and min(args.px, args.py) <= 0):
         parser.error("provide positive px/py together")
@@ -141,7 +146,9 @@ def main():
         valid = None if args.force else existing_preview(output, source)
         equivalent = None if valid is None or args.force_equivalent else existing_equivalence(
             output, valid[0], px=args.px, py=args.py, min_cell_mm=lower, max_cell_mm=upper,
-            grid_level=args.grid_level, draw_grid=args.heatmap_grid)
+            grid_level=args.grid_level, draw_grid=args.heatmap_grid,
+            max_boundary_retreat_mm=args.max_boundary_retreat_mm,
+            max_area_loss_ratio=args.max_area_loss_ratio)
         result = execute(source, output, equivalent_args=options, reuse_parser=valid is not None,
                          reuse_equivalent=equivalent is not None)
         if result["status"] != "success":
@@ -150,7 +157,9 @@ def main():
         cache = {"parser": fingerprint("pcbkit"), "equivalent": fingerprint("pcbeq"),
                  "source_mtime_ns": source_mtime(source), "json_sha256": hashlib.sha256(preview.read_bytes()).hexdigest(),
                  "requested": {"px": args.px, "py": args.py, "min": lower, "max": upper,
-                               "grid_level": args.grid_level, "draw_grid": args.heatmap_grid}}
+                               "grid_level": args.grid_level, "draw_grid": args.heatmap_grid,
+                               "max_boundary_retreat_mm":args.max_boundary_retreat_mm,
+                               "max_area_loss_ratio":args.max_area_loss_ratio}}
         (output / "pipeline/cache.json").write_text(json.dumps(cache, indent=2), encoding="utf-8")
         rows.append((name, source, output, json.loads(preview.read_text(encoding="utf-8")),
                      json.loads((output / "pcbeq/diagnostics/run.json").read_text(encoding="utf-8"))))

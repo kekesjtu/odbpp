@@ -27,7 +27,7 @@ from .grid import BoardGrid, GridOptions, build_grid
 from .materials import MaterialBook, ResolvedMaterials
 from .raster import LayerMask, RasterAxis, region_edges
 from .rectify import (Rect, RectifyOptions, RectifyResult, rectify_region,
-                      profile_shape, _topology)
+                      profile_shape, _topology, boundary_retreat)
 
 __all__ = [
     "EquivalenceOptions",
@@ -569,17 +569,20 @@ def plan_geometry(step, options, diagnostics):
         topology=_topology(original,model)
         loss=original.area-model.area
         allowed=plan.audit.get("area_budget_mm2",0)
-        good=plan.ok and topology["preserved"] and loss <= allowed+1e-8
+        contour=boundary_retreat(original,model,options.rectify.max_boundary_retreat_mm)
+        good=plan.ok and topology["preserved"] and loss <= allowed+1e-8 and contour["within_limit"]
         if not good:
             diagnostics.error("equiv.domain_geometry",f"domain {domain_id!r}: shared step/layer "
-                f"model failed; loss={loss:g} budget={allowed:g}; topology={topology}")
+                f"model failed; loss={loss:g} budget={allowed:g}; "
+                f"boundary_retreat={contour}; topology={topology}")
             rectification.ok=False
         authored=profile_shape(_region_from_polygons(domains[domain_id].get("polygons")))
         audit[domain_id]={**deepcopy(plan.as_dict()),"authored_area_mm2":authored.area,
                           "outside_step_area_mm2":authored.difference(step_original).area,
                           "effective_domain":"layer profile AND original step profile",
                           "shared_model_area_mm2":model.area,
-                          "shared_loss_area_mm2":loss,"shared_topology":topology,"ok":good}
+                          "shared_loss_area_mm2":loss,"shared_topology":topology,
+                          "shared_boundary_retreat":contour,"ok":good}
         models[domain_id]=model
         if model.wkb==step_model.wkb or model.wkb in processed: continue
         processed.add(model.wkb)
