@@ -1,4 +1,5 @@
-# Derived artifacts / scratch space
+# Scratch space and build-backend byproducts
+/tmp/
 build/
 .tmp_research/
 out/

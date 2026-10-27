@@ -1,6 +1,6 @@
 # 中间 JSON 接口
 
-解析器开发人员可先阅读[解析器开发指南](parser-guide.md)，本文作为字段参考。
+本文说明解析器交付的字段和物理语义。
 
 解析器导出与等效器导入共用 `contracts/intermediate.py` 中的 Pydantic 模型。
 项目始终只有一套当前格式；不保存或比较 schema/generator 版本，不维护旧结构兼容分支。
@@ -95,10 +95,10 @@ from pcbkit import load_job, build_step_preview, step_to_document, write_documen
 
 job = load_job("cases/kicad-kitchen-sink")
 board = step_to_document(job, build_step_preview(job))
-write_document(board, "build/board.json")
+write_document(board, "tmp/board.json")
 # 下游独立进程使用自己的模型读取文件。
 from pcbeq.intermediate import read_document
-board = read_document("build/board.json")
+board = read_document("tmp/board.json")
 # equivalence_from_document(board, options) 或传入合法当前格式的普通字典。
 ```
 

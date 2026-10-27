@@ -14,12 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=ROOT / "build/distribution-check")
+    parser.add_argument("--out", type=Path, default=ROOT / "tmp/distribution-check")
     parser.add_argument("--offline", action="store_true")
     args = parser.parse_args()
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    uv = [shutil.which("uv"), "--cache-dir", str(ROOT / "build/uv-cache")]
+    uv = [shutil.which("uv"), "--cache-dir", str(ROOT / "tmp/uv-cache")]
     if args.offline:
         uv.append("--offline")
     def call(argv, **kwargs):

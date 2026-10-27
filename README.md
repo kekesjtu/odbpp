@@ -40,7 +40,7 @@ uv run --all-extras python tools/audit_out.py
 ## 文件与文档
 
 `packages/pcbkit/`、`packages/pcbeq/` 为两个产品，`contracts/` 为共享接口权威源，
-`tests/` 为跨包测试，`tools/` 为维护工具，`docs/` 为项目文档，`build/` 为可再生工作文件。
+`tests/` 为跨包测试，`tools/` 为维护工具，`docs/` 为项目文档，`tmp/` 为可再生工作文件。
 
 - [需求与验收](requirements.md)
 - [协作规则](AGENTS.md)

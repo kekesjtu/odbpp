@@ -11,7 +11,7 @@ uv sync --all-extras
 添加依赖使用 `uv add`；依赖声明变更后审核并提交锁文件。如果本机共享 uv 缓存不可写，可以在当前终端设置项目内缓存：
 
 ```powershell
-$env:UV_CACHE_DIR = Join-Path $PWD 'build/uv-cache'
+$env:UV_CACHE_DIR = Join-Path $PWD 'tmp/uv-cache'
 uv sync --all-extras
 ```
 
@@ -73,7 +73,7 @@ uv run --all-extras pytest tests/integration
 ```powershell
 uv run --all-extras python tools/validate_region_accuracy.py --output docs/validation/reports/region-accuracy.json
 uv run --all-extras python tools/validate_region_accuracy.py --case kicad-video-odb.tgz --sampling-convergence --output docs/validation/reports/region-sampling.json
-uv run --all-extras python tools/benchmark_pipeline.py --case minimal-test-odb --repeat 2 --output build/benchmark
+uv run --all-extras python tools/benchmark_pipeline.py --case minimal-test-odb --repeat 2 --output tmp/benchmark
 ```
 
 几何报告对照两种 Px/Py 下的完整 region / 全局轴线坐标，材料收敛需要实际采样对照。
@@ -83,8 +83,8 @@ uv run --all-extras python tools/benchmark_pipeline.py --case minimal-test-odb -
 ## 构建与独立安装
 
 ```powershell
-uv build --package pcbkit --out-dir build/dist
-uv build --package pcbeq --out-dir build/dist
+uv build --package pcbkit --out-dir tmp/dist
+uv build --package pcbeq --out-dir tmp/dist
 uv run --all-extras python tools/verify_distributions.py
 ```
 
@@ -93,5 +93,5 @@ uv run --all-extras python tools/verify_distributions.py
 
 ## 临时文件与证据
 
-测试、构建和基准过程产物使用 `build/`，正式结果使用 `out/<case>/`。
+测试、构建和基准过程产物使用 `tmp/`，正式结果使用 `out/<case>/`。
 关闭占用进程后，仅清理确认无用的临时文件。验证报告放在 [validation](validation/README.md)，原始文档快照放在 [archive](archive/README.md)。

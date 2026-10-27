@@ -2,11 +2,10 @@
 
 ## 参考对象
 
-以下记录对应项目调研使用的本地检出与来源，更新参考前核对实际提交及其许可文件。
+以下记录对应项目调研使用的参考来源，更新参考前核对实际提交及其许可文件。
 
 | 项目 | 调研记录中的许可 | 参考价值 |
 | --- | --- | --- |
-| [OdbDesign](https://github.com/nam20485/OdbDesign) | AGPL-3.0 | 文件模型、领域模型、符号文法及归档结构 |
 | [KiCad](https://gitlab.com/kicad/code/kicad) | GPL-3.0 | ODB++ 导出器、源板参数与测试数据 |
 | [ODB2kicad](https://github.com/FixturFab/ODB2kicad) | GPL-3.0 | 样本、坐标及 EDA 图元映射 |
 | [ODBPy](https://github.com/ulikoehler/ODBPy) | Apache-2.0 | 轻量解析和组件信息组织 |
@@ -19,8 +18,7 @@
 
 ## 可复用的设计思路
 
-OdbDesign 的 FileModel / ProductModel 分离，适合对照“逐文件读取”与“单板实体语义”的职责。
-标准符号解析使用完整文法，自定义符号通过目录引用读取；归档层屏蔽压缩与目录差异。
+解析器将逐文件读取与单板实体语义分开。标准符号解析使用完整文法，自定义符号通过目录引用读取；归档层屏蔽压缩与目录差异。
 KiCad 源板尺寸与导出器提供独立测试输入，官方格式规范负责最终语义解释。
 
 本项目采用标准库归档 IO、pyclipper 正向布尔与扫掠、Shapely 简单域几何检查、Pydantic IO 模型。

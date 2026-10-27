@@ -21,5 +21,5 @@ pcbeq = { workspace = true }
 [tool.pytest.ini_options]
 pythonpath = [".", "packages/pcbeq/tests", "packages/pcbkit/tests"]
 testpaths = ["tests", "packages/pcbkit/tests", "packages/pcbeq/tests"]
-addopts = "-q --basetemp=build/pytest-tmp"
+addopts = "-q --basetemp=tmp/pytest-tmp"
 filterwarnings = ["error"]
