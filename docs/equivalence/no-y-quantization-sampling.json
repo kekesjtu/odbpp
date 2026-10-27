@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-28",
+  "measurement": "geometry planning + mesh with tracemalloc; Python allocation peak excludes native GEOS/NumPy allocations",
+  "resolution_independence_scope": "complete region and global-grid planning, without material sampling",
+  "cases": [
+    {
+      "case": "kicad-video-odb.tgz",
+      "input_sha256": "8ba8baea454492d663f0d96fc617c50aa7cf07fc8fe7b22cc95ae23726446858",
+      "max_boundary_retreat_mm": 3.0,
+      "max_area_loss_ratio": 0.05,
+      "internal_initial_step_override_mm": null,
+      "before": null,
+      "after": {
+        "regions": 10,
+        "xy_cells": 3755,
+        "seconds": 1.711407100003271,
+        "python_peak_mib": 1.3121261596679688,
+        "area_loss_ratio": 0.0018736384366441314,
+        "retreat_upper_mm": 2.837157871872517,
+        "refinement_steps": 0
+      },
+      "refinement_trace_sample": [],
+      "shared_domain_replanning": [
+        {
+          "coarsening_retreat_limit_mm": 3.0,
+          "ok": true,
+          "failed_domains": []
+        }
+      ],
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.0018736384366444916,
+          "retreat_upper_mm": 2.837157871872517,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "35f0a39b8d8c4c57b61127d399f13a764782ffc945fd2306899fc9a130fda00c",
+      "published_run": {
+        "elapsed_s": 7.960619499994209,
+        "peak_memory_bytes": 358248448,
+        "measurement": "full pcbeq CLI, including imports, IO, images; native process peak",
+        "raster": [
+          4096,
+          1401
+        ],
+        "material_cells": 26285
+      },
+      "all_checks_passed": true,
+      "material_sampling": {
+        "runs": [
+          {
+            "raster": [
+              4096,
+              1401
+            ],
+            "seconds": 2.466356699995231,
+            "material_cells": 26285
+          },
+          {
+            "raster": [
+              8192,
+              2802
+            ],
+            "seconds": 3.1658188000001246,
+            "material_cells": 26285
+          }
+        ],
+        "complete_cell_and_region_coordinates_identical": true,
+        "comparison": "default vs doubled X/Y pixels; observed differences, not a universal convergence guarantee",
+        "properties": {
+          "kx": {
+            "relative_p50": 0.0015541311465281534,
+            "relative_p95": 0.14771604603219463,
+            "relative_max": 31.326487413627117,
+            "absolute_max": 366.6984402079723
+          },
+          "ky": {
+            "relative_p50": 0.0012364213585257372,
+            "relative_p95": 0.1513132197794272,
+            "relative_max": 38.85858585858586,
+            "absolute_max": 238.02805821162002
+          },
+          "kz": {
+            "relative_p50": 0.0050516903829627155,
+            "relative_p95": 0.1631662654755967,
+            "relative_max": 38.858585858585855,
+            "absolute_max": 31.474205981911453
+          },
+          "density": {
+            "relative_p50": 0.001912484208789409,
+            "relative_p95": 0.04126090870743222,
+            "relative_max": 0.1452853321444494,
+            "absolute_max": 581.7041968583062
+          },
+          "specific_heat": {
+            "relative_p50": 0.0012514351358954782,
+            "relative_p95": 0.02987286067908186,
+            "relative_max": 0.12295606386058165,
+            "absolute_max": 93.99061032863847
+          }
+        }
+      }
+    }
+  ]
+}

@@ -6,6 +6,8 @@
 | 文档 | 内容 |
 |---|---|
 | [11-region-accuracy.md](11-region-accuracy.md) | 当前 region 几何精度：退缩量与面积损失双约束、最差位置优先细化、合并/共享域复检及真实案例验证 |
+| [no-y-quantization-validation.json](no-y-quantization-validation.json) | 当前真实 Y 区间与相邻共同区间合并：三种真实板型的新旧规模、误差、资源与几何独立性检查 |
+| [no-y-quantization-tight-validation.json](no-y-quantization-tight-validation.json)、[no-y-quantization-sampling.json](no-y-quantization-sampling.json) | 当前策略的真实板最差位置细化路径与默认/双倍光栅材料采样对照 |
 | [10-independent-clis.md](10-independent-clis.md) | 当前 pcbkit/pcbeq 独立分发、唯一契约、进程管道、输出与验证 |
 | [independent-clis-validation.json](independent-clis-validation.json) | 800 项回归、独立 wheel/sdist 安装、19 个真实 case 的几何/物性/掩膜对照与运行资源记录 |
 | [09-region-materialmap.md](09-region-materialmap.md) | 当前正式 MaterialMap：region 层级 JSON、六边界、未知 Z、XY 网格线、行主序五项物性、热图及独立诊断 |
