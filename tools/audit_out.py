@@ -15,8 +15,9 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
     """Reconstruct row-major JSON cells and independently audit vector/sampling invariants."""
     import math
     from shapely.geometry import box
+    from shapely.ops import unary_union
     from pcbeq.equiv import _region_from_polygons, pipeline_fingerprint
-    from pcbeq.rectify import profile_shape
+    from pcbeq.rectify import profile_shape, _boundary_pairs
     from pcbeq.materialmap import read_document, iter_cells
     from pcbeq.raster import RasterAxis
     records=[]
@@ -34,6 +35,20 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         reports={l["name"]:l for l in meta["layers"] if l["status"]=="equivalent"}
         regions=meta["rectification"]["rectangles"]
         ids=meta["rectification"]["audit"]["domain_region_ids"]
+        geometry_audit=meta["rectification"]["audit"]
+        retreat=geometry_audit["boundary_retreat"]["max_allowed_mm"]
+        ratio=geometry_audit["relative_area_budget"]
+        region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
+        for domain_id,members in ids.items():
+            source=domains[domain_id].intersection(domains[step["profile_domain_id"]])
+            modeled=unary_union([region_shapes[rid] for rid in members])
+            assert source.area-modeled.area<=source.area*ratio+1e-8
+            pairs=_boundary_pairs(source,modeled)
+            assert pairs
+            for a,b in pairs:
+                assert a.buffer(retreat,quad_segs=128).covers(b)
+                assert b.buffer(retreat,quad_segs=128).covers(a)
+            assert geometry_audit["domains"][domain_id]["shared_boundary_retreat"]["within_limit"]
         rect_ids={(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]):rid for rid,r in enumerate(regions)}
         xs,ys=meta["grid"]["x_lines_mm"],meta["grid"]["y_lines_mm"]
         xi,yi={v:i for i,v in enumerate(xs)},{v:j for j,v in enumerate(ys)}
@@ -76,6 +91,9 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             "nx":len(xs)-1,"ny":len(ys)-1,"grid_cells":meta["grid"]["cell_count"],
             "material_rows":sum(counts.values()),"raster":[px,py],
             "minimum_samples_per_axis":minimum,"area_loss_mm2":meta["rectification"]["lost_area_mm2"],
+            "max_boundary_retreat_mm":retreat,
+            "retreat_upper_mm":geometry_audit["boundary_retreat"]["max_distance_upper_mm"],
+            "max_area_loss_ratio":ratio,"continuous_contour_checks_passed":True,
             "layer_count":len(reports),"drill_scope":meta["drill_scope"],
             "copper_drill_overlays_ignored":True,"all_checks_passed":True})
         print(records[-1],flush=True)

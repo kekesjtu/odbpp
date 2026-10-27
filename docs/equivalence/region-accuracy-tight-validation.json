@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-27",
+  "measurement": "geometry planning + mesh with tracemalloc; Python allocation peak excludes native GEOS/NumPy allocations",
+  "resolution_independence_scope": "complete region and global-grid planning, without material sampling",
+  "cases": [
+    {
+      "case": "kicad-video-odb.tgz",
+      "input_sha256": "8ba8baea454492d663f0d96fc617c50aa7cf07fc8fe7b22cc95ae23726446858",
+      "max_boundary_retreat_mm": 0.25,
+      "max_area_loss_ratio": 0.01,
+      "internal_initial_step_override_mm": 1.0,
+      "before": null,
+      "after": {
+        "regions": 73,
+        "xy_cells": 11094,
+        "seconds": 14.01738800000021,
+        "python_peak_mib": 4.126675605773926,
+        "area_loss_ratio": 0.003479918623312062,
+        "retreat_upper_mm": 0.24960740111779328,
+        "refinement_steps": 391
+      },
+      "refinement_trace_sample": [
+        {
+          "iteration": 0,
+          "reason": "boundary",
+          "x_interval_mm": [
+            191.1703003194888,
+            192.16723003194886
+          ],
+          "band_count": 313,
+          "selected_retreat_upper_mm": 1.4106860557811207,
+          "worst_retreat_upper_mm": 1.4106860557811207,
+          "worst_location_mm": [
+            191.1703003194888,
+            -147.195
+          ],
+          "lost_area_mm2": 307.65813662300536,
+          "selected_loss_mm2": 2.169553157616207
+        },
+        {
+          "iteration": 1,
+          "reason": "boundary",
+          "x_interval_mm": [
+            190.17337060702874,
+            191.1703003194888
+          ],
+          "band_count": 314,
+          "selected_retreat_upper_mm": 1.4085146954194028,
+          "worst_retreat_upper_mm": 1.4085146954194028,
+          "worst_location_mm": [
+            190.17337060702874,
+            -148.195
+          ],
+          "lost_area_mm2": 306.41197448243025,
+          "selected_loss_mm2": 2.1664922967418363
+        },
+        {
+          "iteration": 2,
+          "reason": "boundary",
+          "x_interval_mm": [
+            189.17644089456869,
+            190.17337060702874
+          ],
+          "band_count": 315,
+          "selected_retreat_upper_mm": 1.4063433350576444,
+          "worst_retreat_upper_mm": 1.4063433350576444,
+          "worst_location_mm": [
+            189.17644089456869,
+            -149.195
+          ],
+          "lost_area_mm2": 305.1658123418552,
+          "selected_loss_mm2": 2.163431435867466
+        },
+        {
+          "iteration": 3,
+          "reason": "boundary",
+          "x_interval_mm": [
+            188.17951118210863,
+            189.17644089456869
+          ],
+          "band_count": 316,
+          "selected_retreat_upper_mm": 1.4041719746959265,
+          "worst_retreat_upper_mm": 1.4041719746959265,
+          "worst_location_mm": [
+            188.17951118210863,
+            -150.195
+          ],
+          "lost_area_mm2": 303.9196502012801,
+          "selected_loss_mm2": 2.1603705749930953
+        },
+        {
+          "iteration": 4,
+          "reason": "boundary",
+          "x_interval_mm": [
+            187.18258146964854,
+            188.17951118210863
+          ],
+          "band_count": 317,
+          "selected_retreat_upper_mm": 1.4020006143342083,
+          "worst_retreat_upper_mm": 1.4020006143342083,
+          "worst_location_mm": [
+            187.18258146964854,
+            -151.195
+          ],
+          "lost_area_mm2": 302.67348806070504,
+          "selected_loss_mm2": 2.157309714118796
+        },
+        {
+          "iteration": 5,
+          "reason": "boundary",
+          "x_interval_mm": [
+            186.18565175718848,
+            187.18258146964854
+          ],
+          "band_count": 318,
+          "selected_retreat_upper_mm": 1.39982925397245,
+          "worst_retreat_upper_mm": 1.39982925397245,
+          "worst_location_mm": [
+            186.18565175718848,
+            -152.195
+          ],
+          "lost_area_mm2": 301.42732592012993,
+          "selected_loss_mm2": 2.1542488532443826
+        },
+        {
+          "iteration": 385,
+          "reason": "boundary",
+          "x_interval_mm": [
+            186.18565175718848,
+            186.43488418530347
+          ],
+          "band_count": 698,
+          "selected_retreat_upper_mm": 0.33910766804867043,
+          "worst_retreat_upper_mm": 0.33910766804867043,
+          "worst_location_mm": [
+            186.18565175718848,
+            -153.695
+          ],
+          "lost_area_mm2": 99.86449393879997,
+          "selected_loss_mm2": 0.1332725619172166
+        },
+        {
+          "iteration": 386,
+          "reason": "boundary",
+          "x_interval_mm": [
+            185.9364193290735,
+            186.18565175718848
+          ],
+          "band_count": 699,
+          "selected_retreat_upper_mm": 0.3385654427982121,
+          "worst_retreat_upper_mm": 0.3385654427982121,
+          "worst_location_mm": [
+            185.9364193290735,
+            -153.945
+          ],
+          "lost_area_mm2": 99.78660880501404,
+          "selected_loss_mm2": 0.13308125811256488
+        },
+        {
+          "iteration": 387,
+          "reason": "boundary",
+          "x_interval_mm": [
+            185.68718690095847,
+            185.9364193290735
+          ],
+          "band_count": 700,
+          "selected_retreat_upper_mm": 0.3380232175477537,
+          "worst_retreat_upper_mm": 0.3380232175477537,
+          "worst_location_mm": [
+            185.68718690095847,
+            -154.195
+          ],
+          "lost_area_mm2": 99.7087236712281,
+          "selected_loss_mm2": 0.13288995430793094
+        },
+        {
+          "iteration": 388,
+          "reason": "boundary",
+          "x_interval_mm": [
+            185.43795447284344,
+            185.68718690095847
+          ],
+          "band_count": 701,
+          "selected_retreat_upper_mm": 0.33748099229727535,
+          "worst_retreat_upper_mm": 0.33748099229727535,
+          "worst_location_mm": [
+            185.43795447284344,
+            -154.445
+          ],
+          "lost_area_mm2": 99.63083853744216,
+          "selected_loss_mm2": 0.13269865050328633
+        },
+        {
+          "iteration": 389,
+          "reason": "boundary",
+          "x_interval_mm": [
+            157.02545766773164,
+            157.27469009584664
+          ],
+          "band_count": 702,
+          "selected_retreat_upper_mm": 0.3167896202139695,
+          "worst_retreat_upper_mm": 0.3167896202139695,
+          "worst_location_mm": [
+            157.02545766773164,
+            -154.695
+          ],
+          "lost_area_mm2": 99.55295340365622,
+          "selected_loss_mm2": 1.761400734824143
+        },
+        {
+          "iteration": 390,
+          "reason": "boundary",
+          "x_interval_mm": [
+            173.47479792332268,
+            173.7240303514377
+          ],
+          "band_count": 703,
+          "selected_retreat_upper_mm": 0.2795632878517754,
+          "worst_retreat_upper_mm": 0.2795632878517754,
+          "worst_location_mm": [
+            173.47479792332268,
+            -154.695
+          ],
+          "lost_area_mm2": 98.44698450389605,
+          "selected_loss_mm2": 1.213761924920206
+        }
+      ],
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.0034799186233126444,
+          "retreat_upper_mm": 0.24960740111779328,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "2c8f7c31bf76a20b605e5f7946fb41eb3f159d3f74e4ee43397c9e0c36977ee6",
+      "all_checks_passed": true
+    }
+  ]
+}

@@ -4,10 +4,13 @@
 
 ```powershell
 pcbeq run intermediate.json -o result --grid-level standard
+pcbeq run intermediate.json -o result --max-boundary-retreat-mm 0.2 --max-area-loss-ratio 0.01
 pcbeq run intermediate.json -o result --px 4096 --py 4096 --min-cell-mm 0.1 --max-cell-mm 2 3
 ```
 
 光栅 Px/Py 表示整板各方向像素数，必须一起提供。默认采用密集光栅；网格粗/标准/细档位与专家尺寸约束互斥。region 和全局网格仅由物理几何决定，显式光栅不足时报告错误。
+
+region 几何同时满足最大轮廓退缩量 `--max-boundary-retreat-mm`（有限正数，默认 0.5 mm）和最大面积损失比例 `--max-area-loss-ratio`（[0,1)，默认 0.05）。完整外轮廓与孔洞边界采用双向欧氏距离检查，不含内部矩形接缝。程序每次细化最严重超差位置，合并及共享层域后复检；零面积损失只适用于可精确矩形化的板型。运行报告和 region 图记录预算、实际距离上界及损失。
 
 `--materials FILE` 可提供全局、材料层类型和逐层覆盖。缺省时警告并使用铜 k=385 W/(m·K)、密度 8960 kg/m³、比热 385 J/(kg·K)，FR4 k=0.3 W/(m·K)、密度 1850 kg/m³、比热 1100 J/(kg·K)；具体来源与实际采用值写入运行报告。钻孔按实心铜处理且只影响介质层。
 

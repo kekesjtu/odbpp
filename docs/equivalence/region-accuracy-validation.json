@@ -1,0 +1,315 @@
+{
+  "date": "2026-10-27",
+  "measurement": "geometry planning + mesh with tracemalloc; Python allocation peak excludes native GEOS/NumPy allocations",
+  "resolution_independence_scope": "complete region and global-grid planning, without material sampling",
+  "cases": [
+    {
+      "case": "kicad-kitchen-sink",
+      "input_sha256": "ade57d71b426fd55a20dec8064bdf7210d648a8ed6b9238b5cd0010d185e165f",
+      "max_boundary_retreat_mm": 0.5,
+      "max_area_loss_ratio": 0.05,
+      "before": {
+        "case": "kicad-kitchen-sink",
+        "regions": 78,
+        "xy_cells": 4217,
+        "seconds": 1.212208400000236,
+        "python_peak_mib": 7.721501350402832,
+        "loss_ratio": 0.04997061915469787,
+        "ok": true,
+        "retreat_upper_mm": 4.041129981931599
+      },
+      "after": {
+        "regions": 566,
+        "xy_cells": 129818,
+        "seconds": 39.64086169999973,
+        "python_peak_mib": 42.48958396911621,
+        "area_loss_ratio": 0.006894786945854441,
+        "retreat_upper_mm": 0.5,
+        "refinement_steps": 0
+      },
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.006894786945855256,
+          "retreat_upper_mm": 0.5,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "60f7bccb45e9145f69131e6afaddd94e37287187cbe6d7d7a8faabb606f980f5",
+      "all_checks_passed": true,
+      "internal_initial_step_override_mm": null,
+      "published_run": {
+        "elapsed_s": 69.51613429999998,
+        "peak_memory_bytes": 491536384,
+        "measurement": "full pcbeq CLI, including imports, IO, images; native process peak",
+        "raster": [
+          8038,
+          5087
+        ],
+        "material_cells": 389454
+      }
+    },
+    {
+      "case": "kicad-video-odb.tgz",
+      "input_sha256": "8ba8baea454492d663f0d96fc617c50aa7cf07fc8fe7b22cc95ae23726446858",
+      "max_boundary_retreat_mm": 0.5,
+      "max_area_loss_ratio": 0.05,
+      "before": {
+        "case": "kicad-video-odb.tgz",
+        "regions": 6,
+        "xy_cells": 3441,
+        "seconds": 0.785289899999043,
+        "python_peak_mib": 0.971339225769043,
+        "loss_ratio": 0.04926703614666542,
+        "ok": true,
+        "retreat_upper_mm": 13.347642860823335
+      },
+      "after": {
+        "regions": 26,
+        "xy_cells": 5123,
+        "seconds": 1.4025039999996807,
+        "python_peak_mib": 2.0709362030029297,
+        "area_loss_ratio": 0.0038678362043172323,
+        "retreat_upper_mm": 0.47198299519954656,
+        "refinement_steps": 0
+      },
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.0038678362043177944,
+          "retreat_upper_mm": 0.47198299519954656,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "6148955523862d89bcf2d360689fcb4283e7ba2b6b81db263863151125e0e793",
+      "all_checks_passed": true,
+      "internal_initial_step_override_mm": null,
+      "published_run": {
+        "elapsed_s": 7.881732799998645,
+        "peak_memory_bytes": 371630080,
+        "measurement": "full pcbeq CLI, including imports, IO, images; native process peak",
+        "raster": [
+          5621,
+          1921
+        ],
+        "material_cells": 35861
+      }
+    },
+    {
+      "case": "designodb-rigidflex",
+      "input_sha256": "2349accdcb92ae51e309f418ecdc25b6390938771d8e2ba94f7673c4d98acc7d",
+      "max_boundary_retreat_mm": 0.5,
+      "max_area_loss_ratio": 0.05,
+      "before": {
+        "case": "designodb-rigidflex",
+        "regions": 45,
+        "xy_cells": 4262,
+        "seconds": 1.9475337000003492,
+        "python_peak_mib": 2.45004940032959,
+        "loss_ratio": 0.049850571707187076,
+        "ok": true,
+        "retreat_upper_mm": 2.2541869471677636
+      },
+      "after": {
+        "regions": 127,
+        "xy_cells": 10443,
+        "seconds": 12.093424799999411,
+        "python_peak_mib": 3.8951034545898438,
+        "area_loss_ratio": 0.019655003819503705,
+        "retreat_upper_mm": 0.5,
+        "refinement_steps": 0
+      },
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.019655003819504243,
+          "retreat_upper_mm": 0.5,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_13",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_15",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_17",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_19",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_3",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_5",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_7",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_9",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:FLEX_5",
+          "area_loss_ratio": 0.0196232171006156,
+          "retreat_upper_mm": 0.5,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:FLEX_6",
+          "area_loss_ratio": 0.0196232171006156,
+          "retreat_upper_mm": 0.5,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:PLANE_4",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:POLYIMIDE_BASE_11",
+          "area_loss_ratio": 0.0196232171006156,
+          "retreat_upper_mm": 0.5,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_1",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_10",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_2",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_3",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_7",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_8",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_9",
+          "area_loss_ratio": 0.01588301618166311,
+          "retreat_upper_mm": 0.4976745647961057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "28f69ffa493df39fd33a77bfdaf52a9945407a7bf12a4be6008e279986c72240",
+      "all_checks_passed": true,
+      "internal_initial_step_override_mm": null,
+      "published_run": {
+        "elapsed_s": 24.729671699999017,
+        "peak_memory_bytes": 959393792,
+        "measurement": "full pcbeq CLI, including imports, IO, images; native process peak",
+        "raster": [
+          5887,
+          1563
+        ],
+        "material_cells": 145537
+      }
+    }
+  ],
+  "baseline_commit": "6e66c70"
+}

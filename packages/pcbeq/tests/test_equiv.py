@@ -501,8 +501,9 @@ class TestAutoTolerance:
                               polygons=[rect(0, 0, 40, 20)])
         result = equivalence_from_document(
             document, EquivalenceOptions(grid=GridOptions(px=40, py=40)))
-        # Physical shorter side / 32, independent of the sampling pixel pitch.
-        assert result.rectification.tolerance_mm == pytest.approx(20 / 32)
+        # The physical seed is bounded by half the contour-retreat budget;
+        # sampling pixel pitch still has no influence on geometry.
+        assert result.rectification.tolerance_mm == pytest.approx(.5 / 2)
         assert not result.fatal
 
     def test_a_coarse_raster_with_the_default_tolerance_still_samples(self):
@@ -591,7 +592,7 @@ class TestRealCases:
 
     def test_kitchen_sink_dielectric_picks_up_its_drills(self):
         document = self._document_for("kicad-kitchen-sink")
-        result = run(document, px=2400, py=1800, tolerance=1.0, max_cell_mm=5)
+        result = run(document, px=2400, py=1800, tolerance=None, max_cell_mm=5)
         assert not result.fatal
         dielectric = [c for c in result.cells if c.layer_type == "DIELECTRIC"]
         assert dielectric

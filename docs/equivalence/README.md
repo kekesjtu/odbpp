@@ -5,6 +5,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [11-region-accuracy.md](11-region-accuracy.md) | 当前 region 几何精度：退缩量与面积损失双约束、最差位置优先细化、合并/共享域复检及真实案例验证 |
 | [10-independent-clis.md](10-independent-clis.md) | 当前 pcbkit/pcbeq 独立分发、唯一契约、进程管道、输出与验证 |
 | [independent-clis-validation.json](independent-clis-validation.json) | 800 项回归、独立 wheel/sdist 安装、19 个真实 case 的几何/物性/掩膜对照与运行资源记录 |
 | [09-region-materialmap.md](09-region-materialmap.md) | 当前正式 MaterialMap：region 层级 JSON、六边界、未知 Z、XY 网格线、行主序五项物性、热图及独立诊断 |
