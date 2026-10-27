@@ -25,7 +25,6 @@ def main():
     parser.add_argument("--py", type=int)
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     parser.add_argument("--max-cell-mm", type=float, nargs="+")
-    parser.add_argument("--region-algorithm", choices=("staircase","quadtree"))
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("repeat must be positive")

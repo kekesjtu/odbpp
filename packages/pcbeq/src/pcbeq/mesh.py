@@ -7,7 +7,7 @@ DEFAULT_RASTER_LONG_SIDE = 4096
 MAX_DEFAULT_RASTER_PIXELS = 120_000_000
 
 def resolve_mesh(step, rectangles, options):
-    # Resolve the physical target before either region algorithm runs. The
+    # Resolve the physical target from the original physical domain. The
     # original step domain fixes scale; the chosen approximation cannot feed back.
     domain=next(d for d in step["domains"] if d["id"]==step["profile_domain_id"])
     points=[p for ring in domain["polygons"] for p in ring["points"]]

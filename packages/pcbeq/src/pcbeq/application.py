@@ -91,7 +91,6 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
                              mesh_preset=args.grid_level or (None if args.max_cell_mm is not None else "standard"),
                              auto_raster=args.px is None),
             materials=MaterialBook(config or None, diagnostics=diagnostics),
-            region_algorithm=args.region_algorithm,
             rectify=RectifyOptions(
                 max_boundary_retreat_mm=args.max_boundary_retreat_mm,
                 tolerance_mm=args.rectify_tolerance,
@@ -351,10 +350,7 @@ def _gallery_note(result, args) -> str:
             f"{axis} ≤ {limits['max'][i]:g} mm"
             for i, axis in enumerate("XY")))
     if result.rectification.tolerance_mm is not None:
-        if args.region_algorithm=="quadtree":
-            parts.append(f"正方形四叉树，最细方块边长={result.rectification.tolerance_mm:g} mm")
-        else:
-            parts.append("真实 Y 区间竖条阶梯")
+        parts.append("真实 Y 区间竖条阶梯")
     if skipped:
         parts.append(f"{len(skipped)} 层未参与等效（逐层原因见 diagnostics/run.json）")
     if not args.raster_png:

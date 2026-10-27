@@ -193,6 +193,14 @@ def test_pipeline_forwards_both_region_accuracy_controls():
     assert equivalent_args == ["--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"]
 
 
+@pytest.mark.parametrize("removed,value",[("--min-cell-mm","0.1"),("--region-algorithm","quadtree")])
+def test_removed_grid_and_algorithm_options_are_rejected(removed,value):
+    from pcbeq.cli import build_parser
+    with pytest.raises(SystemExit) as error:
+        build_parser().parse_args(["run","board.json",removed,value])
+    assert error.value.code==2
+
+
 def test_shared_domain_retry_reduces_coarsening_without_relaxing_user_budgets(monkeypatch):
     import pcbeq.equiv as module
     document = build_document(layers=[{"name":"CU","type":"SIGNAL","polygons":[]}])
