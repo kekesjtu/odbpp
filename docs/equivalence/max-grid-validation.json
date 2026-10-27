@@ -1,0 +1,280 @@
+{
+  "date": "2026-10-28",
+  "implementation_commit": "6e74aa0",
+  "mesh_controls": "maximum edge only; short forced intervals retained",
+  "full_regression": {
+    "passed": 832,
+    "seconds": 231.02
+  },
+  "case_count": 19,
+  "complete_material_cells": 398124,
+  "all_checks_passed": true,
+  "cases": [
+    {
+      "case": "designodb-rigidflex/pcbeq",
+      "region_count": 32,
+      "xy_cells": 4102,
+      "material_cells": 64882,
+      "max_cell_mm": [
+        1.3155927094834836,
+        1.3155927094834836
+      ],
+      "native_cli": {
+        "elapsed_s": 67.7237568000055,
+        "peak_memory_bytes": 959733760
+      }
+    },
+    {
+      "case": "designodb-rigidflex.tgz/pcbeq",
+      "region_count": 32,
+      "xy_cells": 4102,
+      "material_cells": 64882,
+      "max_cell_mm": [
+        1.3155927094834836,
+        1.3155927094834836
+      ],
+      "native_cli": {
+        "elapsed_s": 64.82837840000138,
+        "peak_memory_bytes": 959127552
+      }
+    },
+    {
+      "case": "kicad-kitchen-sink/pcbeq",
+      "region_count": 74,
+      "xy_cells": 8141,
+      "material_cells": 24423,
+      "max_cell_mm": [
+        2.7742199600462016,
+        2.7742199600462016
+      ],
+      "native_cli": {
+        "elapsed_s": 18.33629749999818,
+        "peak_memory_bytes": 243712000
+      }
+    },
+    {
+      "case": "kicad-positive/clean/four-layer-drills-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 29302,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 6.47045000000071,
+        "peak_memory_bytes": 241086464
+      }
+    },
+    {
+      "case": "kicad-positive/clean/outline-only-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.194624700001441,
+        "peak_memory_bytes": 218046464
+      }
+    },
+    {
+      "case": "kicad-positive/clean/pad-shapes-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.015560400002869,
+        "peak_memory_bytes": 217440256
+      }
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-in/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.342240700003458,
+        "peak_memory_bytes": 218206208
+      }
+    },
+    {
+      "case": "kicad-positive/clean/through-hole-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.564059800002724,
+        "peak_memory_bytes": 218095616
+      }
+    },
+    {
+      "case": "kicad-positive/clean/tracks-arcs-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.526494799996726,
+        "peak_memory_bytes": 217972736
+      }
+    },
+    {
+      "case": "kicad-positive/clean/zone-hole-rotation-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 3.7642802000045776,
+        "peak_memory_bytes": 218161152
+      }
+    },
+    {
+      "case": "kicad-positive/native/four-layer-drills-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 29302,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 7.112070800001675,
+        "peak_memory_bytes": 241065984
+      }
+    },
+    {
+      "case": "kicad-positive/native/outline-only-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.206247699999949,
+        "peak_memory_bytes": 217935872
+      }
+    },
+    {
+      "case": "kicad-positive/native/pad-shapes-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.224739400000544,
+        "peak_memory_bytes": 217665536
+      }
+    },
+    {
+      "case": "kicad-positive/native/through-hole-in/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 3.9582746000014595,
+        "peak_memory_bytes": 217456640
+      }
+    },
+    {
+      "case": "kicad-positive/native/through-hole-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.385957999998936,
+        "peak_memory_bytes": 217944064
+      }
+    },
+    {
+      "case": "kicad-positive/native/tracks-arcs-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.221433500002604,
+        "peak_memory_bytes": 218513408
+      }
+    },
+    {
+      "case": "kicad-positive/native/zone-hole-rotation-mm/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4186,
+      "material_cells": 12558,
+      "max_cell_mm": [
+        0.2209708691207961,
+        0.2209708691207961
+      ],
+      "native_cli": {
+        "elapsed_s": 4.085379100004502,
+        "peak_memory_bytes": 217960448
+      }
+    },
+    {
+      "case": "kicad-video-odb.tgz/pcbeq",
+      "region_count": 10,
+      "xy_cells": 3755,
+      "material_cells": 26285,
+      "max_cell_mm": [
+        2.850794867568188,
+        2.850794867568188
+      ],
+      "native_cli": {
+        "elapsed_s": 7.566866200002551,
+        "peak_memory_bytes": 358178816
+      }
+    },
+    {
+      "case": "minimal-test-odb/pcbeq",
+      "region_count": 1,
+      "xy_cells": 4176,
+      "material_cells": 8352,
+      "max_cell_mm": [
+        1.3975424859373686,
+        1.3975424859373686
+      ],
+      "native_cli": {
+        "elapsed_s": 3.6117101999989245,
+        "peak_memory_bytes": 202366976
+      }
+    }
+  ]
+}

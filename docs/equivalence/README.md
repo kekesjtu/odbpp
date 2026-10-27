@@ -5,6 +5,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [max-grid-validation.json](max-grid-validation.json) | 当前最大边长单独控制：832 项回归、19 个真实 case 的最终网格规模和 CLI 运行资源 |
 | [11-region-accuracy.md](11-region-accuracy.md) | 当前 region 几何精度：退缩量与面积损失双约束、最差位置优先细化、合并/共享域复检及真实案例验证 |
 | [no-y-quantization-validation.json](no-y-quantization-validation.json) | 当前真实 Y 区间与相邻共同区间合并：三种真实板型的新旧规模、误差、资源与几何独立性检查 |
 | [no-y-quantization-tight-validation.json](no-y-quantization-tight-validation.json)、[no-y-quantization-sampling.json](no-y-quantization-sampling.json) | 当前策略的真实板最差位置细化路径与默认/双倍光栅材料采样对照 |

@@ -15,7 +15,7 @@ uv run --all-extras pcbkit export cases/minimal-test-odb -o out/example/pcbkit -
 uv run --all-extras pcbeq run out/example/pcbkit/intermediate.json -o out/example/pcbeq --grid-level standard
 ```
 
-显式光栅需同时提供 `--px` 和 `--py`，表示整板各方向像素数。专家可用 `--min-cell-mm`、`--max-cell-mm` 的一个值或 X/Y 两值替代网格档位。
+显式光栅需同时提供 `--px` 和 `--py`，表示整板各方向像素数。专家用 `--max-cell-mm` 的一个值或 X/Y 两值替代网格档位；不设置最小网格尺寸。region 采用真实 Y 区间竖条阶梯划分。
 
 region 精度由 `--max-boundary-retreat-mm`（默认 3 mm）和 `--max-area-loss-ratio`（默认 0.05，即 5%）共同控制：每次优先细化轮廓超差最严重的位置，合并及逐层共享分区后重新检查。两参数独立于材料光栅和物性网格档位，距离覆盖完整外轮廓与孔洞边界。详见 [几何精度控制](docs/equivalence/11-region-accuracy.md)。
 

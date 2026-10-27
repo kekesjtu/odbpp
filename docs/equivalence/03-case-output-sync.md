@@ -30,14 +30,13 @@ uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-gri
 uv run --all-extras python tools/sync_out.py --grid-level standard --heatmap-grid --force-equivalent
 
 # 改动解析器后加 --force；清理没有来源 case 的输出用 --prune
-# X/Y 可分别设置，例如最小 0.1/0.2 mm，最大 4/3 mm
+# X/Y 最大边长可分别设置，例如 4/3 mm
 uv run --all-extras python tools/sync_out.py --px 9600 --py 7200 \
-    --min-cell-mm 0.1 0.2 --max-cell-mm 4 3 --heatmap-grid
+    --max-cell-mm 4 3 --heatmap-grid
 ```
 
-`--px/--py` 可成对覆盖默认密集光栅。常规采用 `--grid-level coarse|standard|fine`，默认 standard；尺寸参数进入专家模式。`--min-cell-mm/--max-cell-mm` 默认 0.1 / 5 mm，
-各接受一个值或 X Y 两个值。旧的 `--nx/--ny/--coarse-grid` 已移除。
-所有 region 边界传播为全局 X/Y 轴线，相邻轴线区间按尺寸上下限细分；不兼容就报错。
+`--px/--py` 可成对覆盖默认密集光栅。常规采用 `--grid-level coarse|standard|fine`，默认 standard；`--max-cell-mm` 进入专家模式，默认 5 mm，接受一个值或 X Y 两个值。最小尺寸参数及约束已删除。
+所有 region 边界传播为全局 X/Y 轴线，相邻轴线区间按最大尺寸细分，短区间直接保留。
 网格细分不再受整板格数预算限制，因此中部宽区间也会细分。
 光栅像素仍用于等效积分，热图直接读取重新计算的 MaterialMap JSON，不做二次聚合。
 
@@ -46,9 +45,9 @@ uv run --all-extras python tools/sync_out.py --px 9600 --py 7200 \
 ## 复用与重建
 
 预览须符合当前共享 Pydantic 模型，只有一个 step，且输入来源一致。
-等效结果须符合当前 MaterialMap JSON 模型：JSON 来源、自动/显式光栅参数、网格档位或各轴尺寸上下限、
+等效结果须符合当前 MaterialMap JSON 模型：JSON 来源、自动/显式光栅参数、网格档位或各轴尺寸上限、
 有/无热图边界的配置、pipeline_fingerprint，以及 MaterialMap JSON / 运行诊断、图例和逐层 PNG 均匹配才复用。
-只更改最大或最小尺寸也会重算。成功替换后清理已不属于当前层列表的旧 PNG。
+只更改最大尺寸也会重算。成功替换后清理已不属于当前层列表的旧 PNG。
 
 ## region 分区图
 

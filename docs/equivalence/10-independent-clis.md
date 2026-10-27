@@ -29,7 +29,7 @@ uv run --all-extras python tools/sync_contract.py --check
 uv sync --all-extras
 uv run --all-extras pcbkit export cases/minimal-test-odb -o out/example/pcbkit --sagitta-mm 0.001 --digits 4
 uv run --all-extras pcbeq run out/example/pcbkit/intermediate.json -o out/example/pcbeq --px 4096 --py 4096 --grid-level standard
-uv run --all-extras pcbeq run out/example/pcbkit/intermediate.json -o out/example/pcbeq --min-cell-mm 0.1 0.2 --max-cell-mm 2 3
+uv run --all-extras pcbeq run out/example/pcbkit/intermediate.json -o out/example/pcbeq --max-cell-mm 2 3
 ```
 
 pcbkit 保留 info/layers/symbols/diagnostics/summarize 供 ODB++ 检查使用。`--sagitta-mm` 控制曲线弦高误差，`--digits` 控制最终坐标量化；原 `--sagitta` 是同一参数的别名。`--only-json` 跳过预览图。

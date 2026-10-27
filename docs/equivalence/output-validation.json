@@ -51,10 +51,10 @@
       "case": "kicad-kitchen-sink/pcbeq",
       "region_count": 74,
       "physical_region_count": 222,
-      "nx": 118,
+      "nx": 110,
       "ny": 122,
-      "grid_cells": 8719,
-      "material_rows": 26157,
+      "grid_cells": 8141,
+      "material_rows": 24423,
       "raster": [
         4096,
         19217
