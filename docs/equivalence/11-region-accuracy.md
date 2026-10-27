@@ -1,16 +1,16 @@
 # Region 精度：轮廓距离与面积损失
 
-2026-10-27。当前策略为 `inscribed-vertical-staircase-worst-first`，替代旧 v3 的面积预算驱动策略。
+2026-10-27。当前策略为 `inscribed-vertical-staircase-worst-first`，替代旧 v3 的面积预算驱动策略。默认完整轮廓退缩量已按用户要求从 0.5 mm 调整为 3 mm，算法与 5% 面积预算保持不变。
 
 ## 两个用户参数
 
 ```powershell
-uv run --all-extras pcbeq run out/kicad-video-odb.tgz/pcbkit/intermediate.json -o out/kicad-video-odb.tgz/pcbeq --max-boundary-retreat-mm 0.5 --max-area-loss-ratio 0.05
+uv run --all-extras pcbeq run out/kicad-video-odb.tgz/pcbkit/intermediate.json -o out/kicad-video-odb.tgz/pcbeq --max-boundary-retreat-mm 3 --max-area-loss-ratio 0.05
 ```
 
 | 参数 | 默认值 | 含义 |
 |---|---|---|
-| `--max-boundary-retreat-mm` | 0.5 mm | 原始实体与内接模型对应轮廓之间的双向欧氏距离上限，有限正数 |
+| `--max-boundary-retreat-mm` | 3 mm | 原始实体与内接模型对应轮廓之间的双向欧氏距离上限，有限正数 |
 | `--max-area-loss-ratio` | 0.05 | 损失面积 / 原始有效域面积的上限，范围 `[0,1)`，0.01 表示 1% |
 
 两者同时约束 step profile 和每个待等效层的有效域（layer profile AND 原始 step profile）。
@@ -18,6 +18,26 @@ uv run --all-extras pcbeq run out/kicad-video-odb.tgz/pcbkit/intermediate.json -
 
 `tools/run_pipeline.py` 和 `tools/sync_out.py` 也接收并传递这两个参数；批量缓存把两者纳入请求指纹。
 原来的隐藏面积比例/绝对面积命令行参数退役。隐藏 `--diagnostic-geometry-step-mm` 只覆盖内部初始种子尺度，不能代替误差预算。
+
+## 当前算法示意图
+
+```mermaid
+flowchart TD
+    A["中间 JSON：整板轮廓与逐层计算域"] --> B["生成细竖条内接矩形<br/>自动起始尺度不超过 0.25 mm"]
+    B --> C{"退缩 ≤ 3 mm<br/>面积损失 ≤ 5%<br/>内接与拓扑均保留？"}
+    C -- 不通过 --> D["按检查优先级二分一个条带<br/>距离超差：选最大偏差位置<br/>面积超差：选最大损失条带<br/>拓扑失败：保护缺失实体与连接"]
+    D --> B
+    C -- 通过 --> E["尝试合并相邻竖条<br/>每次复检距离、面积、内接、拓扑<br/>不合格的合并直接拒绝"]
+    E --> F["形成 step / layer 共享分区<br/>再次逐层核对完整实体"]
+    F --> G{"各层都合格？"}
+    G -- 否 --> H["减少内部合并幅度并重规划<br/>最多 5 次，用户预算保持不变"]
+    H --> B
+    G -- 是 --> I["确定最终 region<br/>全部边界传播到全局 X/Y 轴线"]
+    I --> J["按网格尺寸约束进一步等分<br/>再结合独立光栅采样计算单元物性"]
+```
+
+图中 3 mm 是完整对应轮廓的双向欧氏距离上限，不是仅 Y 向退缩；起始尺度不是用户误差参数。
+光栅 `Px/Py` 不进入几何规划。达到内部资源限制或重规划仍不合格时，报错停止，不生成成功结果。
 
 ## 距离检查的几何含义
 
@@ -33,7 +53,8 @@ GEOS 的离散 Hausdorff 值只用作下界和快速拒绝，不能据此接受�
 
 ## 最差位置优先细化
 
-1. 用物理尺寸建立竖条种子；自动初始尺度为 `min(max(0.5 mm, 整板短边 / 32), ε / 2)`。
+1. 用物理尺寸建立竖条种子；自动初始尺度为 `min(max(0.5 mm, 整板短边 / 32), ε / 2, 0.25 mm)`。
+   放宽默认距离到 3 mm 后保留原先 0.25 mm 的细种子上限，避免刚挠层域粗种子触发拓扑失败；后续合并仍可以使用完整的 3 mm 预算。该上限只是内部起始尺度，不是额外的误差参数。
    同一 step 的层域共用 X 基础和 Y 原点。轴对齐轮廓按真实 X 顶点精确分条。
    初始尺度只是降低迭代成本的种子，不能作为误差合格的依据。
 2. 每轮重建内接矩形的并集，检查真实外轮廓和孔洞边界。
@@ -53,7 +74,8 @@ GEOS 的离散 Hausdorff 值只用作下界和快速拒绝，不能据此接受�
 小规模距离管带缓存以完整不可变几何与物理半径为键，不依赖光栅。
 
 step / layer 模型相交并共享分区后，对每个原始有效域再次完整检查两预算与拓扑。
-失败给出具体 domain 和超差数据，不生成可被误认为成功的 MaterialMap。
+若只有共享层域复检失败，保持用户距离和面积预算不变，逐次减少允许的合并幅度并重新规划；最多尝试原合并上限及其 1/2、1/4、1/8、1/16。各次合并上限、失败层域和结果写入 `audit.shared_domain_replanning`，采用的内部合并上限写入 `coarsening_retreat_limit_mm`。这是自动局部保护策略，不增加用户参数，也不放宽约束。其他几何错误不通过重试掩盖。
+仍失败时给出具体 domain 和超差数据，不生成可被误认为成功的 MaterialMap。
 当前算法是受约束的启发式，不承诺最少矩形数，也不承诺在所有可解的多域问题上都找到方案。
 
 ## 网格、光栅与终止限制
@@ -74,18 +96,18 @@ region 的所有边界继续传播到全局笛卡尔栅；物性网格尺寸按�
 
 ```powershell
 uv run --all-extras pytest
-uv run --all-extras python tools/validate_region_accuracy.py
+uv run --all-extras python tools/validate_region_accuracy.py --output docs/equivalence/region-accuracy-default-3mm-validation.json
 uv run --all-extras python tools/validate_region_accuracy.py --case kicad-video-odb.tgz --max-boundary-retreat-mm 0.25 --max-area-loss-ratio 0.01 --diagnostic-geometry-step-mm 1 --output docs/equivalence/region-accuracy-tight-validation.json
 uv run --all-extras python tools/validate_region_accuracy.py --case kicad-video-odb.tgz --sampling-convergence --output docs/equivalence/region-sampling-validation.json
 uv run --all-extras python tools/sync_out.py --force-equivalent
 uv run --all-extras python tools/audit_out.py
 ```
 
-默认真实案例对照见 [region-accuracy-validation.json](region-accuracy-validation.json)，收紧预算见
+原 0.5 mm 默认值的真实案例对照见 [region-accuracy-validation.json](region-accuracy-validation.json)，当前默认值见 [region-accuracy-default-3mm-validation.json](region-accuracy-default-3mm-validation.json)，收紧预算见
 [region-accuracy-tight-validation.json](region-accuracy-tight-validation.json)。默认对照同时逐一核对 4096² 和 8192² 两种光栅输入下的 region、全局 X/Y 轴线完全一致；该项只运行几何规划，材料采样容量由完整 CLI 和逐单元输出审计另行验证。
 耗时包含几何规划和网格生成，前后均开启 tracemalloc；Python 分配峰值不包含 GEOS/NumPy 的原生内存，不应误读为进程峰值。
 
-默认策略的初始种子已经可能满足两项预算，所以三种真实案例默认运行的细化次数均为 0；之后仍对每次简化复检。
+原 0.5 mm 默认策略的初始种子已经可能满足两项预算，所以该次三种真实案例默认运行的细化次数均为 0；之后仍对每次简化复检。
 收紧预算的 video 验证专门覆盖较粗的内部种子，实际执行 391 次最差位置细化，最终距离上界 0.249608 mm、面积损失 0.347992%。该内部种子覆盖仅为验证细化路径，不是第三个用户精度参数。
 
 材料采样对照见 [region-sampling-validation.json](region-sampling-validation.json)。
@@ -95,7 +117,7 @@ kx/ky 的第 95 百分位相对变化约为 12.34% / 12.10%。细走线和接近
 
 ## 本次真实案例结果
 
-旧策略基线提交为 `6e66c70`；新策略采用 0.5 mm / 5% 默认预算。下表误差为 step profile，逐层域检查结果见 JSON 报告。
+旧策略基线提交为 `6e66c70`；下表记录调整默认值之前的 0.5 mm / 5% 验证结果，作为历史对照保留。下表误差为 step profile，逐层域检查结果见 JSON 报告。
 
 | case | region 前→后 | XY 单元前→后 | 距离上界前→后 mm | 面积损失前→后 | 几何与网格秒前→后 | Python 分配峰值 MiB 前→后 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -107,5 +129,16 @@ kx/ky 的第 95 百分位相对变化约为 12.34% / 12.10%。细走线和接近
 这些是本机单次测量，运行期间存在其他验证进程，不应作为性能承诺。
 19 个案例的正式 MaterialMap、掩膜、热图和几何图已更新到 `out/`，
 逐单元审计见 [output-validation.json](output-validation.json)。
-本轮完整回归 **817 项通过**（260.58 秒）；19 个案例共 **934,041 个三维物性单元**全部通过输出审计。
+0.5 mm 阶段完整回归 **817 项通过**（260.58 秒），当时 19 个案例共 **934,041 个三维物性单元**全部通过输出审计；当前 3 mm 的逐单元统计以 `output-validation.json` 为准。
 新旧误差、耗时与 Python 分配峰值均保留在默认对照报告；新产物的 `published_run` 另记录含图像与 IO 的完整 CLI 耗时和原生进程峰值，不能与仅几何规划的测量混用。
+
+3 mm / 5% 默认值的真实案例结果如下，均通过逐层域、连续距离及 4096² / 8192² 几何坐标一致性检查：
+
+| case | region | XY 单元 | 距离上界 mm | 面积损失 |
+|---|---:|---:|---:|---:|
+| kitchen-sink | 87 | 5,087 | 2.991501 | 4.0138% |
+| video | 9 | 3,703 | 2.946072 | 1.7853% |
+| 刚挠板 | 54 | 3,276 | 1.444181 | 4.6561% |
+
+刚挠板共享层域自动重规划时缩小了内部合并幅度，因此实际退缩上界小于 3 mm；3 mm 是允许上限，不要求算法必须消耗完预算。完整记录见 [3 mm 验证报告](region-accuracy-default-3mm-validation.json)。
+本次默认值调整后的 86 项定向回归全部通过；19 个案例、362,746 个完整三维物性单元通过输出审计，最终掩膜、热图和几何图已按 3 mm 设置更新。

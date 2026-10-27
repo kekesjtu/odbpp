@@ -1,0 +1,333 @@
+{
+  "date": "2026-10-27",
+  "measurement": "geometry planning + mesh with tracemalloc; Python allocation peak excludes native GEOS/NumPy allocations",
+  "resolution_independence_scope": "complete region and global-grid planning, without material sampling",
+  "cases": [
+    {
+      "case": "kicad-kitchen-sink",
+      "input_sha256": "ade57d71b426fd55a20dec8064bdf7210d648a8ed6b9238b5cd0010d185e165f",
+      "max_boundary_retreat_mm": 3.0,
+      "max_area_loss_ratio": 0.05,
+      "internal_initial_step_override_mm": null,
+      "before": null,
+      "after": {
+        "regions": 87,
+        "xy_cells": 5087,
+        "seconds": 5.185245099997701,
+        "python_peak_mib": 2.181062698364258,
+        "area_loss_ratio": 0.0401382956118175,
+        "retreat_upper_mm": 2.991500704507337,
+        "refinement_steps": 0
+      },
+      "refinement_trace_sample": [],
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.040138295611817906,
+          "retreat_upper_mm": 2.991500704507337,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "13561a293ef74e91a91a4d7ca74e0b123b35ebb8b680569af57d3ae8393a9b02",
+      "published_run": {
+        "elapsed_s": 11.305314900000667,
+        "peak_memory_bytes": 274370560,
+        "measurement": "full pcbeq CLI, including imports, IO, images; native process peak",
+        "raster": [
+          4096,
+          2595
+        ],
+        "material_cells": 15261
+      },
+      "all_checks_passed": true,
+      "shared_domain_replanning": [
+        {
+          "coarsening_retreat_limit_mm": 3.0,
+          "ok": true,
+          "failed_domains": []
+        }
+      ]
+    },
+    {
+      "case": "kicad-video-odb.tgz",
+      "input_sha256": "8ba8baea454492d663f0d96fc617c50aa7cf07fc8fe7b22cc95ae23726446858",
+      "max_boundary_retreat_mm": 3.0,
+      "max_area_loss_ratio": 0.05,
+      "internal_initial_step_override_mm": null,
+      "before": null,
+      "after": {
+        "regions": 9,
+        "xy_cells": 3703,
+        "seconds": 1.857182700001431,
+        "python_peak_mib": 1.2637643814086914,
+        "area_loss_ratio": 0.01785267290646584,
+        "retreat_upper_mm": 2.946071683182057,
+        "refinement_steps": 0
+      },
+      "refinement_trace_sample": [],
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.017852672906465996,
+          "retreat_upper_mm": 2.946071683182057,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "dfb708c8978cc0e535751cc4f5d586ec31621b6587e67727cd047102f075074f",
+      "published_run": {
+        "elapsed_s": 7.337217999996938,
+        "peak_memory_bytes": 358273024,
+        "measurement": "full pcbeq CLI, including imports, IO, images; native process peak",
+        "raster": [
+          4096,
+          1401
+        ],
+        "material_cells": 25921
+      },
+      "all_checks_passed": true,
+      "shared_domain_replanning": [
+        {
+          "coarsening_retreat_limit_mm": 3.0,
+          "ok": true,
+          "failed_domains": []
+        }
+      ]
+    },
+    {
+      "case": "designodb-rigidflex",
+      "input_sha256": "2349accdcb92ae51e309f418ecdc25b6390938771d8e2ba94f7673c4d98acc7d",
+      "max_boundary_retreat_mm": 3.0,
+      "max_area_loss_ratio": 0.05,
+      "internal_initial_step_override_mm": null,
+      "before": null,
+      "after": {
+        "regions": 54,
+        "xy_cells": 3276,
+        "seconds": 13.27693029999864,
+        "python_peak_mib": 3.016824722290039,
+        "area_loss_ratio": 0.046561240891242375,
+        "retreat_upper_mm": 1.4441805342311886,
+        "refinement_steps": 0
+      },
+      "refinement_trace_sample": [],
+      "domains": [
+        {
+          "domain": "step_profile",
+          "area_loss_ratio": 0.046561240891242604,
+          "retreat_upper_mm": 1.4441805342311886,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_13",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_15",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_17",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_19",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_3",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_5",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_7",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:DIELECTRIC_9",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:FLEX_5",
+          "area_loss_ratio": 0.04653032658053423,
+          "retreat_upper_mm": 1.4441805342311886,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:FLEX_6",
+          "area_loss_ratio": 0.04653032658053423,
+          "retreat_upper_mm": 1.4441805342311886,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:PLANE_4",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:POLYIMIDE_BASE_11",
+          "area_loss_ratio": 0.04653032658053423,
+          "retreat_upper_mm": 1.4441805342311886,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_1",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_10",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_2",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_3",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_7",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_8",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        },
+        {
+          "domain": "layer_profile:SIGNAL_9",
+          "area_loss_ratio": 0.04500938223157404,
+          "retreat_upper_mm": 1.4006633789062541,
+          "topology_preserved": true,
+          "continuous_reference_check": true
+        }
+      ],
+      "raster_dimensions_compared": [
+        [
+          4096,
+          4096
+        ],
+        [
+          8192,
+          8192
+        ]
+      ],
+      "region_and_grid_coordinates_identical": true,
+      "geometry_sha256": "e5e78b3ce7f0ddbccafca4c06043416f947d6ebb775f231be3f256940ef7fa1e",
+      "published_run": {
+        "elapsed_s": 31.662580299998808,
+        "peak_memory_bytes": 959614976,
+        "measurement": "full pcbeq CLI, including imports, IO, images; native process peak",
+        "raster": [
+          5887,
+          1563
+        ],
+        "material_cells": 51956
+      },
+      "all_checks_passed": true,
+      "shared_domain_replanning": [
+        {
+          "coarsening_retreat_limit_mm": 3.0,
+          "ok": false,
+          "failed_domains": [
+            "layer_profile:DIELECTRIC_13",
+            "layer_profile:DIELECTRIC_15",
+            "layer_profile:DIELECTRIC_17",
+            "layer_profile:DIELECTRIC_19",
+            "layer_profile:DIELECTRIC_3",
+            "layer_profile:DIELECTRIC_5",
+            "layer_profile:DIELECTRIC_7",
+            "layer_profile:DIELECTRIC_9",
+            "layer_profile:PLANE_4",
+            "layer_profile:SIGNAL_1",
+            "layer_profile:SIGNAL_10",
+            "layer_profile:SIGNAL_2",
+            "layer_profile:SIGNAL_3",
+            "layer_profile:SIGNAL_7",
+            "layer_profile:SIGNAL_8",
+            "layer_profile:SIGNAL_9"
+          ]
+        },
+        {
+          "coarsening_retreat_limit_mm": 1.5,
+          "ok": true,
+          "failed_domains": []
+        }
+      ]
+    }
+  ]
+}
