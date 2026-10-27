@@ -27,10 +27,10 @@ def build_parser():
                       help="Y raster pixels (provide together with --px)")
     p_eq.add_argument("--grid-level", choices=("coarse","standard","fine"), default=None,
                       help="adaptive mesh preset (default: standard; expert sizes override)")
-    p_eq.add_argument("--min-cell-mm", type=float, nargs="+", default=None, metavar="MM",
-                      help="minimum cell edge, one value or X Y (default 0.1 mm)")
     p_eq.add_argument("--max-cell-mm", type=float, nargs="+", default=None, metavar="MM",
                       help="maximum cell edge, one value or X Y (default 5 mm)")
+    p_eq.add_argument("--region-algorithm", choices=("staircase","quadtree"), default="staircase",
+                      help="region geometry algorithm (default: staircase); quadtree finest square side = min(max-cell X/Y)")
     p_eq.add_argument("--diagnostic-geometry-step-mm", dest="rectify_tolerance",
                       type=float, default=None, help=argparse.SUPPRESS)
     p_eq.add_argument("--max-boundary-retreat-mm", type=float, default=3.0, metavar="MM",

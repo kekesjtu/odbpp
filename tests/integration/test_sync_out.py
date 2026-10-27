@@ -98,7 +98,7 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
 
 def test_sync_rejects_invalid_size_bounds(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "100", "--py", "100",
-                                      "--min-cell-mm", "6", "--max-cell-mm", "5"])
+                                      "--max-cell-mm", "0"])
     with pytest.raises(SystemExit) as exc:
         sync_out.main()
     assert exc.value.code == 2

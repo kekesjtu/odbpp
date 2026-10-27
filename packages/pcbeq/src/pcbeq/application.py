@@ -81,16 +81,17 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     if (args.px is None) != (args.py is None):
         print("--px and --py must be provided together", file=sys.stderr)
         return 2
-    if args.grid_level and (args.min_cell_mm is not None or args.max_cell_mm is not None):
+    if args.grid_level and args.max_cell_mm is not None:
         print("--grid-level cannot be combined with expert cell sizes", file=sys.stderr)
         return 2
     try:
         options = EquivalenceOptions(
             grid=GridOptions(px=4096 if args.px is None else args.px, py=4096 if args.py is None else args.py,
-                             min_cell_mm=args.min_cell_mm or .1, max_cell_mm=args.max_cell_mm or 5,
-                             mesh_preset=args.grid_level or (None if args.min_cell_mm is not None or args.max_cell_mm is not None else "standard"),
+                             max_cell_mm=args.max_cell_mm if args.max_cell_mm is not None else 5,
+                             mesh_preset=args.grid_level or (None if args.max_cell_mm is not None else "standard"),
                              auto_raster=args.px is None),
             materials=MaterialBook(config or None, diagnostics=diagnostics),
+            region_algorithm=args.region_algorithm,
             rectify=RectifyOptions(
                 max_boundary_retreat_mm=args.max_boundary_retreat_mm,
                 tolerance_mm=args.rectify_tolerance,
@@ -347,10 +348,13 @@ def _gallery_note(result, args) -> str:
     if result.grid.size_constraints_mm:
         limits = result.grid.size_constraints_mm
         parts.append("单元边长 " + "，".join(
-            f"{axis}=[{limits['min'][i]:g}, {limits['max'][i]:g}] mm"
+            f"{axis} ≤ {limits['max'][i]:g} mm"
             for i, axis in enumerate("XY")))
     if result.rectification.tolerance_mm is not None:
-        parts.append(f"矩形化 tolerance={result.rectification.tolerance_mm:g} mm")
+        if args.region_algorithm=="quadtree":
+            parts.append(f"正方形四叉树，最细方块边长={result.rectification.tolerance_mm:g} mm")
+        else:
+            parts.append("真实 Y 区间竖条阶梯")
     if skipped:
         parts.append(f"{len(skipped)} 层未参与等效（逐层原因见 diagnostics/run.json）")
     if not args.raster_png:

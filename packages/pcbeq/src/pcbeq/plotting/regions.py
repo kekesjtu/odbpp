@@ -91,9 +91,12 @@ def plot_regions(document: dict, directory: Path, *, metadata: dict) -> dict:
         ax.set_title(title,fontsize=11); ax.set_xlabel("X / mm"); ax.set_ylabel("Y / mm")
     fig.colorbar(ScalarMappable(norm=norm,cmap=cmap),ax=overview,
                  orientation="horizontal",shrink=.6,pad=.08,label="Region area / mm² (log scale)")
+    quadtree=actual["strategy"]=="inscribed-square-quadtree"
+    scale_label="Finest square side" if quadtree else "Physical initial X step"
     information.text(0,1,
         f"{len(rects)} rectangle regions\n"
-        f"Physical initial step: {actual['tolerance_mm']:.4g} mm\n"
+        f"Algorithm: {'Square quadtree' if quadtree else 'Vertical staircase'}\n"
+        f"{scale_label}: {actual['tolerance_mm']:.4g} mm\n"
         f"Retreat limit: {actual['audit']['boundary_retreat']['max_allowed_mm']:.4g} mm\n"
         f"Retreat upper: {actual['audit']['boundary_retreat']['max_distance_upper_mm']:.4g} mm\n"
         f"Area budget: {actual['audit']['relative_area_budget']:.2%}\n"

@@ -62,13 +62,14 @@ def existing_preview(directory, source):
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
-def existing_equivalence(directory, preview, *, px, py, min_cell_mm=.1, max_cell_mm=5,
+def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5,
                          grid_level=None, draw_grid=False, max_boundary_retreat_mm=3.0,
-                         max_area_loss_ratio=.05):
+                         max_area_loss_ratio=.05, region_algorithm="staircase"):
     try:
         cache = json.loads((directory / "pipeline/cache.json").read_text(encoding="utf-8"))
-        requested = {"px": px, "py": py, "min": sizes(min_cell_mm, .1), "max": sizes(max_cell_mm, 5),
+        requested = {"px": px, "py": py, "max": sizes(max_cell_mm, 5),
                      "grid_level": grid_level, "draw_grid": draw_grid,
+                     "region_algorithm":region_algorithm,
                      "max_boundary_retreat_mm":max_boundary_retreat_mm,
                      "max_area_loss_ratio":max_area_loss_ratio}
         if cache["equivalent"] != fingerprint("pcbeq") or cache["requested"] != requested:
@@ -122,20 +123,18 @@ def main():
     parser.add_argument("--px", type=int)
     parser.add_argument("--py", type=int)
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
-    parser.add_argument("--min-cell-mm", nargs="+", type=float)
     parser.add_argument("--max-cell-mm", nargs="+", type=float)
+    parser.add_argument("--region-algorithm",choices=("staircase","quadtree"),default="staircase")
     parser.add_argument("--max-boundary-retreat-mm", type=float, default=3.0)
     parser.add_argument("--max-area-loss-ratio", type=float, default=.05)
     args = parser.parse_args()
     if (args.px is None) != (args.py is None) or (args.px is not None and min(args.px, args.py) <= 0):
         parser.error("provide positive px/py together")
-    expert = args.min_cell_mm is not None or args.max_cell_mm is not None
+    expert = args.max_cell_mm is not None
     if expert and args.grid_level:
         parser.error("grid level cannot be combined with expert sizes")
     try:
-        lower, upper = sizes(args.min_cell_mm, .1), sizes(args.max_cell_mm, 5)
-        if any(a > b for a, b in zip(lower, upper)):
-            raise ValueError("minimum cell size exceeds maximum")
+        upper = sizes(args.max_cell_mm, 5)
     except ValueError as exc:
         parser.error(str(exc))
     args.grid_level = args.grid_level or (None if expert else "standard")
@@ -145,8 +144,9 @@ def main():
         output = OUT / name
         valid = None if args.force else existing_preview(output, source)
         equivalent = None if valid is None or args.force_equivalent else existing_equivalence(
-            output, valid[0], px=args.px, py=args.py, min_cell_mm=lower, max_cell_mm=upper,
+            output, valid[0], px=args.px, py=args.py, max_cell_mm=upper,
             grid_level=args.grid_level, draw_grid=args.heatmap_grid,
+            region_algorithm=args.region_algorithm,
             max_boundary_retreat_mm=args.max_boundary_retreat_mm,
             max_area_loss_ratio=args.max_area_loss_ratio)
         result = execute(source, output, equivalent_args=options, reuse_parser=valid is not None,
@@ -156,7 +156,8 @@ def main():
         preview = output / "pcbkit/intermediate.json"
         cache = {"parser": fingerprint("pcbkit"), "equivalent": fingerprint("pcbeq"),
                  "source_mtime_ns": source_mtime(source), "json_sha256": hashlib.sha256(preview.read_bytes()).hexdigest(),
-                 "requested": {"px": args.px, "py": args.py, "min": lower, "max": upper,
+                 "requested": {"px": args.px, "py": args.py, "max": upper,
+                               "region_algorithm":args.region_algorithm,
                                "grid_level": args.grid_level, "draw_grid": args.heatmap_grid,
                                "max_boundary_retreat_mm":args.max_boundary_retreat_mm,
                                "max_area_loss_ratio":args.max_area_loss_ratio}}

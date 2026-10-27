@@ -197,7 +197,7 @@ RECTIFY_AREA_WARNING = "rectify.area_warning"
 RECTIFY_SLAB_AMBIGUOUS = "rectify.slab_ambiguous"
 
 # Board grid allocation (AGENTS 外轮廓矩形化与网格 3-5).
-GRID_SIZE_INCOMPATIBLE = "grid.size_incompatible"
+GRID_RESOURCE_LIMIT = "grid.resource_limit"
 GRID_NO_BOARD_CELLS = "grid.no_board_cells"
 GRID_CELL_WITHOUT_PIXEL = "grid.cell_without_pixel"
 

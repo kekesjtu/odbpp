@@ -136,12 +136,12 @@ def test_default_raster_is_dense_and_presets_reject_few_samples():
 
 def test_expert_mode_retains_physical_limits_and_fails_zero_samples():
     d=build_document(layers=[{"name":"CU","type":"SIGNAL","polygons":[rect(0,0,10,10)]}])
-    low=equivalence_from_document(d,EquivalenceOptions(GridOptions(1,1,.1,1)))
-    high=equivalence_from_document(d,EquivalenceOptions(GridOptions(200,200,.1,1)))
+    low=equivalence_from_document(d,EquivalenceOptions(GridOptions(1,1,1)))
+    high=equivalence_from_document(d,EquivalenceOptions(GridOptions(200,200,1)))
     assert low.fatal and not high.fatal
     assert coordinates(low)==coordinates(high)
     assert high.grid.mesh_configuration["mode"]=="expert"
-    assert high.grid.size_constraints_mm=={"min":[.1,.1],"max":[1,1]}
+    assert high.grid.size_constraints_mm=={"max":[1,1]}
 
 
 def test_cli_default_preset_and_invalid_combinations(tmp_path):
@@ -153,7 +153,7 @@ def test_cli_default_preset_and_invalid_combinations(tmp_path):
     common=["run",str(source),"-o",str(output),"--no-raster-png","--no-heatmap","--no-gallery"]
     assert main(common+["--px","100"])==2
     assert main(common+["--px","0","--py","100"])==2
-    assert main(common+["--grid-level","fine","--min-cell-mm",".1"])==2
+    assert main(common+["--grid-level","fine","--max-cell-mm","1"])==2
     assert main(common)==0
     meta=json.loads((output/"diagnostics/run.json").read_text(encoding="utf-8"))
     assert "schema" not in meta and "cells" not in meta["grid"]

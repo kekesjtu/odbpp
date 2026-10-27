@@ -93,7 +93,7 @@ def drill_document(**kwargs):
 def run(document, *, px=10, py=10, max_cell_mm=None, tolerance=0.01,
         materials=None, diagnostics=None):
     options = EquivalenceOptions(
-        grid=GridOptions(px=px, py=py, min_cell_mm=0.001,
+        grid=GridOptions(px=px, py=py,
                          max_cell_mm=max_cell_mm or (10/px, 10/py)),
         materials=materials or MaterialBook(diagnostics=diagnostics),
         rectify=RectifyOptions(tolerance_mm=tolerance),
@@ -552,9 +552,7 @@ class TestOutput:
         assert meta["rectification"]["ok"] is True
         assert "shape_deviation_mm2" in meta["rectification"]
 
-    def test_a_rectification_that_fills_a_hole_is_fatal(self):
-        # A 0.2 mm slot cannot survive a 5 mm tolerance; filling it changes the
-        # board shape, so the run must be marked untrustworthy, not written.
+    def test_a_thin_independent_entity_survives_without_a_minimum_grid_limit(self):
         domains = [{
             "id": "step_profile", "source": "step_profile",             "polygons": [rect(0, 0, 10, 10), rect(12, 0, 12.05, 10)],
         }]
@@ -562,9 +560,8 @@ class TestOutput:
             {"name": "CU", "type": "SIGNAL", "polygons": []}])
         diagnostics = Diagnostics()
         result = equivalence_from_document(document, EquivalenceOptions(GridOptions(2000,2000)), diagnostics=diagnostics)
-        assert not result.grid.cells
-        assert result.fatal is True
-        assert diagnostics.errors
+        assert result.grid.cells and not result.fatal and not diagnostics.errors
+        assert any(c.x0==12 and c.x1==12.05 for c in result.cells)
 
 
 # ---------------------------------------------------------------------------
@@ -629,7 +626,7 @@ class TestCommandLine:
         from pcbeq.cli import main
 
         code = main(["run", str(export_minimal(tmp_path)),
-                     "--px", "10", "--py", "10", "--min-cell-mm", "6", "--max-cell-mm", "5",
+                     "--px", "10", "--py", "10", "--max-cell-mm", "0",
                      "-o", str(tmp_path)])
         assert code == 2
         assert not list(tmp_path.glob("*.MaterialMap.json"))
@@ -647,7 +644,7 @@ class TestCommandLine:
         out = tmp_path / "eq"
         code = main(["run", str(preview),
                      "--px", "20", "--py", "20",
-                     "--min-cell-mm", "0.1", "-o", str(out)])
+                     "--max-cell-mm", "5", "-o", str(out)])
         assert code == 2
         assert not list(out.glob("*.MaterialMap.json"))
         assert not list(out.glob("*.tmp"))
@@ -659,4 +656,4 @@ class TestCommandLine:
         assert args.max_boundary_retreat_mm == 3.0
         assert args.max_area_error_ratio == .05
         assert args.px is None and args.py is None
-        assert args.min_cell_mm is None and args.max_cell_mm is None
+        assert not hasattr(args,"min_cell_mm") and args.max_cell_mm is None

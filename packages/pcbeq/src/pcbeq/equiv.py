@@ -66,7 +66,7 @@ def pipeline_fingerprint() -> str:
     import hashlib
     from pathlib import Path
     digest = hashlib.sha256()
-    for name in ("equiv.py", "geometry.py", "rectify.py", "grid.py", "raster.py",
+    for name in ("equiv.py", "geometry.py", "rectify.py", "quadtree.py", "grid.py", "raster.py",
                  "materials.py", "visualize.py", "mesh.py", "intermediate.py", "materialmap.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
     return digest.hexdigest()
@@ -81,6 +81,11 @@ class EquivalenceOptions:
     grid: GridOptions
     materials: MaterialBook = field(default_factory=MaterialBook)
     rectify: RectifyOptions = field(default_factory=RectifyOptions)
+    region_algorithm: str = "staircase"
+
+    def __post_init__(self):
+        if self.region_algorithm not in ("staircase","quadtree"):
+            raise ValueError("region_algorithm must be staircase or quadtree")
 
 
 @dataclass(frozen=True, slots=True)
@@ -527,6 +532,9 @@ def _sampling_plan(grid, x_axis, y_axis):
 
 def plan_geometry(step, options, diagnostics):
     """Retry shared-domain failures with less coarsening, never relaxed budgets."""
+    if options.region_algorithm=="quadtree":
+        from .quadtree import plan_quadtree
+        return plan_quadtree(step,options,diagnostics)
     attempts = []
     for divisor in (1,2,4,8,16):
         cap = min(options.rectify.max_boundary_retreat_mm,

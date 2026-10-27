@@ -7,9 +7,11 @@ DEFAULT_RASTER_LONG_SIDE = 4096
 MAX_DEFAULT_RASTER_PIXELS = 120_000_000
 
 def resolve_mesh(step, rectangles, options):
-    forced = [sorted({v for r in rectangles for v in (getattr(r,a+"0"),getattr(r,a+"1"))}) for a in "xy"]
-    gaps = [min(b-a for a,b in zip(v,v[1:])) for v in forced]
-    spans = [v[-1]-v[0] for v in forced]
+    # Resolve the physical target before either region algorithm runs. The
+    # original step domain fixes scale; the chosen approximation cannot feed back.
+    domain=next(d for d in step["domains"] if d["id"]==step["profile_domain_id"])
+    points=[p for ring in domain["polygons"] for p in ring["points"]]
+    spans=[max(p[i] for p in points)-min(p[i] for p in points) for i in (0,1)]
     config = {"mode":"expert", "minimum_samples_per_axis":1}
     if options.mesh_preset:
         from shapely.geometry import Polygon
@@ -28,9 +30,8 @@ def resolve_mesh(step, rectangles, options):
         target=math.sqrt(spans[0]*spans[1])/divisions
         if representative is not None: target=min(target,representative*factor)
         target=max(target,max(spans)/512)
-        lows=tuple(min(g/2,target/4) for g in gaps)
         highs=(target,target)
-        options=replace(options,min_cell_mm=lows,max_cell_mm=highs)
+        options=replace(options,max_cell_mm=highs)
         config={"mode":"preset", "preset":options.mesh_preset,
                 "minimum_samples_per_axis":MIN_SAMPLES_PER_AXIS,
                 "feature_estimator":"positive copper polygon 2A/P, 10th percentile >= 0.01 mm",
@@ -39,8 +40,7 @@ def resolve_mesh(step, rectangles, options):
                 "feature_estimate_count":len(estimates),
                 "ignored_sliver_estimate_count":len(estimates)-len(usable),
                 "board_scale_divisions":divisions,"feature_multiplier":factor,
-                "target_max_cell_mm":target,"minimum_forced_interval_mm":gaps}
-    config["min_cell_mm"]=list(options.min_cell_mm)
+                "target_max_cell_mm":target}
     config["max_cell_mm"]=list(options.max_cell_mm)
     return options,config
 

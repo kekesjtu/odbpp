@@ -103,7 +103,6 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
         f"Modeled XY cells: {len(grid['cells']):,}\n"
         f"Regions: {len(rects)}\n"
         f"Sizing: {mode}\n\n"
-        f"Min X/Y: {constraints['min'][0]:.4g} / {constraints['min'][1]:.4g} mm\n"
         f"Max X/Y: {constraints['max'][0]:.4g} / {constraints['max'][1]:.4g} mm\n\n"
         "Every region boundary is retained.\n"
         "Axis coordinates propagate across\nthe whole board.\n\n"

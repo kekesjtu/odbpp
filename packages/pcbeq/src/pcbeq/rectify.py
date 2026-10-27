@@ -133,7 +133,7 @@ class RectifyResult:
 
     def as_dict(self) -> dict:
         return {
-            "strategy": "inscribed-vertical-staircase-worst-first",
+            "strategy": self.audit.get("strategy","inscribed-vertical-staircase-worst-first"),
             "audit": self.audit,
             "tolerance_mm": self.tolerance_mm,
             "rectangle_count": len(self.rectangles),

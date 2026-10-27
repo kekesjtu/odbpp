@@ -36,6 +36,11 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         regions=meta["rectification"]["rectangles"]
         ids=meta["rectification"]["audit"]["domain_region_ids"]
         geometry_audit=meta["rectification"]["audit"]
+        if meta["rectification"]["strategy"]=="inscribed-square-quadtree":
+            finest=geometry_audit["finest_square_side_mm"]
+            for r in regions:
+                w=r["x1_mm"]-r["x0_mm"];h=r["y1_mm"]-r["y0_mm"]
+                assert abs(w-h)<1e-8 and w>=finest-1e-8
         retreat=geometry_audit["boundary_retreat"]["max_allowed_mm"]
         ratio=geometry_audit["relative_area_budget"]
         region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
@@ -76,7 +81,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             a,b,c,d=bounds5
             assert (a,b,c,d)==(xs[xi[a]],ys[yi[b]],xs[xi[a]+1],ys[yi[b]+1])
             for axis,length in enumerate((c-a,d-b)):
-                assert limits["min"][axis]-1e-8<=length<=limits["max"][axis]+1e-8
+                assert 0<length<=limits["max"][axis]+1e-8
             columns=ax.range_for(a,c);rows=ay.range_for(b,d)
             samples=min(columns[1]-columns[0],rows[1]-rows[0])
             assert samples>=required;minimum=min(minimum,samples)
@@ -90,6 +95,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             counts[name]=counts.get(name,0)+1
         assert counts=={name:layer["cell_count"] for name,layer in reports.items()}
         records.append({"case":directory.relative_to(out_dir).as_posix(),
+            "region_algorithm":meta["rectification"]["strategy"],
             "region_count":len(regions),"physical_region_count":len(materialmap.regions),
             "nx":len(xs)-1,"ny":len(ys)-1,"grid_cells":meta["grid"]["cell_count"],
             "material_rows":sum(counts.values()),"raster":[px,py],

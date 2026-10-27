@@ -20,7 +20,7 @@ from test_svg import parse, layer_groups, path_of
 def evaluate(doc):
     masks = {}
     result = equivalence_from_document(doc, EquivalenceOptions(
-        GridOptions(20, 20, min_cell_mm=0.001, max_cell_mm=1)),
+        GridOptions(20, 20, max_cell_mm=1)),
         mask_sink=lambda name, mask, pitch: masks.update({name: bytes(mask.pixels)}))
     assert not result.fatal, [d.message for d in result.diagnostics.errors]
     return result, masks

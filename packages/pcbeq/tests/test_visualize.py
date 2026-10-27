@@ -127,7 +127,7 @@ def document(layers, *, profile=None, domains=None) -> dict:
 
 def run(document_dict, *, px=4, py=4, max_cell_mm=None, mask_sink=None):
     options = EquivalenceOptions(
-        grid=GridOptions(px=px, py=py, min_cell_mm=0.001,
+        grid=GridOptions(px=px, py=py,
                          max_cell_mm=max_cell_mm or (10/px, 10/py)),
         materials=MaterialBook(),
         rectify=RectifyOptions(tolerance_mm=0.01),
@@ -714,7 +714,7 @@ class TestCommandLine:
             encoding="utf-8")
         out = tmp_path / "eq"
         code = main(["run", str(preview),
-                     "--px", "20", "--py", "20", "--min-cell-mm", "0.1",
+                     "--px", "20", "--py", "20", "--max-cell-mm", "5",
                      "-o", str(out)])
         assert code == 2
         assert not list(out.rglob("*.png"))
