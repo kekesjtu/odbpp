@@ -142,6 +142,7 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
         "retreat_upper_mm":geometry.audit["boundary_retreat"]["max_distance_upper_mm"],
         "refinement_steps":geometry.audit["refinement_count"]},
         "refinement_trace_sample":geometry.audit["local_refinement"][:6]+geometry.audit["local_refinement"][-6:],
+        "shared_domain_replanning":geometry.audit.get("shared_domain_replanning",[]),
         "domains":domain_checks,"raster_dimensions_compared":[[4096,4096],[8192,8192]],
         "region_and_grid_coordinates_identical":True,
         "geometry_sha256":hashlib.sha256(json.dumps(coordinates).encode()).hexdigest(),
@@ -154,14 +155,14 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case",action="append",choices=CASES)
-    parser.add_argument("--max-boundary-retreat-mm",type=float,default=.5)
+    parser.add_argument("--max-boundary-retreat-mm",type=float,default=3.0)
     parser.add_argument("--max-area-loss-ratio",type=float,default=.05)
     parser.add_argument("--diagnostic-geometry-step-mm",type=float,
                         help="internal test seed to exercise worst-first refinement; not a third accuracy control")
     parser.add_argument("--baseline",type=Path)
     parser.add_argument("--sampling-convergence",action="store_true",
                         help="also compare default material sampling to doubled X/Y pixels")
-    parser.add_argument("--output",type=Path,default=ROOT/"docs/equivalence/region-accuracy-validation.json")
+    parser.add_argument("--output",type=Path,default=ROOT/"docs/equivalence/region-accuracy-default-3mm-validation.json")
     args = parser.parse_args()
     baseline = {r["case"]:r for r in json.loads(args.baseline.read_text(encoding="utf-8"))} if args.baseline else {}
     report = {"date":datetime.now(timezone(timedelta(hours=8))).date().isoformat(),

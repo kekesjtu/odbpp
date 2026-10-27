@@ -17,8 +17,11 @@ __all__ = ["Rect", "RectifyOptions", "RectifyResult", "rectify_region",
 
 #: Initial physical boundary step; adaptive refinement never reads pixels.
 DEFAULT_TOLERANCE_MM = 0.5
-DEFAULT_MAX_BOUNDARY_RETREAT_MM = 0.5
+DEFAULT_MAX_BOUNDARY_RETREAT_MM = 3.0
 MAX_INITIAL_BANDS = 10000
+# Keep the established topology-safe seed when users relax the error budget;
+# coarsening can still consume the larger distance/area budgets afterwards.
+MAX_INITIAL_STEP_MM = 0.25
 
 
 @dataclass(frozen=True)
@@ -68,10 +71,16 @@ class RectifyOptions:
     max_refinement_rounds: int = 20
     max_refinement_steps: int = 10000
     basis_mm: Optional[tuple[float, float, float, float]] = None
+    #: Internal retry cap for coarsening when independently valid layer models
+    #: become invalid after shared-domain intersection. Public budgets stay fixed.
+    coarsening_retreat_mm: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.max_boundary_retreat_mm) or self.max_boundary_retreat_mm <= 0:
             raise ValueError("max_boundary_retreat_mm must be finite and positive")
+        if self.coarsening_retreat_mm is not None and (
+                not math.isfinite(self.coarsening_retreat_mm) or self.coarsening_retreat_mm <= 0):
+            raise ValueError("internal coarsening retreat cap must be finite and positive")
         if self.tolerance_mm is not None and (not math.isfinite(self.tolerance_mm) or self.tolerance_mm <= 0.0):
             raise ValueError(f"tolerance_mm must be positive, got {self.tolerance_mm!r}")
         if not math.isfinite(self.max_relative_area_error) or not 0 <= self.max_relative_area_error < 1:
@@ -546,7 +555,7 @@ def rectify_region(region, options=None, *, diagnostics=None):
     if opts.tolerance_mm is None:
         basis = opts.basis_mm or original.bounds
         step = min(max(DEFAULT_TOLERANCE_MM, min(basis[2]-basis[0], basis[3]-basis[1])/32),
-                   opts.max_boundary_retreat_mm/2)
+                   opts.max_boundary_retreat_mm/2, MAX_INITIAL_STEP_MM)
     orthogonal = all(abs(a-c)<1e-9 or abs(b-d)<1e-9 for r in region.rings
                      for (a,b),(c,d) in zip(tuple(r.points),tuple(r.points[1:])+tuple(r.points[:1])))
     if orthogonal:
@@ -650,10 +659,11 @@ def rectify_region(region, options=None, *, diagnostics=None):
     outside = model.difference(original).area
     contour = boundary_retreat(original, model, limit, measure=False)
     coarsening = {}
+    coarsening_limit = min(limit,opts.coarsening_retreat_mm or limit)
     if topology["preserved"] and lost <= allowed+1e-8 and outside <= 1e-8 and contour["within_limit"]:
         origin = (opts.basis_mm or original.bounds)[1]
         envelopes, coarsening = _coarsen(envelopes, original, allowed, step, origin,
-                                         topology_source, max_boundary_retreat_mm=limit)
+                                         topology_source, max_boundary_retreat_mm=coarsening_limit)
         model = unary_union([box(*r.bounds) for r in _pack(envelopes)])
         topology = _topology(original,model,topology_source)
         lost = original.difference(model).area
@@ -676,14 +686,16 @@ def rectify_region(region, options=None, *, diagnostics=None):
                                 "area_budget_mm2":allowed,
                                 "relative_area_budget":opts.max_relative_area_error,
                                 "boundary_retreat":contour,
+                                "coarsening_retreat_limit_mm":coarsening_limit,
                                 "min_step_mm":opts.min_step_mm,
                                 "max_refinement_depth":opts.max_refinement_rounds,
                                 "max_refinement_steps":opts.max_refinement_steps,
                                 "max_initial_bands":MAX_INITIAL_BANDS,
+                                "initial_seed_cap_mm":MAX_INITIAL_STEP_MM,
                                 "refinement_priority":"worst full-contour retreat/limit first; then largest area loss",
                                 "termination":termination,
                                 "refinement_count":len(history),
-                                "initial_scale_rule":"min(max(0.5 mm, shorter board side / 32), max boundary retreat / 2)",
+                                "initial_scale_rule":"min(max(0.5 mm, shorter board side / 32), max boundary retreat / 2, 0.25 mm seed cap)",
                                 "coarsening":coarsening,
                                 "topology":topology,"local_refinement":history})
 

@@ -526,6 +526,26 @@ def _sampling_plan(grid, x_axis, y_axis):
 
 
 def plan_geometry(step, options, diagnostics):
+    """Retry shared-domain failures with less coarsening, never relaxed budgets."""
+    attempts = []
+    for divisor in (1,2,4,8,16):
+        cap = min(options.rectify.max_boundary_retreat_mm,
+                  options.rectify.coarsening_retreat_mm or options.rectify.max_boundary_retreat_mm)/divisor
+        attempt = replace(options,rectify=replace(options.rectify,coarsening_retreat_mm=cap))
+        local = Diagnostics()
+        geometry,membership = _plan_geometry_once(step,attempt,local)
+        attempts.append({"coarsening_retreat_limit_mm":cap,"ok":geometry.ok,
+            "failed_domains":[key for key,audit in geometry.audit.get("domains",{}).items()
+                              if not audit["ok"]]})
+        if (geometry.ok or not local.errors
+                or any(d.code != "equiv.domain_geometry" for d in local.errors)):
+            break
+    geometry.audit["shared_domain_replanning"] = attempts
+    diagnostics.extend(local)
+    return geometry,membership
+
+
+def _plan_geometry_once(step, options, diagnostics):
     """Common physical XY partition and explicit layer-domain membership, no pixels."""
     from shapely.geometry import box
     from shapely.ops import unary_union

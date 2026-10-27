@@ -160,6 +160,8 @@ def test_cli_default_preset_and_invalid_combinations(tmp_path):
     assert meta["grid"]["mesh_configuration"]["preset"]=="standard"
     assert meta["grid"]["layout"]=="global-cartesian"
     assert meta["raster"]["px"]>=4096
+    assert meta["rectification"]["audit"]["boundary_retreat"]["max_allowed_mm"] == 3.0
+    assert meta["rectification"]["audit"]["relative_area_budget"] == .05
 
 
 def test_cli_accuracy_parameters_validate_and_reach_published_diagnostics(tmp_path):
@@ -189,3 +191,24 @@ def test_pipeline_forwards_both_region_accuracy_controls():
     parser_args,equivalent_args = forwarded(args)
     assert not parser_args
     assert equivalent_args == ["--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"]
+
+
+def test_shared_domain_retry_reduces_coarsening_without_relaxing_user_budgets(monkeypatch):
+    import pcbeq.equiv as module
+    document = build_document(layers=[{"name":"CU","type":"SIGNAL","polygons":[]}])
+    original = module._plan_geometry_once
+    attempts = []
+    def fail_first(step,options,diagnostics):
+        attempts.append(options.rectify)
+        geometry,membership = original(step,options,diagnostics)
+        if len(attempts) == 1:
+            geometry.ok = False
+            diagnostics.error("equiv.domain_geometry","injected shared-domain conflict")
+        return geometry,membership
+    monkeypatch.setattr(module,"_plan_geometry_once",fail_first)
+    diagnostics = Diagnostics()
+    geometry,_ = plan_geometry(document["steps"][0],EquivalenceOptions(GridOptions(100,100)),diagnostics)
+    assert geometry.ok and not diagnostics.errors
+    assert [o.coarsening_retreat_mm for o in attempts] == [3.0,1.5]
+    assert all(o.max_boundary_retreat_mm == 3.0 and o.max_relative_area_error == .05 for o in attempts)
+    assert len(geometry.audit["shared_domain_replanning"]) == 2

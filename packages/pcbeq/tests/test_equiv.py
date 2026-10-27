@@ -503,7 +503,7 @@ class TestAutoTolerance:
             document, EquivalenceOptions(grid=GridOptions(px=40, py=40)))
         # The physical seed is bounded by half the contour-retreat budget;
         # sampling pixel pitch still has no influence on geometry.
-        assert result.rectification.tolerance_mm == pytest.approx(.5 / 2)
+        assert result.rectification.tolerance_mm == pytest.approx(.25)
         assert not result.fatal
 
     def test_a_coarse_raster_with_the_default_tolerance_still_samples(self):
@@ -656,5 +656,7 @@ class TestCommandLine:
         from pcbeq.cli import build_parser
 
         args=build_parser().parse_args(["run", "some/path"])
+        assert args.max_boundary_retreat_mm == 3.0
+        assert args.max_area_error_ratio == .05
         assert args.px is None and args.py is None
         assert args.min_cell_mm is None and args.max_cell_mm is None

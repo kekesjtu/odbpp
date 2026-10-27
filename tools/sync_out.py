@@ -63,7 +63,7 @@ def existing_preview(directory, source):
         return None
 
 def existing_equivalence(directory, preview, *, px, py, min_cell_mm=.1, max_cell_mm=5,
-                         grid_level=None, draw_grid=False, max_boundary_retreat_mm=.5,
+                         grid_level=None, draw_grid=False, max_boundary_retreat_mm=3.0,
                          max_area_loss_ratio=.05):
     try:
         cache = json.loads((directory / "pipeline/cache.json").read_text(encoding="utf-8"))
@@ -124,7 +124,7 @@ def main():
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     parser.add_argument("--min-cell-mm", nargs="+", type=float)
     parser.add_argument("--max-cell-mm", nargs="+", type=float)
-    parser.add_argument("--max-boundary-retreat-mm", type=float, default=.5)
+    parser.add_argument("--max-boundary-retreat-mm", type=float, default=3.0)
     parser.add_argument("--max-area-loss-ratio", type=float, default=.05)
     args = parser.parse_args()
     if (args.px is None) != (args.py is None) or (args.px is not None and min(args.px, args.py) <= 0):
