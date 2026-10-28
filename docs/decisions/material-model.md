@@ -46,5 +46,5 @@ heat_capacity = mass × specific_heat
 ## 依据与实现对照
 
 逐行 / 逐列近似保留材料排列的方向性，单纯铜面积比例只足以计算 kz、密度及质量加权比热。
-公式与极限样例见 [推导索引](../derivation/README.md)，材料解析位于 `pcbeq.materials`，统计位于 `pcbeq.equiv`。
-该模型表达正交串并联近似，适用边界由 [需求](../../requirements.md) 定义。
+公式与极限样例见 [串并联推导](../derivation/串并联PCB等效热模型推导.md)和[密度与热容推导](../derivation/密度和热容等效热模型推导.md)。
+该模型表达正交串并联近似，适用边界由 [需求](../requirements.md) 定义。

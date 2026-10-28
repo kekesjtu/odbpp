@@ -80,43 +80,13 @@ for j in range(ny):                 # Y 由小到大
 
 物性发布精度：热导率通常保留六位小数，密度与比热保留四位。极小正值若按该精度会变成 0，则保留原正数，以保证输出有效。XY 网格线和确定 Z 保留内部实际坐标，不以重复单元边界的舍入结果反推网格。
 
-## 写入与读取实现
-
-- `packages/pcbeq/src/pcbeq/materialmap.py` 定义共享读取模型、region 校验、流式写入和单元还原。
-- `MaterialMapWriter` 接收采样器的单元回调，最多缓存一层。当前采样器按跨 region 行带积分，写入器在层结束时按规划 region 顺序归组，再按 Y/X 排列值。
-- 完成前逐 region 检查实际规划边界、全局轴线和完整单元数，核对物理层总数。失败或缺失单元不能产生一个看似完整的正式文件。
-- CLI 写入临时文件，运行成功后再发布；产物按 [发布约定](../decisions/output-publication.md) 管理。
-- `write_materialmap(result, path, step_name=...)` 供保留内存结果的调用方使用，同样通过临时文件替换。
-- 读取器校验单位、五项顺序、区域形状、全局轴线一致性、同层 region 不重叠及层类型 / Z 一致性。
-- 错误物性或缺少条目会报错，不能跳过后把下一条物性错配给当前单元。
-
-```python
-from pcbeq.materialmap import read_document, iter_cells
-
-document = read_document("out/<case>/pcbeq/materialmap.json")
-for region, xy_bounds, values in iter_cells(document):
-    layer_name = region.layer.name
-    x0, y0, x1, y1 = xy_bounds
-    z0, z1 = region.bounds_mm.z
-    kx, ky, kz, density, specific_heat = values
-```
-
 ## 热图和诊断
 
 热图直接读取正式 MaterialMap JSON，按网格线重建每个单元的矩形，不依赖 ODB++ 输入或运行报告。
 
-热图由 `pcbeq run` 在正式 JSON 写出后生成，实现入口为 `pcbeq.visualize`。
-图片语义见 [可视化说明](../visualization.md)。
+热图在正式 JSON 写出后生成。
+图片语义见 [pcbeq 可视化](../decisions/pcbeq-visualization.md)。
 
 `diagnostics/run.json` 是独立运行诊断，记录必要的材料来源、默认材料警告、光栅配置、网格尺寸策略、几何损失、逐层跳过原因和实现指纹。它不是 MaterialMap 的另一部分，热图读取不需要它；其中也不写逐单元索引、面积和采样统计。region / 全局网格诊断图继续单独生成。
 
 几何与材料验收工具从 JSON 网格线重建单元，再独立核对原始域归属、尺寸约束、实际光栅采样中心容量、Z 与物性范围。计算期间仍须检查采样充足性，不能因为正式文件删去统计而取消内部校验。
-
-## 验证入口
-
-```powershell
-uv run --all-extras pytest packages/pcbeq/tests/test_materialmap.py
-uv run --all-extras python tools/audit_out.py
-```
-
-审计由最终网格线重建单元，再核对层域归属、尺寸、采样容量、Z 和物性范围。验收方法见 [验证说明](../validation/README.md)。

@@ -35,4 +35,4 @@
 ## 依据与实现对照
 
 共同轴线使下游恢复单元几何、共享分区与跨层对齐具有确定含义。尺寸细分同时适用于中央宽区域和边界短区间。
-实现位于 `pcbeq.grid/mesh`，几何预算见 [内接 region](inscribed-regions.md)，采样阈值见 [材料采样](material-sampling.md)。
+几何预算见 [内接 region](inscribed-regions.md)，采样阈值见 [材料采样](material-sampling.md)。

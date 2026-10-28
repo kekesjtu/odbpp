@@ -20,12 +20,7 @@ Parser 生成自包含 HTML，SVG、样式和脚本均内联，支持离线打�
 选择保持现有图层可见性；键盘可选择矩阵行与箭头。
 端点无法唯一解析时显示跨度未解析；箭头位置按实际行高更新，支持滚动、换行及窗口变化。
 
-## 性能约定与实现对照
+## 性能约定
 
-逻辑位移、缩放和坐标在每个输入事件中立即计算，DOM 显示写入通过 requestAnimationFrame 合并到显示帧。
-主 SVG 接收交互，复杂材料路径不参与逐图元命中；图层、属性及矩阵节点有索引缓存。
-矩阵先读取端点行中心，再批量写箭头，排序通过 DocumentFragment 移动现有节点。
-坐标转换组合 viewBox CTM、逻辑变换和 Y 翻转，定位层前刷新待显示变换。
-
-实现位于 `pcbkit.svg`，回归位于 `packages/pcbkit/tests/test_svg.py`、`test_viewer_inspection.py`。
-外部参考来源与观察范围见 [Viewer 调研](../research/viewer-reference.md)，测量方法见 [验证说明](../validation/README.md)。
+缩放、平移和坐标反馈应保持流畅；复杂图层和钻孔跨度矩阵应支持窗口变化及滚动。
+外部参考来源与观察范围见 [Viewer 调研](../research/viewer-reference.md)。

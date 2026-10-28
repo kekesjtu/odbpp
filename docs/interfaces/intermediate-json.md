@@ -87,24 +87,3 @@ SVG/HTML 在局部绘图副本中对介质做 difference；该副本不能导出
 不写入中间 JSON。根节点也不导出 `diagnostics`，
 解析诊断保留在内部模型和命令行；逐层 `geometry_status/geometry_error` 保留。
 消费者直接使用规整后的实体几何。
-
-## 使用与验证
-
-```python
-from pcbkit import load_job, build_step_preview, step_to_document, write_document
-
-job = load_job("cases/kicad-kitchen-sink")
-board = step_to_document(job, build_step_preview(job))
-write_document(board, "tmp/board.json")
-# 下游独立进程使用自己的模型读取文件。
-from pcbeq.intermediate import read_document
-board = read_document("tmp/board.json")
-# equivalence_from_document(board, options) 或传入合法当前格式的普通字典。
-```
-
-JSON Schema 可描述类型和基本范围；Python 自定义校验器中的跨字段关系不会全部展开成
-JSON Schema，以上语义及 tests/contracts/test_intermediate.py 同时维护。
-Pydantic 模型不用于阶段内任意可变状态，也不使用跳过验证的构造来接收外部文件。
-
-
-接口验证与真实案例审计命令见 [开发说明](../development.md)。

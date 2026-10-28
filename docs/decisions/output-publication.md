@@ -40,9 +40,8 @@ region CSV 是几何编号 / 尺寸表，MaterialMap 的正式数值格式为 JS
 批量复用检查输入来源、内容哈希、当前字段结构、实现指纹、光栅、网格、几何精度及图片配置和产物完整性。
 缓存命中只决定是否重算，几何分支的输入始终是物理坐标与几何配置。
 
-## 依据与实现对照
+## 依据
 
 数值、图片和本轮状态共同发布，便于工程核对同一次计算。
-实现位于两产品的 `application/publication/report` 与 `tools/run_pipeline.py`、`tools/sync_out.py`。
 热图读取正式 MaterialMap，region 图使用实际规划矩形，网格图还原最终全局轴线。
-图像语义见 [可视化](../visualization.md)，字段见 [接口](../interfaces/README.md)。
+图像语义见 [pcbeq 可视化](pcbeq-visualization.md)，字段见 [中间 JSON](../interfaces/intermediate-json.md)与 [MaterialMap](../interfaces/materialmap.md)。

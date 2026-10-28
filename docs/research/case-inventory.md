@@ -41,4 +41,3 @@
 
 四例中有负极性记录、真实孔洞及自定义圆弧，matrix 层极性均为 POSITIVE。
 负片层、递归嵌套、循环引用、resize、失败层级 profile 及显式 FORM 由最小合成夹具和包内测试补充。
-原始完整普查作为输入证据保存在 [归档记录](../archive/research/03-case-inventory.md)。

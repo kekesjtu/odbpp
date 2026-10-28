@@ -1,13 +1,12 @@
-# 预览、材料掩膜与几何诊断
+# pcbeq 可视化决策
 
 ## 输出含义
 
 | 产物 | 数据来源 | 用途 |
 | --- | --- | --- |
-| `pcbkit/preview.svg`、`preview.html` | Parser 最终规整的矢量 | 图层、走线、孔、计算域与叠层核对 |
 | `pcbeq/masks/*.png` | 实际材料采样掩膜 | 铜 / 基底 / 域外及钻孔覆盖核对 |
 | `pcbeq/heatmaps/*.png` | 正式 MaterialMap JSON | 每层 kx / ky / kz 的实际单元热图 |
-| `pcbeq/regions/*` | 本轮内接矩形集合 | region 边界、面积、编号、尺寸和几何损失 |
+| `pcbeq/regions/*` | 实际内接矩形集合 | region 边界、面积、编号、尺寸和几何损失 |
 | `pcbeq/grids/*` | 最终全局轴线与实体单元 | 强制边界、传播细分与网格尺寸检查 |
 
 各图分别服务于不同检查；几何误差使用矢量域验证，材料误差使用实际数值采样收敛验证。
@@ -41,6 +40,4 @@ region 图对照原始轮廓，逐矩形显示边界、面积对数色标、编�
 
 默认生成掩膜、热图、region、grid 和图例页，可分别用 `--no-raster-png`、`--no-heatmap`、`--no-regions`、`--no-grids`、`--no-gallery` 控制。
 层名转为文件系统安全名称，大小写冲突和后缀冲突分配空闲名称，图例保留原层名。
-所请求的图片与数值结果按 [发布决策](decisions/output-publication.md) 一起完成后发布。
-
-实现位于 `pcbeq.png/visualize/plotting` 与 `pcbkit.svg`。命令见 [开发说明](development.md)，验证范围见 [验证方法](validation/README.md)。
+所请求的图片与数值结果按 [发布决策](output-publication.md) 一起完成后发布。

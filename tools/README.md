@@ -21,5 +21,4 @@ uv run --all-extras python tools/<脚本> --help
 `cases/` 是本地真实输入目录。合成夹具位于 `tests/fixtures/`，测试和基准过程输出位于 `tmp/`，正式结果位于 `out/`。
 几何、标记或元数据改变时使用完整案例同步；CSS/JS 专项更新可用预览刷新工具。
 
-运行、验证与打包命令统一见 [开发说明](../docs/development.md)，验证方法见 [验证说明](../docs/validation/README.md)，
-规范来源与摘要见 [参考资料](../docs/reference/README.md)。
+运行、测试和构建入口见 [项目说明](../README.md)，规范来源见 [参考资料](../docs/reference/format-sources.md)。

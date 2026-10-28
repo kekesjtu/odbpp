@@ -1,11 +1,6 @@
 # pcbkit / pcbeq
 
-ODB++ v8.1 单板解析器与 PCB 物性等效器，分别安装和分发，通过中间 JSON 协作。
-
-| 软件 | 输入 | 输出 |
-| --- | --- | --- |
-| `pcbkit` | ODB++ 目录、tar / zip；曲线与坐标精度 | `intermediate.json`、SVG、交互式 HTML |
-| `pcbeq` | 中间 JSON；材料、光栅与网格配置 | `materialmap.json`、材料掩膜、热图、region 与网格诊断 |
+ODB++ v8.1 单板解析器 `pcbkit` 与 PCB 物性等效器 `pcbeq` 分别安装和分发，通过中间 JSON 交接。
 
 ## 快速开始
 
@@ -15,36 +10,26 @@ ODB++ v8.1 单板解析器与 PCB 物性等效器，分别安装和分发，通�
 uv sync --all-extras
 uv run --all-extras pcbkit export cases/minimal-test-odb -o out/example/pcbkit --sagitta-mm 0.001 --digits 4
 uv run --all-extras pcbeq run out/example/pcbkit/intermediate.json -o out/example/pcbeq --grid-level standard
-```
-
-常规网格提供 coarse / standard / fine，默认 standard。专家使用 `--max-cell-mm` 的一个值或 X/Y 两值设置最大边长。
-光栅 `--px/--py` 成对指定，表示整板两个方向的采样像素数。
-region 采用真实 Y 共同区间的竖条阶梯，默认完整轮廓退缩量 3 mm、面积损失预算 5%。
-几何规划独立于材料采样分辨率；钻孔只在相交介质中按实心铜覆盖。
-缺少材料配置时使用带来源的项目铜 / FR4 默认值并明确警告。
-
-## 开发与案例管道
-
-```powershell
 uv run --all-extras pytest
 uv run --all-extras python tools/sync_contract.py --check
-uv run --all-extras python tools/run_pipeline.py cases/minimal-test-odb -o out/example
-uv run --all-extras python tools/sync_out.py --force
-uv run --all-extras python tools/audit_out.py
 ```
 
-`out/<case>/pcbkit/` 保存解析结果，`pcbeq/` 保存等效结果，`pipeline/` 保存状态与日志。
-本地真实输入位于 `cases/`，合成夹具位于 `tests/fixtures/`。
-完整命令与独立打包见 [开发说明](docs/development.md)。
+独立构建使用 `uv build --package pcbkit` 和 `uv build --package pcbeq`。命令参数可通过对应命令的 `--help` 查看，案例管道和维护工具见 [tools/README.md](tools/README.md)。
 
-## 文件与文档
+## 项目结构
 
-`packages/pcbkit/`、`packages/pcbeq/` 为两个产品，`contracts/` 为共享接口权威源，
-`tests/` 为跨包测试，`tools/` 为维护工具，`docs/` 为项目文档，`tmp/` 为可再生工作文件。
+- `packages/pcbkit/`：ODB++ 解析、正向实体和预览。
+- `packages/pcbeq/`：内接 region、网格、材料等效及可视化。
+- `contracts/`：共享中间 JSON 模型和 schema。
+- `tests/`：跨包测试和夹具；`tools/`：长期维护工具。
+- `cases/`：本地 PCB 案例；`out/`：案例产物。
+- `docs/`：需求、决策、领域参考与调研；`tmp/`、`build/`：可再生工作文件与构建中间文件。
 
-- [需求与验收](requirements.md)
-- [协作规则](AGENTS.md)
-- [项目文档索引](docs/README.md)
-- [技术栈与架构](docs/tech_stack.md)
-- [中间 JSON](docs/interfaces/intermediate-json.md) 与 [MaterialMap](docs/interfaces/materialmap.md)
-- [工具索引](tools/README.md)
+## 文档索引
+
+- [需求与验收](docs/requirements.md)；[协作规范](AGENTS.md)。
+- 架构与接口：[独立产品与契约](docs/decisions/independent-products.md)、[中间 JSON](docs/interfaces/intermediate-json.md)、[MaterialMap](docs/interfaces/materialmap.md)。
+- 解析：[解析语义](docs/decisions/parser-semantics.md)、[逐层域与叠层](docs/decisions/layer-domains-and-stackup.md)、[查看器交互](docs/decisions/viewer-interaction.md)。
+- 等效：[内接 region](docs/decisions/inscribed-regions.md)、[全局网格](docs/decisions/global-cartesian-grid.md)、[材料采样](docs/decisions/material-sampling.md)、[材料模型](docs/decisions/material-model.md)、[pcbeq 可视化](docs/decisions/pcbeq-visualization.md)、[输出与发布](docs/decisions/output-publication.md)。
+- 调研：[格式与单位](docs/research/format-and-units.md)、[几何与符号](docs/research/geometry-and-symbols.md)、[案例清单](docs/research/case-inventory.md)、[KiCad 案例](docs/research/kicad-test-cases.md)、[开源参考](docs/research/open-source-survey.md)、[Viewer 参考](docs/research/viewer-reference.md)。
+- 参考：[官方规范与参考格式](docs/reference/format-sources.md)、[串并联热模型推导](docs/derivation/串并联PCB等效热模型推导.md)、[密度和热容推导](docs/derivation/密度和热容等效热模型推导.md)。

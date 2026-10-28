@@ -42,4 +42,4 @@ step / layer profile 与材料图案使用一致的离散与输出精度。JSON�
 
 这些假设的实证状态与输入案例关联，合成覆盖不替代生产样本验证。
 范围中明确排除的 T / B 记录仍以 `features.unsupported_record` 报告。
-规范页码与输入观察见 [格式调研](../research/README.md)，实现位于 `pcbkit.units/features/metadata/geometry/clipper/expand/export`。
+规范页码与输入观察见 [格式调研](../research/format-and-units.md)。

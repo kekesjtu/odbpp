@@ -2,7 +2,7 @@
 
 ## 依据与文件模型
 
-项目使用 Siemens *ODB++Design Format Specification* Release 8.1 Update 4，引用 `p.<PDF 页码>`，版本与摘要见 [参考资料](../reference/README.md)。
+项目使用 Siemens *ODB++Design Format Specification* Release 8.1 Update 4，引用 `p.<PDF 页码>`，版本与摘要见 [参考资料](../reference/format-sources.md)。
 ODB++ 是目录树和文本记录组成的产品模型，tar / zip 是传输包装；文件可能按 gzip 压缩，读取应探测内容魔数。
 
 | 路径 | 信息 |
@@ -50,4 +50,4 @@ features 的 `$` 表声明符号，`@` 表声明属性名称，`&` 表声明属�
 `pcbkit.textio/metadata/features/units` 分别处理文本、来源、图元和换算。
 几何核使用 1e-6 mm 整数量化，最终输出分辨率由 `--digits` 明确指定；浮点比较与量化容差分开处理。
 `.sum` 的 SUM 算法在采用规范中缺少完整定义；样本及其旁车保持字节稳定。
-XML 扩展及拼板范围由 [需求](../../requirements.md) 定义，单板接口见 [中间 JSON](../interfaces/intermediate-json.md)。
+XML 扩展及拼板范围由 [需求](../requirements.md) 定义，单板接口见 [中间 JSON](../interfaces/intermediate-json.md)。
