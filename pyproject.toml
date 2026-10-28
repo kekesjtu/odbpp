@@ -19,7 +19,8 @@ pcbkit = { workspace = true }
 pcbeq = { workspace = true }
 
 [tool.pytest.ini_options]
-pythonpath = [".", "packages/pcbeq/tests", "packages/pcbkit/tests"]
+pythonpath = [".", "tests", "packages/pcbeq/tests", "packages/pcbkit/tests"]
 testpaths = ["tests", "packages/pcbkit/tests", "packages/pcbeq/tests"]
-addopts = "-q --basetemp=tmp/pytest-tmp"
+# Load the shared fixture for package tests outside the tests/ directory.
+addopts = "-q --basetemp=tmp/pytest-tmp -p conftest"
 filterwarnings = ["error"]
