@@ -28,4 +28,4 @@ Parser 生成自包含 HTML，SVG、样式和脚本均内联，支持离线打�
 坐标转换组合 viewBox CTM、逻辑变换和 Y 翻转，定位层前刷新待显示变换。
 
 实现位于 `pcbkit.svg`，回归位于 `packages/pcbkit/tests/test_svg.py`、`test_viewer_inspection.py`。
-外部参考来源与观察范围见 [Viewer 调研](../research/viewer-reference.md)，测量证据见 [验证索引](../validation/README.md)。
+外部参考来源与观察范围见 [Viewer 调研](../research/viewer-reference.md)，测量方法见 [验证说明](../validation/README.md)。

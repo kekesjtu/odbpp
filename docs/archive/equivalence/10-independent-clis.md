@@ -95,4 +95,4 @@ verify_distributions.py 在 build/distribution-check 中构建 wheel/sdist，再
 
 测试分布：两包 tests 放算法和 CLI 回归；tests/contracts 检查接口，tests/integration 检查真实数据与跨进程行为，tests/distribution 检查依赖和导入边界。项目根 conftest.py 提供统一样本路径。测试不使用根 src/odbpp 兼容壳。
 
-本次验证见 [independent-clis-validation.json](../../validation/reports/independent-clis-validation.json)：完整回归 800 项通过，日志发布调整后的相关回归 45 项通过，19 个真实 case 的中间几何、region、全局轴线、MaterialMap 解码内容及材料掩膜均与旧结果相同；旧文件的 JSON 排版差异单独记录。最终 case 输出已迁入 pcbkit/pcbeq/pipeline 子目录，旧产物归档到 build/refactor-baseline/legacy-out。
+本次验证见 `independent-clis-validation.json`：完整回归 800 项通过，日志发布调整后的相关回归 45 项通过，19 个真实 case 的中间几何、region、全局轴线、MaterialMap 解码内容及材料掩膜均与旧结果相同；旧文件的 JSON 排版差异单独记录。最终 case 输出已迁入 pcbkit/pcbeq/pipeline 子目录，旧产物归档到 build/refactor-baseline/legacy-out。

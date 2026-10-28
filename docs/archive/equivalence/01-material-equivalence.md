@@ -46,4 +46,4 @@ geometry 不读取光栅配置。采样不足提示提高分辨率，不改变�
 完整算法、默认预算、诊断与限制见 [05](05-inscribed-architecture.md)。
 真实案例重导出、前后性能与收敛证据见
 [修复 09](../fixes/09-inscribed-architecture.md) 和
-[验证数据](../../validation/reports/architecture-validation.json)。
+验证数据（`architecture-validation.json`）。

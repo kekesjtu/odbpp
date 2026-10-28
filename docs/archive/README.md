@@ -11,7 +11,7 @@
 | [research](research/README.md) | 原始规范、样本、开源和工具调研 |
 | [derivation](derivation/README.md) | 两份原始模型推导入口 |
 
-机器可读验证证据统一存放于 [validation/reports](../validation/README.md)，官方文件与参考 CSV 位于 [reference](../reference/README.md)。
-逐文件来源与存放位置见 [归档清单](manifest.json)，清单记录 Git 基线摘要和当前存放文件的 SHA-256。
+验证方法见 [validation](../validation/README.md)。历史验证报告在当前工作区的 `tmp/validation/history/`，也可从 Git 提交 `2e60504` 的 `docs/validation/reports/` 恢复；新环境无需依赖这些本地文件。
+官方文件与参考 CSV 位于 [reference](../reference/README.md)。逐文件来源与存放位置见 [归档清单](manifest.json)，清单记录 Git 基线摘要和存放文件的 SHA-256。
 原始文档的相对资料链接按归档位置调整，行尾与空白统一规范；引用中记录的历史代码和命令保持其证据语义。
 日常维护更新现行主题文档，设计演变由 Git 记录。

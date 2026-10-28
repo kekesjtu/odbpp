@@ -34,7 +34,7 @@
 ## 测量
 
 Windows 11，Python 3.13.15；依赖版本、三次原始数据、产物长度与 SHA-256 保存在
-[`performance-validation.json`](../../validation/reports/performance-validation.json)。每次重复启动新进程，
+`performance-validation.json`。每次重复启动新进程，
 基线与优化版顺序运行，计时期间不并行跑测试或其他基准。
 采用默认标准档位、自动密集光栅、逐层 SVG、掩膜 PNG 和默认 1440 px 热图。
 
@@ -79,13 +79,13 @@ metadata 只排除源码指纹 `pipeline_fingerprint` 与输出位置 `source.pa
 重新执行 CLI 预览导出，刷新之前留存的旧版 HTML，同时重新生成 CSV、metadata、
 掩膜、热图、图例、region/网格诊断图及索引。逐单元审计 **320664 行**全部通过，覆盖域内
 包含、region 归属、共同轴线、尺寸约束、采样容量、完整体积、Z 和物性范围，详见
-[`performance-output-validation.json`](../../validation/reports/performance-output-validation.json)。
+`performance-output-validation.json`。
 
 另外对刚挠板与 kitchen-sink 分别使用现有默认分辨率、两轴像素数各加倍、64 × 64：
 每种分辨率均在独立进程中对照 Git 基线和优化版。**未舍入的五项浮点物性、整层掩膜字节、
 metadata 和失败诊断完全一致**；三种分辨率的 region/网格几何指纹相同，64 × 64 仍明确失败。
 默认与加倍分辨率之间的材料采样差异及每次耗时见
-[`performance-sampling-validation.json`](../../validation/reports/performance-sampling-validation.json)。
+`performance-sampling-validation.json`。
 加倍分辨率只用作此次差异参照，并非物理真值或已证明收敛的极限；几何近似损失仍独立报告。
 
 默认与加倍光栅的单元相对变化 p95 如下，两版数值相同。少数单元的最大相对变化更高，

@@ -111,4 +111,4 @@ region 的所有边界继续传播到全局笛卡尔栅；物性网格尺寸按�
 实现位于 `packages/pcbeq/src/pcbeq/rectify.py`。审计记录包含面积、内接、拓扑、连续距离上界、局部细化和共享域重规划结果。
 `diagnostics/run.json` 与 `regions/regions.stats.json` 保存实际策略及检查结果；region 图显示实际采用的矩形集合。
 资源限制内无法满足约束时停止并给出定位诊断。算法采用受约束启发式，结果不承诺全局最少矩形数。
-验证方法见 [验证数据](../validation/README.md)，网格规则见 [全局笛卡尔栅](global-cartesian-grid.md)。
+验证方法见 [验证说明](../validation/README.md)，网格规则见 [全局笛卡尔栅](global-cartesian-grid.md)。

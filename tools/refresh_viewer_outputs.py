@@ -27,7 +27,7 @@ def payload(text: str) -> str:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, default=ROOT/'out')
-    parser.add_argument('--report', type=Path, default=ROOT/'docs/validation/reports/viewer-output-validation.json')
+    parser.add_argument('--report', type=Path, default=ROOT/'tmp/validation/reports/viewer-output-validation.json')
     args = parser.parse_args()
     results = []
     for path in sorted(args.out.rglob('*.html')):

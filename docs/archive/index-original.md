@@ -2,7 +2,7 @@
 
 当前软件分为独立分发的 pcbkit 和 pcbeq。命令、包结构、进程管道及输出目录见
 [独立 CLI 文档](equivalence/10-independent-clis.md)，本次回归与真实案例对照见
-[验证报告](../validation/reports/independent-clis-validation.json)。
+验证报告（`independent-clis-validation.json`）。
 
 Markdown 文档按 `research/`、`reviews/`、`fixes/`、`equivalence/` 分类。每个目录独立从 `01`
 连续编号，文件名统一为 `NN-kebab-case-topic.md`；日期保留在正文标题或元信息中。

@@ -71,8 +71,8 @@ uv run --all-extras pytest tests/integration
 几何精度和材料采样分别测量：
 
 ```powershell
-uv run --all-extras python tools/validate_region_accuracy.py --output docs/validation/reports/region-accuracy.json
-uv run --all-extras python tools/validate_region_accuracy.py --case kicad-video-odb.tgz --sampling-convergence --output docs/validation/reports/region-sampling.json
+uv run --all-extras python tools/validate_region_accuracy.py --output tmp/validation/reports/region-accuracy.json
+uv run --all-extras python tools/validate_region_accuracy.py --case kicad-video-odb.tgz --sampling-convergence --output tmp/validation/reports/region-sampling.json
 uv run --all-extras python tools/benchmark_pipeline.py --case minimal-test-odb --repeat 2 --output tmp/benchmark
 ```
 
@@ -94,4 +94,4 @@ uv run --all-extras python tools/verify_distributions.py
 ## 临时文件与证据
 
 测试、构建和基准过程产物使用 `tmp/`，正式结果使用 `out/<case>/`。
-关闭占用进程后，仅清理确认无用的临时文件。验证报告放在 [validation](validation/README.md)，原始文档快照放在 [archive](archive/README.md)。
+验证方法见 [validation](validation/README.md)，验证报告放在 `tmp/validation/reports/`，原始文档快照放在 [archive](archive/README.md)。关闭占用进程后，仅清理确认无用的临时文件。

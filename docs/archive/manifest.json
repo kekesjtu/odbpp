@@ -1,7 +1,7 @@
 {
   "source_commit": "e28735a",
   "original_file_count": 81,
-  "markdown_adjustments": "relative links, line endings and trailing whitespace only; original prose preserved",
+  "markdown_adjustments": "relative links, line endings, trailing whitespace and local report references; original prose preserved",
   "versioned_sha256_note": "Git blob bytes; CSV blob is an LFS pointer",
   "files": [
     {
@@ -14,7 +14,7 @@
       "path": "docs/README.md",
       "archived_path": "docs/archive/index-original.md",
       "versioned_sha256": "12eabb291712f7d610987283b7733eabd70b170558f741b9bef3dde52ef04848",
-      "stored_sha256": "5097a8de4e3d55ea4e289dba70bd6b1c78a7f180806fbfab7dfed01a9068f3f0"
+      "stored_sha256": "132b56ead7d3ae33062bec8d547b67d2aa52ead9341ef0af77765d29bf7eb0e1"
     },
     {
       "path": "docs/derivation/串并联PCB等效热模型推导.md",
@@ -32,7 +32,7 @@
       "path": "docs/equivalence/01-material-equivalence.md",
       "archived_path": "docs/archive/equivalence/01-material-equivalence.md",
       "versioned_sha256": "c40e136a422bda896e157cb2be509fde7b7e07940a2e8fb845ca71b7fddb5d46",
-      "stored_sha256": "216047c7954761b1a3d0aa7530cc4dc53b722ed6185da261e88f8f3e48d88941"
+      "stored_sha256": "ded343514854351d32d0fa7cf400f6770ffbd1339b0ffdc90a11099cda210420"
     },
     {
       "path": "docs/equivalence/02-visualization.md",
@@ -56,7 +56,7 @@
       "path": "docs/equivalence/05-inscribed-architecture.md",
       "archived_path": "docs/archive/equivalence/05-inscribed-architecture.md",
       "versioned_sha256": "1e5988ac14856422eefb273cab5f1c278b9aff0a535085507a877088e88b25be",
-      "stored_sha256": "1cf1e2a79048013281fd82715069c36311183aee611c5ec2185e973afd42591f"
+      "stored_sha256": "6f47f15b64f449f88b053528e9425e5e520983120be037ef1a4258dc7d002c4c"
     },
     {
       "path": "docs/equivalence/06-drill-rasterization.md",
@@ -86,133 +86,190 @@
       "path": "docs/equivalence/10-independent-clis.md",
       "archived_path": "docs/archive/equivalence/10-independent-clis.md",
       "versioned_sha256": "f4a6af631c2ada3df75c230197fcb2dd5a87fdaa03528aab8355749a22be53e9",
-      "stored_sha256": "8dffbdd25f99886fd0def9a4e9b5a0f2fdc835a93b96e7fcd352dfadd339a055"
+      "stored_sha256": "662c8661788447c399c565ed98925c3c37aa7b686ac8e47ad73335ff96c9e16c"
     },
     {
       "path": "docs/equivalence/11-region-accuracy.md",
       "archived_path": "docs/archive/equivalence/11-region-accuracy.md",
       "versioned_sha256": "58a7485166f7798b3449dd18a38d5f5172f5a2ea866ebfdfb50ee2864bca2e7a",
-      "stored_sha256": "ebec8269261c25d4189c5069900071e41bcd12a4c9bcb618fc80edd99d55cc2b"
+      "stored_sha256": "0d31363a69bce9b9406d7e98865bf771e12251a5ea9cf58b919f7568715ea5f9"
     },
     {
       "path": "docs/equivalence/README.md",
       "archived_path": "docs/archive/equivalence/README.md",
       "versioned_sha256": "880d1848368689f6e8efe6657425fde7f28af73c66d4faada274a746f2092d4a",
-      "stored_sha256": "efed600ea21a3836dd71e1df304a0143ce7b49f68f3e0c3396a4514eab69d2c9"
+      "stored_sha256": "c43d01dc35ab8c14ae08f10332ef012cb42116bdb400d7bd6a45b43bb2369bea"
     },
     {
       "path": "docs/equivalence/architecture-validation.json",
-      "archived_path": "docs/validation/reports/architecture-validation.json",
+      "archived_path": "tmp/validation/history/architecture-validation.json",
       "versioned_sha256": "e1f8a09d2290f85d9167b3dbd9e923b9b9093a1279a846e39256e38b743fac0f",
-      "stored_sha256": "71fce06aa09758a512eb043279b3f69d52df4482f5e8bafed6007bc649b0a87f"
+      "stored_sha256": "71fce06aa09758a512eb043279b3f69d52df4482f5e8bafed6007bc649b0a87f",
+      "git_history_path": "docs/validation/reports/architecture-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/coarse-region-validation.json",
-      "archived_path": "docs/validation/reports/coarse-region-validation.json",
+      "archived_path": "tmp/validation/history/coarse-region-validation.json",
       "versioned_sha256": "5234ba1f99e3d10bd134a6ffbb96a9c5e83e91acc595432aad99d0294137af79",
-      "stored_sha256": "f3ed02c47abb7b378b684005697eb00db034d15c301119003e67c9c6ebae5d59"
+      "stored_sha256": "f3ed02c47abb7b378b684005697eb00db034d15c301119003e67c9c6ebae5d59",
+      "git_history_path": "docs/validation/reports/coarse-region-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/drill-policy-validation.json",
-      "archived_path": "docs/validation/reports/drill-policy-validation.json",
+      "archived_path": "tmp/validation/history/drill-policy-validation.json",
       "versioned_sha256": "96655456dae6d93e0ca73b9fe94fe1020cb5c26abf37e270a1341e42917bfc3b",
-      "stored_sha256": "36b19590593bf44d6e9c4137e0057beb16e2a452e55f8d181031133e351f230f"
+      "stored_sha256": "36b19590593bf44d6e9c4137e0057beb16e2a452e55f8d181031133e351f230f",
+      "git_history_path": "docs/validation/reports/drill-policy-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/drill-z-validation.json",
-      "archived_path": "docs/validation/reports/drill-z-validation.json",
+      "archived_path": "tmp/validation/history/drill-z-validation.json",
       "versioned_sha256": "923b791a1d15ca03e286aa6945a0afe641ef2fe4f4666a4557a0e1c05a591cbd",
-      "stored_sha256": "10bbf3a76edaaed5ea133d2a426020245f1864c74dc195b3f815e5353a3eb492"
+      "stored_sha256": "10bbf3a76edaaed5ea133d2a426020245f1864c74dc195b3f815e5353a3eb492",
+      "git_history_path": "docs/validation/reports/drill-z-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/independent-clis-validation.json",
-      "archived_path": "docs/validation/reports/independent-clis-validation.json",
+      "archived_path": "tmp/validation/history/independent-clis-validation.json",
       "versioned_sha256": "139b74fc1cbe709f9a7bce8a5c1cbeb0f9febfcd6460d833b057f361803922b9",
-      "stored_sha256": "5b7e0ec05c5114c175bef6c55336e822934d7d1e3241832ec8fa568585879f41"
+      "stored_sha256": "5b7e0ec05c5114c175bef6c55336e822934d7d1e3241832ec8fa568585879f41",
+      "git_history_path": "docs/validation/reports/independent-clis-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/intermediate-validation.json",
-      "archived_path": "docs/validation/reports/intermediate-validation.json",
+      "archived_path": "tmp/validation/history/intermediate-validation.json",
       "versioned_sha256": "db68e2717e65482ff3e85ce2f715741c1993b0e5b64ac1c402147c86a5201e26",
-      "stored_sha256": "c2b17eb3c84c5ef7dfd5bffc42a2db285cce9b5dd75262c5aac4312a442ef674"
+      "stored_sha256": "c2b17eb3c84c5ef7dfd5bffc42a2db285cce9b5dd75262c5aac4312a442ef674",
+      "git_history_path": "docs/validation/reports/intermediate-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/materialmap-format-validation.json",
-      "archived_path": "docs/validation/reports/materialmap-format-validation.json",
+      "archived_path": "tmp/validation/history/materialmap-format-validation.json",
       "versioned_sha256": "3b609cf77d1a858d813058aa02f551c03af69badf0440237e86df13f89ced20e",
-      "stored_sha256": "e3d0dabecb27695d7a109f526a901f1074ab80f9e20033b19b268227fdcbc5a7"
+      "stored_sha256": "e3d0dabecb27695d7a109f526a901f1074ab80f9e20033b19b268227fdcbc5a7",
+      "git_history_path": "docs/validation/reports/materialmap-format-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/materialmap-process-validation.json",
-      "archived_path": "docs/validation/reports/materialmap-process-validation.json",
+      "archived_path": "tmp/validation/history/materialmap-process-validation.json",
       "versioned_sha256": "c109db746c498fc2b9ba2fa05b20b51e33f8b3f5a3b8f5baaea46dd900465f36",
-      "stored_sha256": "311ce54ee4b9b662e066816988bcb067b900cd3fbd556fef242da4a7cd7b25ee"
+      "stored_sha256": "311ce54ee4b9b662e066816988bcb067b900cd3fbd556fef242da4a7cd7b25ee",
+      "git_history_path": "docs/validation/reports/materialmap-process-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/max-grid-validation.json",
-      "archived_path": "docs/validation/reports/max-grid-validation.json",
+      "archived_path": "tmp/validation/history/max-grid-validation.json",
       "versioned_sha256": "cbf75487fb7b965f1eb89f31bec2f384bb72bb68064c2ebec8e70b90f2ed25a6",
-      "stored_sha256": "a8ee980d27419f7e3ef6668a32cec84b78fbb33d8923a4f96dc4bc490945772d"
+      "stored_sha256": "a8ee980d27419f7e3ef6668a32cec84b78fbb33d8923a4f96dc4bc490945772d",
+      "git_history_path": "docs/validation/reports/max-grid-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/no-y-quantization-sampling.json",
-      "archived_path": "docs/validation/reports/no-y-quantization-sampling.json",
+      "archived_path": "tmp/validation/history/no-y-quantization-sampling.json",
       "versioned_sha256": "d84cbf8b7251c0ab747e04061996abb1a6bc807502ec6ab49e3ead5b51386aca",
-      "stored_sha256": "c5b819faf2e682aceac1d10babe871f195ed36f6ae91f608c5ddd0058ff20cec"
+      "stored_sha256": "c5b819faf2e682aceac1d10babe871f195ed36f6ae91f608c5ddd0058ff20cec",
+      "git_history_path": "docs/validation/reports/no-y-quantization-sampling.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/no-y-quantization-tight-validation.json",
-      "archived_path": "docs/validation/reports/no-y-quantization-tight-validation.json",
+      "archived_path": "tmp/validation/history/no-y-quantization-tight-validation.json",
       "versioned_sha256": "b7246a37c311b737f1670085e15bd45f790b2d0925bc37668d7237560f87ebd9",
-      "stored_sha256": "6b6bb8b743b1bfc284df6b2335f60135c1b3a06d0d1face3a10e6387da41b9d8"
+      "stored_sha256": "6b6bb8b743b1bfc284df6b2335f60135c1b3a06d0d1face3a10e6387da41b9d8",
+      "git_history_path": "docs/validation/reports/no-y-quantization-tight-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/no-y-quantization-validation.json",
-      "archived_path": "docs/validation/reports/no-y-quantization-validation.json",
+      "archived_path": "tmp/validation/history/no-y-quantization-validation.json",
       "versioned_sha256": "916b80fa895b64c7e456886297a6670fb0fb2622dbeb349f3820ccda0e29ec32",
-      "stored_sha256": "751fa0bb497013489787d3a758c8cda9924b55d085f9f0f2cdca2e97074c7ca3"
+      "stored_sha256": "751fa0bb497013489787d3a758c8cda9924b55d085f9f0f2cdca2e97074c7ca3",
+      "git_history_path": "docs/validation/reports/no-y-quantization-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/output-validation.json",
-      "archived_path": "docs/validation/reports/output-validation.json",
+      "archived_path": "tmp/validation/history/output-validation.json",
       "versioned_sha256": "9ac3b2dc23111fe6df03e5117939f6ce35c9620de0409a97f704ae1aead93586",
-      "stored_sha256": "d5bfa986e7882089f12483e78a78a0b908767a2afaf9090cf6b04db52f0ee926"
+      "stored_sha256": "d5bfa986e7882089f12483e78a78a0b908767a2afaf9090cf6b04db52f0ee926",
+      "git_history_path": "docs/validation/reports/output-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/region-accuracy-default-3mm-validation.json",
-      "archived_path": "docs/validation/reports/region-accuracy-default-3mm-validation.json",
+      "archived_path": "tmp/validation/history/region-accuracy-default-3mm-validation.json",
       "versioned_sha256": "5cb907c77ef15691bab8cd9d356740512f56a32e5b5fbaa30c5fdc4e2ced02ab",
-      "stored_sha256": "fe2509fef4ced664b49f85d14d2b357efe148cef8b75fad3434fbea8b0b95eca"
+      "stored_sha256": "fe2509fef4ced664b49f85d14d2b357efe148cef8b75fad3434fbea8b0b95eca",
+      "git_history_path": "docs/validation/reports/region-accuracy-default-3mm-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/region-accuracy-tight-validation.json",
-      "archived_path": "docs/validation/reports/region-accuracy-tight-validation.json",
+      "archived_path": "tmp/validation/history/region-accuracy-tight-validation.json",
       "versioned_sha256": "fb8b970a830b4b6f58c6723665f8d55ae8de5b5e0891a0ec77c47b3a0d8c46f0",
-      "stored_sha256": "5da8270afc60975bfd026d60f13d73e214ca5943b24803252dc3a4aeb4ec6e8b"
+      "stored_sha256": "5da8270afc60975bfd026d60f13d73e214ca5943b24803252dc3a4aeb4ec6e8b",
+      "git_history_path": "docs/validation/reports/region-accuracy-tight-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/region-accuracy-validation.json",
-      "archived_path": "docs/validation/reports/region-accuracy-validation.json",
+      "archived_path": "tmp/validation/history/region-accuracy-validation.json",
       "versioned_sha256": "6d2349d9bcc46df6db840a8116ea8a4de608d230eccc737e14d450ac7056907d",
-      "stored_sha256": "8da579ff111f2584b5a6a632abf4c7702eb3b68e21378928d2c45b39b4ef574b"
+      "stored_sha256": "8da579ff111f2584b5a6a632abf4c7702eb3b68e21378928d2c45b39b4ef574b",
+      "git_history_path": "docs/validation/reports/region-accuracy-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/region-sampling-validation.json",
-      "archived_path": "docs/validation/reports/region-sampling-validation.json",
+      "archived_path": "tmp/validation/history/region-sampling-validation.json",
       "versioned_sha256": "77b56181ac04c9051afb6ae199b781ac80c2b2ac0c1ce023f96e165fbb2febc4",
-      "stored_sha256": "62fbfc71c717e649c2ba9d15fb411550fdc5371ca04e280cb47b21fabb7d3029"
+      "stored_sha256": "62fbfc71c717e649c2ba9d15fb411550fdc5371ca04e280cb47b21fabb7d3029",
+      "git_history_path": "docs/validation/reports/region-sampling-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/remove-parse-info-validation.json",
-      "archived_path": "docs/validation/reports/remove-parse-info-validation.json",
+      "archived_path": "tmp/validation/history/remove-parse-info-validation.json",
       "versioned_sha256": "72e2a4167e52abf9a7ff8a0c6f38cfff1c1f436ab50fc719f4fc5196f1fef75c",
-      "stored_sha256": "c5b783e84a7b8bae47f02c45bf48e0ac826d0b08cce5e3625df99bf3175b5ec2"
+      "stored_sha256": "c5b783e84a7b8bae47f02c45bf48e0ac826d0b08cce5e3625df99bf3175b5ec2",
+      "git_history_path": "docs/validation/reports/remove-parse-info-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/equivalence/remove-root-diagnostics-validation.json",
-      "archived_path": "docs/validation/reports/remove-root-diagnostics-validation.json",
+      "archived_path": "tmp/validation/history/remove-root-diagnostics-validation.json",
       "versioned_sha256": "a52947a5eb4f966578b8ab1b6a180f180b0e19411880190c769411901bba92e1",
-      "stored_sha256": "b70f48241d1d1859a5e5c1af4957941856cc7cc5228ea61502b7fc1bad4e7e95"
+      "stored_sha256": "b70f48241d1d1859a5e5c1af4957941856cc7cc5228ea61502b7fc1bad4e7e95",
+      "git_history_path": "docs/validation/reports/remove-root-diagnostics-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/fixes/01-project-review-fixes.md",
@@ -266,13 +323,13 @@
       "path": "docs/fixes/09-inscribed-architecture.md",
       "archived_path": "docs/archive/fixes/09-inscribed-architecture.md",
       "versioned_sha256": "3634d75199ec160c3416ea03b7bbc49e5c844b7179fa06ba47d062aed624e928",
-      "stored_sha256": "113de43d6c370e6b1accde988fea697fb906ea68be099c07eccadafcc76fa2f5"
+      "stored_sha256": "8172e0943b024d5d44a35231ae98880a5fa32e237361fc479dcd2139dd0142e5"
     },
     {
       "path": "docs/fixes/10-coarse-regions-and-viewer.md",
       "archived_path": "docs/archive/fixes/10-coarse-regions-and-viewer.md",
       "versioned_sha256": "072ab164db886dc51db9555654e22171d5942fa9438a4fbc6f227d9b2199a1d4",
-      "stored_sha256": "3f5a083a4f8797d056cbbe3f182b6974894c9474c71955014744df89236440a8"
+      "stored_sha256": "d3cdc0e9917c381e60e86c056395681ee884a5da859e6c28057478efa9b01b5f"
     },
     {
       "path": "docs/fixes/11-drill-span-matrix.md",
@@ -290,7 +347,7 @@
       "path": "docs/fixes/13-intermediate-json.md",
       "archived_path": "docs/archive/fixes/13-intermediate-json.md",
       "versioned_sha256": "eb55d5a596f023098c93162c03eb63d9fad707b3996de9a8b8ac707718e7792a",
-      "stored_sha256": "aa54ffac757d2d20530bdbca75a89558b8d955858e60b97c76c265c08a301494"
+      "stored_sha256": "181a0422667f305a0d449762cc5257340d67fada5c93569d197a536220d7ab7e"
     },
     {
       "path": "docs/fixes/14-dielectric-drill-policy.md",
@@ -314,13 +371,13 @@
       "path": "docs/fixes/17-region-materialmap.md",
       "archived_path": "docs/archive/fixes/17-region-materialmap.md",
       "versioned_sha256": "4e73e15f5d678476f891b0b0490a3ed6bec802a43b358ab517ca4aff3066e184",
-      "stored_sha256": "9ac132fe2b6578babba24d0280ab85c19b490ef355c55957640680cdb033e7a1"
+      "stored_sha256": "28dd42c39cb47ed376056e8a9215c3433cd1dee5c6dd8c5393ccedeb8faca09d"
     },
     {
       "path": "docs/fixes/18-drill-derived-z.md",
       "archived_path": "docs/archive/fixes/18-drill-derived-z.md",
       "versioned_sha256": "c846472128770637a751921cb7fac0097bcbf37e19bb7e182d551f1b79239755",
-      "stored_sha256": "ee4058482ff23738cf186a97e204b944a1d520923465905853bf6046472eff78"
+      "stored_sha256": "fd8b308ec1da630e89b76892cfba355b6bdd5439ec640c17c57b1974c5293e9f"
     },
     {
       "path": "docs/fixes/19-project-cleanup.md",
@@ -440,13 +497,13 @@
       "path": "docs/reviews/06-pipeline-performance.md",
       "archived_path": "docs/archive/reviews/06-pipeline-performance.md",
       "versioned_sha256": "b9ed242e9dc73cfe27a29f5b58b454e9edd08360ad9e2a79ebc7c68970d3c693",
-      "stored_sha256": "3a984a5494276501ea52055b4d77282b1407b0171cc6f17a98ea4050ae292209"
+      "stored_sha256": "1ba1ff43582a467cb40f40e5dc97d2a95f5aa309e164c94db4efb96b17b97f25"
     },
     {
       "path": "docs/reviews/07-viewer-performance.md",
       "archived_path": "docs/archive/reviews/07-viewer-performance.md",
       "versioned_sha256": "1eb7e31e7786a5de3a3c70e1e02d447dddd36fb3eb6ec472d0d62e7c54302275",
-      "stored_sha256": "10e1844df88dc44513dc8248c6b831c797880cca1a5055c2fabc2480c56f5ea9"
+      "stored_sha256": "62bfb8ab3cffbce9c4dcb8c28c58cfe8866992e1588be8ed98b94f051470f9e5"
     },
     {
       "path": "docs/reviews/README.md",
@@ -456,33 +513,48 @@
     },
     {
       "path": "docs/reviews/performance-output-validation.json",
-      "archived_path": "docs/validation/reports/performance-output-validation.json",
+      "archived_path": "tmp/validation/history/performance-output-validation.json",
       "versioned_sha256": "7998558ec046ae34cf6478c7768f7cd982fb8c9397460142562062df373bce49",
-      "stored_sha256": "33f685508652a8619647775dfd5c4072dee5fd258f8fdd4380c143b0ebabffbe"
+      "stored_sha256": "33f685508652a8619647775dfd5c4072dee5fd258f8fdd4380c143b0ebabffbe",
+      "git_history_path": "docs/validation/reports/performance-output-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/reviews/performance-sampling-validation.json",
-      "archived_path": "docs/validation/reports/performance-sampling-validation.json",
+      "archived_path": "tmp/validation/history/performance-sampling-validation.json",
       "versioned_sha256": "44d49f844094a4980ce77eac8ec3f8b9ab47a8c5ef03f6dbcc69026fbbfecc66",
-      "stored_sha256": "26bfad6af922a6b04cbda44a4968744dc090a79a7bffc484154bcebb64ab8985"
+      "stored_sha256": "26bfad6af922a6b04cbda44a4968744dc090a79a7bffc484154bcebb64ab8985",
+      "git_history_path": "docs/validation/reports/performance-sampling-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/reviews/performance-validation.json",
-      "archived_path": "docs/validation/reports/performance-validation.json",
+      "archived_path": "tmp/validation/history/performance-validation.json",
       "versioned_sha256": "6f4b7aea79db511a51fc986fcd036301263249638d8b77088d97a63acf852a9a",
-      "stored_sha256": "cfa31d7250934045e5789d4c9564e66adf79888f361ad4963e8e12c556591efb"
+      "stored_sha256": "cfa31d7250934045e5789d4c9564e66adf79888f361ad4963e8e12c556591efb",
+      "git_history_path": "docs/validation/reports/performance-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/reviews/viewer-output-validation.json",
-      "archived_path": "docs/validation/reports/viewer-output-validation.json",
+      "archived_path": "tmp/validation/history/viewer-output-validation.json",
       "versioned_sha256": "95e92a83006dfd9dc6994f5e8911a31d5c0a0fda12a4be101c1ed9415171ba27",
-      "stored_sha256": "1f654629e59777235908ce6dd9e8c0b44f94bd528f2d7a7745506a47dcae07be"
+      "stored_sha256": "1f654629e59777235908ce6dd9e8c0b44f94bd528f2d7a7745506a47dcae07be",
+      "git_history_path": "docs/validation/reports/viewer-output-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/reviews/viewer-performance-validation.json",
-      "archived_path": "docs/validation/reports/viewer-performance-validation.json",
+      "archived_path": "tmp/validation/history/viewer-performance-validation.json",
       "versioned_sha256": "51db1f93b1ff5dc506b36f81f559a000a4e719410981688bdba8c86410d85a69",
-      "stored_sha256": "9e8504c71313f1f2245f669790523a0c70730ceba22d155ce2b5077c70dbd0ed"
+      "stored_sha256": "9e8504c71313f1f2245f669790523a0c70730ceba22d155ce2b5077c70dbd0ed",
+      "git_history_path": "docs/validation/reports/viewer-performance-validation.json",
+      "git_history_commit": "2e60504",
+      "local_only": true
     },
     {
       "path": "docs/ODB++_Format_User_Guide.pdf",

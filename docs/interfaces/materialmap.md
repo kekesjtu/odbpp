@@ -119,4 +119,4 @@ uv run --all-extras pytest packages/pcbeq/tests/test_materialmap.py
 uv run --all-extras python tools/audit_out.py
 ```
 
-审计由最终网格线重建单元，再核对层域归属、尺寸、采样容量、Z 和物性范围。证据入口见 [验证数据](../validation/README.md)。
+审计由最终网格线重建单元，再核对层域归属、尺寸、采样容量、Z 和物性范围。验收方法见 [验证说明](../validation/README.md)。

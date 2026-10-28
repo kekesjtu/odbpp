@@ -26,7 +26,7 @@ HTML 仍自包含，可离线直接打开，没有新增运行时库。更新在
 PCB 查看器连续派发 400 个事件，重复 5 次取中位数。下表单位 ms，为事件派发及
 同步处理耗时，**不包含后续绘制和显示器刷新，不应当作帧率或整页加载加速比**。
 原始 CDP 布局/样式指标与环境版本见
-[`viewer-performance-validation.json`](../../validation/reports/viewer-performance-validation.json)。
+`viewer-performance-validation.json`。
 
 | 案例 | 鼠标移动：前 → 后 | 拖动：前 → 后 | 滚轮：前 → 后 |
 |---|---:|---:|---:|
@@ -60,7 +60,7 @@ PCB 查看器连续派发 400 个事件，重复 5 次取中位数。下表单�
 
 `out/` 的 18 个交互查看器已更新，仅替换内联 CSS/JS。页面其余内容（含 SVG
 路径、元数据和检查面板）逐字符不变，见
-[`viewer-output-validation.json`](../../validation/reports/viewer-output-validation.json)。掩膜、热图、CSV 和 JSON
+`viewer-output-validation.json`。掩膜、热图、CSV 和 JSON
 无需重新计算。本轮没有增加材料采样或几何策略参数。
 
 ## 复现与更新

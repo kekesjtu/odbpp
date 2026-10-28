@@ -85,7 +85,7 @@ outside_step_area、effective_domain、有效域的模型损失，避免把层�
 
 2026-10-28 的最大尺寸单独控制验证：832 项完整回归通过（231.02 秒），
 19 个真实 case、398,124 个完整三维物性单元通过输出审计。
-运行资源与逐 case 规模见 [max-grid-validation.json](../../validation/reports/max-grid-validation.json)。
+运行资源与逐 case 规模见 `max-grid-validation.json`。
 
 默认材料光栅长边至少 4096 像素，保留物理长宽比。网格先确定，采样分支
 随后按最小实际单元加密光栅：档位每个轴向至少 8 个采样中心，专家至少 1 个。

@@ -26,8 +26,8 @@ DRILL 不再重复导出该字段。DRILL 的几何/深度由正向投影多边�
 
 全量测试通过：800 passed，175.85 s。19 个案例全部同步，26 个 DRILL 层均不导出 `z_mm`，端点铜层 Z 保留。
 逐文件对照修改前 MaterialMap 的 SHA-256，19 份文件逐字节完全一致，包括几何网格和全部物性。
-逐案例记录见 [drill-z-validation.json](../../validation/reports/drill-z-validation.json)。
-最终逐单元域归属、全局轴线、尺寸、采样容量及物性范围核查也全部通过，见 [output-validation.json](../../validation/reports/output-validation.json)。
+逐案例记录见 `drill-z-validation.json`。
+最终逐单元域归属、全局轴线、尺寸、采样容量及物性范围核查也全部通过，见 `output-validation.json`。
 
 ```powershell
 uv sync --all-extras

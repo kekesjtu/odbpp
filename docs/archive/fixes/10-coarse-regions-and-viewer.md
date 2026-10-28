@@ -25,7 +25,7 @@
 三个真实案例的默认光栅与 X/Y 都加倍的光栅具有完全相同的 region、网格坐标
 和单元顺序。三档网格均能规划；默认材料警告、solid_copper 钻孔规则保留。
 详细相对误差、耗时与峰值内存见
-[coarse-region-validation.json](../../validation/reports/coarse-region-validation.json)。
+`coarse-region-validation.json`。
 
 默认→加倍的 kx/ky 第 95 百分位相对差异：刚挠板约 12.36%/11.53%，
 kitchen-sink 约 1.15%/1.06%，video 约 14.51%/12.37%。个别细走线、

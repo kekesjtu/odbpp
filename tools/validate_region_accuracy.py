@@ -165,7 +165,7 @@ def main():
     parser.add_argument("--baseline",type=Path)
     parser.add_argument("--sampling-convergence",action="store_true",
                         help="also compare default material sampling to doubled X/Y pixels")
-    parser.add_argument("--output",type=Path,default=ROOT/"docs/validation/reports/region-accuracy-default-3mm-validation.json")
+    parser.add_argument("--output",type=Path,default=ROOT/"tmp/validation/reports/region-accuracy-default-3mm-validation.json")
     args = parser.parse_args()
     baseline = {r["case"]:r for r in json.loads(args.baseline.read_text(encoding="utf-8"))} if args.baseline else {}
     report = {"date":datetime.now(timezone(timedelta(hours=8))).date().isoformat(),

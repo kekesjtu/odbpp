@@ -122,14 +122,14 @@ uv run --all-extras python tools/sync_out.py --force-equivalent
 uv run --all-extras python tools/audit_out.py
 ```
 
-原 0.5 mm 默认值的真实案例对照见 [region-accuracy-validation.json](../../validation/reports/region-accuracy-validation.json)，当前默认值见 [region-accuracy-default-3mm-validation.json](../../validation/reports/region-accuracy-default-3mm-validation.json)，收紧预算见
-[region-accuracy-tight-validation.json](../../validation/reports/region-accuracy-tight-validation.json)。默认对照同时逐一核对 4096² 和 8192² 两种光栅输入下的 region、全局 X/Y 轴线完全一致；该项只运行几何规划，材料采样容量由完整 CLI 和逐单元输出审计另行验证。
+原 0.5 mm 默认值的真实案例对照见 `region-accuracy-validation.json`，当前默认值见 `region-accuracy-default-3mm-validation.json`，收紧预算见
+`region-accuracy-tight-validation.json`。默认对照同时逐一核对 4096² 和 8192² 两种光栅输入下的 region、全局 X/Y 轴线完全一致；该项只运行几何规划，材料采样容量由完整 CLI 和逐单元输出审计另行验证。
 耗时包含几何规划和网格生成，前后均开启 tracemalloc；Python 分配峰值不包含 GEOS/NumPy 的原生内存，不应误读为进程峰值。
 
 原 0.5 mm 默认策略的初始种子已经可能满足两项预算，所以该次三种真实案例默认运行的细化次数均为 0；之后仍对每次简化复检。
 收紧预算的 video 验证专门覆盖较粗的内部种子，实际执行 391 次最差位置细化，最终距离上界 0.249608 mm、面积损失 0.347992%。该内部种子覆盖仅为验证细化路径，不是第三个用户精度参数。
 
-材料采样对照见 [region-sampling-validation.json](../../validation/reports/region-sampling-validation.json)。
+材料采样对照见 `region-sampling-validation.json`。
 video 默认 5621×1921 与双倍 11242×3842 的 35,861 个完整三维单元坐标全部相同；
 kx/ky 的第 95 百分位相对变化约为 12.34% / 12.10%。细走线和接近纯 FR4 的单元仍有很大的相对差异，
 因此该对照验证了几何独立性并量化采样变化，不能宣称所有单元的物性都已收敛。几何距离预算不承担材料采样误差保证。
@@ -147,7 +147,7 @@ kx/ky 的第 95 百分位相对变化约为 12.34% / 12.10%。细走线和接近
 更严格的局部距离约束明显增加 kitchen-sink 的轴线和计算量；当前策略不以牺牲误差预算换取旧版规模。
 这些是本机单次测量，运行期间存在其他验证进程，不应作为性能承诺。
 19 个案例的正式 MaterialMap、掩膜、热图和几何图已更新到 `out/`，
-逐单元审计见 [output-validation.json](../../validation/reports/output-validation.json)。
+逐单元审计见 `output-validation.json`。
 0.5 mm 阶段完整回归 **817 项通过**（260.58 秒），当时 19 个案例共 **934,041 个三维物性单元**全部通过输出审计；当前 3 mm 的逐单元统计以 `output-validation.json` 为准。
 新旧误差、耗时与 Python 分配峰值均保留在默认对照报告；新产物的 `published_run` 另记录含图像与 IO 的完整 CLI 耗时和原生进程峰值，不能与仅几何规划的测量混用。
 
@@ -159,7 +159,7 @@ kx/ky 的第 95 百分位相对变化约为 12.34% / 12.10%。细走线和接近
 | video | 9 | 3,703 | 2.946072 | 1.7853% |
 | 刚挠板 | 54 | 3,276 | 1.444181 | 4.6561% |
 
-刚挠板共享层域自动重规划时缩小了内部合并幅度，因此实际退缩上界小于 3 mm；3 mm 是允许上限，不要求算法必须消耗完预算。完整记录见 [3 mm 验证报告](../../validation/reports/region-accuracy-default-3mm-validation.json)。
+刚挠板共享层域自动重规划时缩小了内部合并幅度，因此实际退缩上界小于 3 mm；3 mm 是允许上限，不要求算法必须消耗完预算。完整记录见 3 mm 验证报告（`region-accuracy-default-3mm-validation.json`）。
 本次默认值调整后的 86 项定向回归全部通过；19 个案例、362,746 个完整三维物性单元通过输出审计，最终掩膜、热图和几何图已按 3 mm 设置更新。
 
 ## 去除 Y 量化后的真实案例
@@ -173,8 +173,8 @@ kx/ky 的第 95 百分位相对变化约为 12.34% / 12.10%。细走线和接近
 | 刚挠板 | 54→32 | 3,276→4,102 | 2.690795 | 4.9637% |
 
 region 减少不保证全局网格单元减少：真实非均匀边界仍需传播至全板，video 的启发式解也比历史量化方案多一个 region。
-逐域距离、孔洞/连通性、完整 region/网格坐标独立于光栅，以及同口径几何耗时、Python 分配峰值见 [no-y-quantization-validation.json](../../validation/reports/no-y-quantization-validation.json)。
-当前完整输出及逐单元检查以 [output-validation.json](../../validation/reports/output-validation.json) 为准；上文旧报告保留为历史证据，不代表当前几何。
+逐域距离、孔洞/连通性、完整 region/网格坐标独立于光栅，以及同口径几何耗时、Python 分配峰值见 `no-y-quantization-validation.json`。
+当前完整输出及逐单元检查以 `output-validation.json` 为准；上文旧报告保留为历史证据，不代表当前几何。
 
 完整回归 **830 项通过**（209.31 秒）；19 个 case 的 **399,858 个完整三维物性单元**通过输出审计。
 掩膜、物性热图及实际 region 几何图已更新到 `out/`，默认光栅容量上限仍为 1.2 亿像素。
@@ -188,10 +188,10 @@ region 减少不保证全局网格单元减少：真实非均匀边界仍需传�
 这是本机单次测量，当前几何检查期间同时运行其他回归/输出任务；不能将不同口径的几何测量与 CLI 墙钟时间直接相比。
 去掉 Y 格点后需要更多共同区间候选和逐层复检，尤其刚挠板更慢；当前没有最优 region 数或运行时间保证。
 
-新策略的 [收紧预算验证](../../validation/reports/no-y-quantization-tight-validation.json) 使用 video 真实轮廓、1 mm 内部 X 种子、0.25 mm / 1% 预算，实际执行 **36 次**最差位置细化，最终距离上界 0.222366 mm、面积损失 0.02818%。
-[材料采样对照](../../validation/reports/no-y-quantization-sampling.json) 将 video 默认 4096×1401 加密到 8192×2802，26,285 个完整三维单元的 region/单元坐标全部相同。
+新策略的 收紧预算验证（`no-y-quantization-tight-validation.json`） 使用 video 真实轮廓、1 mm 内部 X 种子、0.25 mm / 1% 预算，实际执行 **36 次**最差位置细化，最终距离上界 0.222366 mm、面积损失 0.02818%。
+材料采样对照（`no-y-quantization-sampling.json`） 将 video 默认 4096×1401 加密到 8192×2802，26,285 个完整三维单元的 region/单元坐标全部相同。
 kx/ky 的第 95 百分位相对变化约 14.77% / 15.13%，局部差异仍可很大；这项检查证明采样不改变几何，并不宣称材料物性普遍收敛。
 
 随后删除最小网格约束，并将档位最大尺寸估算固定使用原始 step 范围。
 region 几何不变，部分全局网格数量因此变化；最新 19 个 case、398,124 个三维单元通过审计。
-832 项完整回归通过，当前仅保留阶梯算法，网格设置与运行统计见 [max-grid-validation.json](../../validation/reports/max-grid-validation.json)。上文表格保留为该阶段历史对照。
+832 项完整回归通过，当前仅保留阶梯算法，网格设置与运行统计见 `max-grid-validation.json`。上文表格保留为该阶段历史对照。

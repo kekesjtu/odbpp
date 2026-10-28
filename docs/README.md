@@ -13,7 +13,7 @@
 | [格式与参考调研](research/README.md) | 官方语义、真实样本、开源结构与独立参考 |
 | [数学推导](derivation/README.md) | 串并联热导率、密度与质量加权比热 |
 | [参考资料](reference/README.md) | 官方 PDF、摘要、页码约定与参考 CSV |
-| [验证数据](validation/README.md) | 验收方法、报告索引及证据适用范围 |
+| [验证方法](validation/README.md) | 验收范围、验证命令及报告存放方式 |
 | [原始文档归档](archive/README.md) | 保留原文与基线的资料快照 |
 
 现行文档按职责和主题维护，需求定义功能边界，技术决策说明实现约定与依据。

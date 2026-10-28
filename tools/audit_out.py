@@ -109,7 +109,7 @@ def main():
     parser.add_argument("--out", type=Path, default=ROOT / "out",
                         help="case-output root to audit")
     parser.add_argument("--output", type=Path,
-                        default=ROOT / "docs/validation/reports/output-validation.json")
+                        default=ROOT / "tmp/validation/reports/output-validation.json")
     args = parser.parse_args()
     report = {"schema": "odbpp/output-validation-5", "cases": audit_outputs(args.out)}
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -36,7 +36,7 @@ dataclass/元组/数组。接口说明见 [07](../equivalence/07-intermediate-js
 
 四案例的以下数据完全一致：逐层规整后几何与 domain、绝对 Z、region/全局轴线/网格坐标、
 每个等效单元未舍入的铜占比及五项物性、最终 CSV 字节、逐层原始掩膜字节和光栅配置。
-原始散列、计时及每层掩膜记录见 [intermediate-validation.json](../../validation/reports/intermediate-validation.json)。
+原始散列、计时及每层掩膜记录见 `intermediate-validation.json`。
 
 精简主要消除接口中的重复语义；大案例由几何坐标主导，JSON 字节减少幅度很小。
 Pydantic 带来入口结构和有限数值检查，也增加大文件导入成本。video 仍有明显额外峰值内存，
@@ -59,4 +59,4 @@ Pydantic 带来入口结构和有限数值检查，也增加大文件导入成�
 掩膜和热图均已同步；共 **100 个物理层** 的掩膜与热图。
 `validate_architecture.py --audit-out` 对 **386,938 行** CSV 检查域内包含、region 归属、
 共同轴线、尺寸、有效采样、完整体积、绝对 Z 和物性范围，全部通过，记录见
-[output-validation.json](../../validation/reports/output-validation.json)。
+`output-validation.json`。

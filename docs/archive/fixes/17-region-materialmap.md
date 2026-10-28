@@ -26,11 +26,11 @@
 按层身份、还原 XY、可信 Z / null 及固定五项物性归一化，与修改前 CSV 逐单元完全一致；
 X/Y 比较沿用旧 CSV 的九位坐标精度，可信 Z 比较沿用旧六位精度。内部完整 region 与全局轴线也完全一致。
 正式文件总大小从 63,115,231 字节降为 13,661,237 字节（减少约 78.4%）。
-对照见 [materialmap-format-validation.json](../../validation/reports/materialmap-format-validation.json)。
+对照见 `materialmap-format-validation.json`。
 
 四个代表案例在独立进程中读取相同中间输入，对照基线 51c268b：原始浮点单元、原始掩膜及几何哈希全部一致。
 下面记录等效与写出阶段（不含 Parser 和 PNG 渲染）的单次观测，不能据此作严格速度优劣结论。
-峰值为整个 worker 进程，包括读入中间数据。报告见 [materialmap-process-validation.json](../../validation/reports/materialmap-process-validation.json)。
+峰值为整个 worker 进程，包括读入中间数据。报告见 `materialmap-process-validation.json`。
 
 | 案例 | region（二维） | 单元 | 秒：旧 → 新 | 峰值 MiB：旧 → 新 | 正式文件字节：旧 → 新 |
 |---|---:|---:|---:|---:|---:|
@@ -40,7 +40,7 @@ X/Y 比较沿用旧 CSV 的九位坐标精度，可信 Z 比较沿用旧六位�
 | designodb-rigidflex.tgz | 45 | 66274 | 4.966 → 4.581 | 487.79 → 489.46 | 11580529 → 2894414 |
 
 最终全输出核查通过：从 JSON 还原每个单元，检查原始逐层域和 region 归属、全局轴线、尺寸上下限、
-实际光栅采样容量、Z / null、五项物性范围与单元总数。记录为 [output-validation.json](../../validation/reports/output-validation.json)。
+实际光栅采样容量、Z / null、五项物性范围与单元总数。记录为 `output-validation.json`。
 直接检查了厨房示例 F.CU 和刚挠板 FLEX_5 的三方向热图，图形方向、板内挖空及层域显示正常。
 
 ## 复现

@@ -51,13 +51,13 @@
 
 少数细走线、钻孔和高对比白色间隙所在单元仍有很大的相对误差；异形板大部分单元为全 FR4，p95 近零不能证明其少数材料细节收敛。
 至少 8 个中心/轴是容量保护，并不保证细走线被充分解析或热导率误差低于某百分比。
-详细 median/p95/max、耗时和内存见 [验证数据](../../validation/reports/architecture-validation.json)。
+详细 median/p95/max、耗时和内存见 验证数据（`architecture-validation.json`）。
 
 ## 最终输出核查
 
 18 个 case 更新到 out/，共 641,177 行、81 张掩膜和同数量热图，每个 case 均有实际 region 图及尺寸表。
 逐行核查全局轴线索引、所属 region、层域成员关系、尺寸、采样容量、绝对 Z、完整单元覆盖语义和有限正数/材料范围。
-全部默认结果至少 9 个采样中心/轴。核查结果见 [output-validation.json](../../validation/reports/output-validation.json)。
+全部默认结果至少 9 个采样中心/轴。核查结果见 `output-validation.json`。
 第二次相同配置同步复用全部结果；缓存校验 schema、输入、自动/显式光栅模式、档位/专家尺寸、图片和实现指纹。
 已目视核查异形板 region 图和 kx/ky/kz 图；图片仅用于诊断，数值结论由上述逐单元核查支持。
 
