@@ -40,4 +40,4 @@ region 图对照原始轮廓，逐矩形显示边界、面积对数色标、编�
 
 默认生成掩膜、热图、region、grid 和图例页，可分别用 `--no-raster-png`、`--no-heatmap`、`--no-regions`、`--no-grids`、`--no-gallery` 控制。
 层名转为文件系统安全名称，大小写冲突和后缀冲突分配空闲名称，图例保留原层名。
-所请求的图片与数值结果按 [发布决策](output-publication.md) 一起完成后发布。
+所请求的图片与数值结果按 [发布决策](../output-publication.md) 一起完成后发布。

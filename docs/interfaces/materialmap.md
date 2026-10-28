@@ -85,7 +85,7 @@ for j in range(ny):                 # Y 由小到大
 热图直接读取正式 MaterialMap JSON，按网格线重建每个单元的矩形，不依赖 ODB++ 输入或运行报告。
 
 热图在正式 JSON 写出后生成。
-图片语义见 [pcbeq 可视化](../decisions/pcbeq-visualization.md)。
+图片语义见 [pcbeq 可视化](../decisions/pcbeq/pcbeq-visualization.md)。
 
 `diagnostics/run.json` 是独立运行诊断，记录必要的材料来源、默认材料警告、光栅配置、网格尺寸策略、几何损失、逐层跳过原因和实现指纹。它不是 MaterialMap 的另一部分，热图读取不需要它；其中也不写逐单元索引、面积和采样统计。region / 全局网格诊断图继续单独生成。
 

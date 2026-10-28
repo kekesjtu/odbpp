@@ -8,7 +8,7 @@
 
 主窗口提供图层列表、板框导航、板图、缩放 / 平移 / 测量和 Matrix。
 matrix 展示层名、类型、子类型、上下文、极性与引用；状态栏尺寸需要结合显示单位核对。
-本项目借鉴图层检查和矩阵核验流程，交互约定见 [查看器决策](../decisions/viewer-interaction.md)。
+本项目借鉴图层检查和矩阵核验流程，交互约定见 [查看器决策](../decisions/pcbkit/viewer-interaction.md)。
 
 ## 黑盒核验
 

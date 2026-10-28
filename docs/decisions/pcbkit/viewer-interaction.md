@@ -23,4 +23,4 @@ Parser 生成自包含 HTML，SVG、样式和脚本均内联，支持离线打�
 ## 性能约定
 
 缩放、平移和坐标反馈应保持流畅；复杂图层和钻孔跨度矩阵应支持窗口变化及滚动。
-外部参考来源与观察范围见 [Viewer 调研](../research/viewer-reference.md)。
+外部参考来源与观察范围见 [Viewer 调研](../../research/viewer-reference.md)。
