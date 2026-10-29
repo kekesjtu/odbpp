@@ -343,7 +343,6 @@ class TestReadMaterialMap:
         assert [series.name for series in data.series] == ["CU", "FR"]
         assert data.row_count == 32
         assert data.skipped_invalid == 0
-        assert data.column_count == 4 and data.row_band_count == 4
         assert data.x_edges == (0.0, 2.5, 5.0, 7.5, 10.0)
         assert data.bounds_mm() == (0.0, 0.0, 10.0, 10.0)
         assert len(data.series[0]) == 16
@@ -372,9 +371,9 @@ class TestReadMaterialMap:
     def test_an_incoherent_grid_is_refused(self, tmp_path):
         path = self._csv(tmp_path, px=4, py=4)
         data = json.loads(path.read_text(encoding="utf-8"))
-        data["regions"][0]["x_lines_mm"][1] = 0
+        data["regions"][0]["grid_counts"]["x"] = 0
         path.write_text(json.dumps(data), encoding="utf-8")
-        with pytest.raises(VisualizeError, match="increase"):
+        with pytest.raises(VisualizeError, match="grid_counts"):
             read_materialmap(str(path))
 
 

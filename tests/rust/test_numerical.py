@@ -85,7 +85,7 @@ def test_native_boundaries_validate_resources_and_finite_inputs():
         native.rasterize([],None,[],(0.,1.,120_000_001),(0.,1.,1))
 
 
-def test_cartesian_grid_keeps_signed_zero_and_all_forced_boundaries():
+def test_local_cartesian_grids_match_python_with_signed_zero():
     from pcbeq.grid import GridOptions, build_grid
     from pcbeq.rectify import Rect
     rectangles = [Rect(-2.,-1.,-0.,2.),Rect(0.,0.,3.1,1.)]
@@ -93,8 +93,7 @@ def test_cartesian_grid_keeps_signed_zero_and_all_forced_boundaries():
         expected = build_grid(rectangles, GridOptions(50,50,(.7,.4)))
     with pcbeq_rust.backend():
         actual = build_grid(rectangles, GridOptions(50,50,(.7,.4)))
-    assert actual.x_lines == expected.x_lines
-    assert actual.y_lines == expected.y_lines
+    assert [r.as_dict() for r in actual.regions] == [r.as_dict() for r in expected.regions]
     assert [(c.region_id,c.i,c.j,c.bounds) for c in actual.cells] == [
         (c.region_id,c.i,c.j,c.bounds) for c in expected.cells]
 

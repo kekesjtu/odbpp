@@ -37,7 +37,7 @@ def test_drill_leaves_copper_clearance_and_every_property_unchanged(kind):
     after, masks = evaluate(doc)
     before, reference_masks = evaluate(reference)
     assert [c for c in after.cells if c.layer_name == "CU"] == [c for c in before.cells if c.layer_name == "CU"]
-    assert after.grid.x_lines == before.grid.x_lines and after.grid.y_lines == before.grid.y_lines
+    assert after.grid.regions == before.grid.regions
     assert masks["CU"] == reference_masks["CU"]
     assert masks["CU"][10 * 20 + 10] == LayerMask.WHITE
     assert masks["DIEL"][10 * 20 + 10] == LayerMask.BLACK

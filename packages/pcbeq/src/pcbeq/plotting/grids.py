@@ -1,14 +1,11 @@
-"""Draw the actual global Cartesian axes from a final MaterialMap metadata file.
-
-uv run --all-extras python tools/plot_grid.py out/<case>/<step>.json
-Writes grid/cartesian-grid.png, .svg and .stats.json. No geometry is replanned.
-"""
+"""Draw actual region-local Cartesian cells, including nonconforming seams."""
 from __future__ import annotations
 
 import argparse
 import json
 import math
 from pathlib import Path
+from ..grid import uniform_lines
 
 
 def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
@@ -21,27 +18,33 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
     from matplotlib.patches import PathPatch, Rectangle
 
     grid = metadata["grid"]
-    if grid.get("layout") != "global-cartesian" or not metadata["rectification"]["ok"]:
+    if grid.get("layout") != "region-local-cartesian" or not metadata["rectification"]["ok"]:
         raise ValueError("refusing to illustrate invalid or non-Cartesian geometry")
-    xs, ys = grid["x_lines_mm"], grid["y_lines_mm"]
-    if any(not math.isfinite(v) for values in (xs, ys) for v in values):
-        raise ValueError("grid axes must be finite")
-    if any(b <= a for values in (xs, ys) for a, b in zip(values, values[1:])):
-        raise ValueError("grid axes must be strictly increasing")
+    axes = {}
+    segments = []
+    for region in grid["regions"]:
+        bounds,counts = region["bounds_mm"],region["grid_counts"]
+        xs = uniform_lines(*bounds["x"],counts["x"])
+        ys = uniform_lines(*bounds["y"],counts["y"])
+        if any(not math.isfinite(v) for values in (xs,ys) for v in values):
+            raise ValueError("local grid axes must be finite")
+        axes[region["region_id"]] = xs,ys
+        segments += [[(x,ys[0]),(x,ys[-1])] for x in xs]
+        segments += [[(xs[0],y),(xs[-1],y)] for y in ys]
     if not grid["cells"]:
         raise ValueError("no modeled grid cells")
     for cell in grid["cells"]:
         i, j = cell["i"], cell["j"]
+        xs,ys = axes[cell["region_id"]]
         expected = (xs[i], ys[j], xs[i+1], ys[j+1])
         actual = tuple(cell[k] for k in ("x0_mm", "y0_mm", "x1_mm", "y1_mm"))
         if any(abs(a-b) > 1e-8 for a, b in zip(actual, expected)):
-            raise ValueError(f"cell ({i},{j}) does not follow final global axes")
+            raise ValueError(f"region {cell['region_id']} cell ({i},{j}) does not follow its local axes")
 
     step = document["steps"][0]
     bounds = metadata["raster"]["board_bounds_mm"]
     x0, y0, x1, y1 = bounds
     rects = metadata["rectification"]["rectangles"]
-    segments = [[(x, y0), (x, y1)] for x in xs] + [[(x0, y), (x1, y)] for y in ys]
     vertices, codes = [], []
     for r in rects:
         a,b,c,d = (r[k] for k in ("x0_mm", "y0_mm", "x1_mm", "y1_mm"))
@@ -66,7 +69,7 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
     left = fig.add_subplot(layout[1,0])
     centre = fig.add_subplot(layout[1,1])
     info = fig.add_subplot(layout[:,2]); info.axis("off")
-    panels = [(overview,bounds,"All global axes (actual mesh)"),
+    panels = [(overview,bounds,"Region-local Cartesian cells (actual mesh)"),
               (left,(max(x0,ex-width/16),max(y0,ey-height/8),
                      min(x1,ex+width/16),min(y1,ey+height/8)),"Boundary detail"),
               (centre,(max(x0,cx-width/16),max(y0,cy-height/8),
@@ -75,9 +78,6 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
         ax.set_facecolor("#edf0f4")
         fill=PathPatch(model_path,facecolor="white",edgecolor="none")
         ax.add_patch(fill)
-        # Light extensions show the full global lattice; clipped blue lines are modeled cell borders.
-        ax.add_collection(LineCollection(segments,colors="#a6b0bc",linewidths=.3,
-                                         linestyles="dotted",alpha=.6))
         real=LineCollection(segments,colors="#307bb3",linewidths=.35,alpha=.85)
         real.set_clip_path(fill)
         real.set_clip_box(ax.bbox)
@@ -97,35 +97,33 @@ def plot_grid(document: dict, directory: Path, metadata: dict) -> dict:
     config=grid.get("mesh_configuration") or {}
     mode=config.get("preset") or config.get("mode","expert")
     info.text(0,1,
-        f"GLOBAL CARTESIAN MESH\n\n"
-        f"Global shape: {len(xs)-1} x {len(ys)-1}\n"
-        f"Axes: X={len(xs)}, Y={len(ys)}\n"
+        f"REGION-LOCAL CARTESIAN MESH\n\n"
         f"Modeled XY cells: {len(grid['cells']):,}\n"
         f"Regions: {len(rects)}\n"
         f"Sizing: {mode}\n\n"
         f"Max X/Y: {constraints['max'][0]:.4g} / {constraints['max'][1]:.4g} mm\n\n"
         "Every region boundary is retained.\n"
-        "Axis coordinates propagate across\nthe whole board.\n\n"
+        "Each region is uniformly divided.\n"
+        "Neighboring cells need not conform.\n\n"
         "White = modeled XY footprint\n"
         "Grey = no modeled cells\n"
         "Layer presence is determined\nseparately for every physical layer.\n\n"
         "Geometry only: no raster pixels\nor material values are shown.\n"
-        "Axes are read from final metadata;\nno re-meshing or simplification.",
+        "Bounds and counts are read from\nfinal metadata; no re-meshing.",
         va="top",fontsize=11,linespacing=1.45)
     info.legend(handles=[Line2D([],[],color="#307bb3",label="Actual cell boundaries"),
-                         Line2D([],[],color="#a6b0bc",linestyle=":",label="Global axes outside model"),
                          Line2D([],[],color="#d28a26",label="Region boundaries"),
                          Line2D([],[],color="#ce3645",linestyle="--",label="Original step profile")],
                 loc="lower left",fontsize=10)
-    fig.suptitle(f"{step['name']} | Global Cartesian grid (not a material heatmap)",fontsize=16)
+    fig.suptitle(f"{step['name']} | Region-local Cartesian grids (not a material heatmap)",fontsize=16)
     directory.mkdir(parents=True,exist_ok=True)
     fig.savefig(directory/"cartesian-grid.png",dpi=180)
     fig.savefig(directory/"cartesian-grid.svg")
     plt.close(fig)
     stats={"schema":"odbpp/grid-illustration-1","source":"MaterialMap.json",
-           "layout":grid["layout"],"nx":len(xs)-1,"ny":len(ys)-1,
+           "layout":grid["layout"],"conformity_required":False,
            "region_count":len(rects),"cell_count":len(grid["cells"]),
-           "x_lines_mm":xs,"y_lines_mm":ys,"board_bounds_mm":bounds,
+           "regions":grid["regions"],"board_bounds_mm":bounds,
            "size_constraints_mm":constraints,"cell_axis_alignment_checked":True,
            "scope":"shared XY geometry; per-layer existence remains in MaterialMap metadata"}
     (directory/"cartesian-grid.stats.json").write_text(json.dumps(stats,indent=2),encoding="utf-8")

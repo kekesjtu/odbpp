@@ -28,7 +28,7 @@ class TestGrid:
         rectangles = [Rect(x, 0, x+1, 10) for x in range(5)] + [Rect(5, 0, 70, 10)]
         grid = build_grid(rectangles, GridOptions(400, 400, 5))
         assert grid.cells
-        assert set(range(6)).issubset(grid.x_lines)
+        assert [r.rect.x0 for r in grid.regions]==list(range(6))
         assert len([c for c in grid.cells if c.rect.x0 >= 5]) == 13*2
         for cell in grid.cells:
             assert 0.5 <= cell.rect.width <= 5
@@ -45,12 +45,12 @@ class TestGrid:
         grid = build_grid([Rect(0,0,width,5)], GridOptions(100,100,high),
                           diagnostics=diagnostics)
         assert grid.cells and not diagnostics.errors
-        assert grid.x_lines[0]==0 and grid.x_lines[-1]==width
+        assert grid.regions[0].x_lines[0]==0 and grid.regions[0].x_lines[-1]==width
 
     def test_bounds_rounding_and_per_axis_constraints(self):
         grid = build_grid([Rect(0,0,10,6)], GridOptions(100,100,(3,2)))
-        assert grid.nx == 4 and grid.ny == 3
-        assert grid.x_lines == [0,2.5,5,7.5,10]
+        assert grid.regions[0].nx == 4 and grid.regions[0].ny == 3
+        assert grid.regions[0].x_lines == [0,2.5,5,7.5,10]
         assert grid.as_dict()["size_constraints_mm"] == {"max":[3,2]}
 
     @pytest.mark.parametrize("maximum", [2, 1e-300])

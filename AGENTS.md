@@ -6,7 +6,7 @@ pcbkit / pcbeq AI 协作开发指南，说明项目结构、开发规范和文�
 
 本项目提供 ODB++ v8.1 单板解析器 `pcbkit` 和 PCB 物性等效器 `pcbeq`，两者分别安装和分发，通过中间 JSON 交接。
 独立 Rust 数值核心版本为 `pcbkit-rust`、`pcbeq-rust`；保留 Python 版，工程可视化和图表使用 Python。
-解析器交付正向实体多边形、逐层计算域和叠层信息；等效器生成内接三维 region、全局笛卡尔网格与完整单元物性。
+解析器交付正向实体多边形、逐层计算域和叠层信息；等效器生成内接三维 region、各 region 独立的局部笛卡尔网格与完整单元物性。
 SVG/HTML、材料掩膜和热图用于工程核对。
 
 功能范围、物理约束和验收标准以 [docs/requirements.md](docs/requirements.md) 为准；实现前先阅读相关需求及 [README.md](README.md) 中的主题文档。

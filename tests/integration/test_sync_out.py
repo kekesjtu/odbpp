@@ -50,8 +50,8 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     assert (result / "pcbeq/grids" / "cartesian-grid.png").is_file()
     grid_stats=json.loads((result/"pcbeq/grids"/"cartesian-grid.stats.json").read_text(encoding="utf-8"))
     final_grid=json.loads(meta.read_text(encoding="utf-8"))["grid"]
-    assert grid_stats["x_lines_mm"]==final_grid["x_lines_mm"]
-    assert grid_stats["y_lines_mm"]==final_grid["y_lines_mm"]
+    assert grid_stats["regions"]==final_grid["regions"]
+    assert grid_stats["layout"]=="region-local-cartesian"
     assert grid_stats["cell_count"]==final_grid["cell_count"]
 
     before = csv.stat().st_mtime_ns
@@ -76,17 +76,17 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     sync_out.main()
     changed = json.loads(meta.read_text(encoding="utf-8"))
     assert changed["raster"]["px"] == 20
-    assert (changed["grid"]["nx"], changed["grid"]["ny"]) == (10, 8)
+    assert changed["grid"]["regions"][0]["grid_counts"] == {"x":10,"y":8,"z":1}
 
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16",
                                       "--max-cell-mm", "25", "20", "--heatmap-grid"])
     sync_out.main()
     coarse = json.loads(meta.read_text(encoding="utf-8"))
-    assert (coarse["grid"]["nx"], coarse["grid"]["ny"]) == (4, 4)
+    assert coarse["grid"]["regions"][0]["grid_counts"] == {"x":4,"y":4,"z":1}
     records = json.loads(csv.read_text(encoding="utf-8"))["regions"]
     assert sum(len(r["values"]) for r in records) == 32
     assert all(len(v) == 5 for r in records for v in r["values"])
-    assert "4×4" in (out / "index.html").read_text(encoding="utf-8")
+    assert "1 regions / 16 cells" in (out / "index.html").read_text(encoding="utf-8")
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,
                                          max_cell_mm=(25,20), draw_grid=True) is not None
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,

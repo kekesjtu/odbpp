@@ -26,6 +26,6 @@ def resource_limits():
     native = current()
     if native is None:
         return {}
-    return {"max_axis_lines": native.MAX_AXIS_LINES,
+    return {"max_region_axis_lines": native.MAX_AXIS_LINES,
             "max_grid_cells": native.MAX_GRID_CELLS,
             "max_raster_pixels": native.MAX_RASTER_PIXELS}

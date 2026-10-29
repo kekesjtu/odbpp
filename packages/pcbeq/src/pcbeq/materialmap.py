@@ -1,12 +1,12 @@
 """Region-based MaterialMap JSON; indexes and sampling state stay internal."""
 from __future__ import annotations
 
-from bisect import bisect_left, bisect_right
 import json
 from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from .grid import uniform_lines
 
 PROPERTIES = ["kx", "ky", "kz", "density", "specific_heat"]
 UNITS = {"length": "mm", "thermal_conductivity": "W/(m*K)",
@@ -42,25 +42,27 @@ class Bounds(_Model):
         return self
 
 
+class GridCounts(_Model):
+    x: int = Field(ge=1, le=1_000_000)
+    y: int = Field(ge=1, le=1_000_000)
+    z: int = Field(ge=1, le=1)
+
+
 class MaterialRegion(_Model):
     layer: LayerIdentity
     bounds_mm: Bounds
-    x_lines_mm: list[FiniteFloat] = Field(min_length=2)
-    y_lines_mm: list[FiniteFloat] = Field(min_length=2)
+    grid_counts: GridCounts
     values: list[Values]
 
     @model_validator(mode="after")
     def rectangular(self):
-        for axis in "xy":
-            lines = getattr(self, f"{axis}_lines_mm")
-            if any(b <= a for a, b in zip(lines, lines[1:])):
-                raise ValueError(f"{axis}_lines_mm must strictly increase")
-            if (lines[0], lines[-1]) != getattr(self.bounds_mm, axis):
-                raise ValueError(f"{axis} bounds must equal first/last grid line")
-        expected = (len(self.x_lines_mm)-1)*(len(self.y_lines_mm)-1)
+        expected = self.grid_counts.x*self.grid_counts.y*self.grid_counts.z
         if len(self.values) != expected:
             raise ValueError(f"region requires exactly {expected} row-major property rows, got {len(self.values)}")
         return self
+
+    def axis_lines(self, axis):
+        return uniform_lines(*getattr(self.bounds_mm,axis),getattr(self.grid_counts,axis))
 
 
 class MaterialMapDocument(_Model):
@@ -75,13 +77,8 @@ class MaterialMapDocument(_Model):
     def coherent(self):
         if self.units != UNITS or self.properties != PROPERTIES:
             raise ValueError("MaterialMap units and five-property order must match the current contract")
-        xs = sorted({x for r in self.regions for x in r.x_lines_mm})
-        ys = sorted({y for r in self.regions for y in r.y_lines_mm})
         layers = {}
         for region in self.regions:
-            for lines, all_lines in ((region.x_lines_mm, xs), (region.y_lines_mm, ys)):
-                if lines != all_lines[bisect_left(all_lines, lines[0]):bisect_right(all_lines, lines[-1])]:
-                    raise ValueError("region lines must follow the common global Cartesian axes")
             prior = layers.setdefault(region.layer.name, [])
             for other in prior:
                 if other.layer.type != region.layer.type or other.bounds_mm.z != region.bounds_mm.z:
@@ -98,13 +95,13 @@ def read_document(path: str | Path) -> MaterialMapDocument:
 
 
 def iter_cells(document: MaterialMapDocument):
-    """Reconstruct geometry from lines, never from a serialized cell index."""
+    """Reconstruct local uniform cells; X is fastest, then Y, with one Z cell."""
     for region in document.regions:
-        nx = len(region.x_lines_mm)-1
+        nx = region.grid_counts.x
+        xs, ys = region.axis_lines("x"), region.axis_lines("y")
         for q, values in enumerate(region.values):
             j, i = divmod(q, nx)
-            yield region, (region.x_lines_mm[i], region.y_lines_mm[j],
-                           region.x_lines_mm[i+1], region.y_lines_mm[j+1]), values
+            yield region, (xs[i],ys[j],xs[i+1],ys[j+1]), values
 
 
 class MaterialMapWriter:
@@ -149,6 +146,8 @@ class MaterialMapWriter:
             first = cells[0]
             xs = sorted({v for c in cells for v in (c.x0, c.x1)})
             ys = sorted({v for c in cells for v in (c.y0, c.y1)})
+            if xs != uniform_lines(xs[0],xs[-1],len(xs)-1) or ys != uniform_lines(ys[0],ys[-1],len(ys)-1):
+                raise ValueError(f"layer {self.layer!r} region {rid}: local Cartesian cells must be uniform")
             ordered = sorted(cells, key=lambda c: (c.y0, c.x0))
             expected = [(a, b, c, d) for b, d in zip(ys, ys[1:]) for a, c in zip(xs, xs[1:])]
             if [(c.x0, c.y0, c.x1, c.y1) for c in ordered] != expected:
@@ -160,7 +159,7 @@ class MaterialMapWriter:
             region = MaterialRegion.model_validate({
                 "layer": {"name": first.layer_name, "type": first.layer_type},
                 "bounds_mm": {"x": [xs[0], xs[-1]], "y": [ys[0], ys[-1]], "z": z},
-                "x_lines_mm": xs, "y_lines_mm": ys,
+                "grid_counts": {"x":len(xs)-1,"y":len(ys)-1,"z":1},
                 "values": [c.property_values() for c in ordered]})
             if self.headers:
                 self.handle.write(',\n')
@@ -179,9 +178,9 @@ class MaterialMapWriter:
             r = result.rectification.rectangles[rid]
             if (xs[0], ys[0], xs[-1], ys[-1]) != r.bounds:
                 raise ValueError(f"layer {name!r} region {rid}: cell extent differs from planned region")
-            for lines, axis in ((xs, result.grid.x_lines), (ys, result.grid.y_lines)):
-                if lines != axis[bisect_left(axis, lines[0]):bisect_right(axis, lines[-1])]:
-                    raise ValueError("serialized region is not a complete subset of the global axes")
+            local = result.grid.regions[rid]
+            if xs != local.x_lines or ys != local.y_lines:
+                raise ValueError("serialized region differs from its planned local Cartesian grid")
             counts[name] = counts.get(name, 0)+count
         expected = {r.name: r.cell_count for r in result.layers if r.status == "equivalent"}
         if not counts or counts != expected:
@@ -195,15 +194,19 @@ def restore_report_grid(report: dict, document: MaterialMapDocument) -> dict:
     from copy import deepcopy
     out = deepcopy(report)
     grid = out["grid"]
-    xi = {x: i for i, x in enumerate(grid["x_lines_mm"])}
-    yi = {y: j for j, y in enumerate(grid["y_lines_mm"])}
     rects = out["rectification"]["rectangles"]
     ids = {(r["x0_mm"], r["y0_mm"], r["x1_mm"], r["y1_mm"]): n for n, r in enumerate(rects)}
     cells = {}
-    for _region, bounds, _values in iter_cells(document):
-        a, b, c, d = bounds
-        xy = (_region.bounds_mm.x[0], _region.bounds_mm.y[0], _region.bounds_mm.x[1], _region.bounds_mm.y[1])
-        cells[(a,b,c,d)] = {"region_id": ids[xy], "i": xi[a], "j": yi[b],
-                           "x0_mm": a, "y0_mm": b, "x1_mm": c, "y1_mm": d}
+    planned = {r["region_id"]:r for r in grid["regions"]}
+    for region in document.regions:
+        xy = (region.bounds_mm.x[0],region.bounds_mm.y[0],region.bounds_mm.x[1],region.bounds_mm.y[1])
+        rid = ids[xy]
+        if region.grid_counts.model_dump() != planned[rid]["grid_counts"]:
+            raise ValueError("MaterialMap counts differ from the diagnostic local grid")
+        xs,ys = region.axis_lines("x"),region.axis_lines("y")
+        for j,(b,d) in enumerate(zip(ys,ys[1:])):
+            for i,(a,c) in enumerate(zip(xs,xs[1:])):
+                cells[(rid,i,j)] = {"region_id":rid,"i":i,"j":j,
+                    "x0_mm":a,"y0_mm":b,"x1_mm":c,"y1_mm":d}
     grid["cells"] = list(cells.values())
     return out

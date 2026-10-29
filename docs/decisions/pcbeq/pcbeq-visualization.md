@@ -7,7 +7,7 @@
 | `pcbeq/masks/*.png` | 实际材料采样掩膜 | 铜 / 基底 / 域外及钻孔覆盖核对 |
 | `pcbeq/heatmaps/*.png` | 正式 MaterialMap JSON | 每层 kx / ky / kz 的实际单元热图 |
 | `pcbeq/regions/*` | 实际内接矩形集合 | region 边界、面积、编号、尺寸和几何损失 |
-| `pcbeq/grids/*` | 最终全局轴线与实体单元 | 强制边界、传播细分与网格尺寸检查 |
+| `pcbeq/grids/*` | 各 region 的范围、网格数与实体单元 | 局部均匀划分、不共形接缝与尺寸检查 |
 
 各图分别服务于不同检查；几何误差使用矢量域验证，材料误差使用实际数值采样收敛验证。
 
@@ -30,10 +30,10 @@ DRILL 只在相交介质层内为黑色，铜层掩膜完全由自身图案形�
 面板宽默认 1440 像素，由 `--heatmap-panel-width` 控制。
 绘图以实际毫米矩形构成 PolyCollection，显示像素尺寸不改变材料数据或网格坐标。
 
-## region 与全局网格
+## region 与局部网格
 
 region 图对照原始轮廓，逐矩形显示边界、面积对数色标、编号与尺寸表，并统计短边、损失、孔洞和连接保护结果。
-全局网格图显示实际内域单元、域外轴线延伸、region 边界与原始 step profile。
+局部网格图显示每个 region 内的实际单元、region 边界与原始 step profile；网格线仅绘于所属 region 内，允许接缝不共形，不绘制板外轴线延伸。
 逐层实体存在性和五项物性以 MaterialMap 中的完整三维 region 为准。
 
 ## 选项、文件名与失败

@@ -68,7 +68,7 @@ def test_slanted_staircase_is_inside_and_uses_vertical_strips():
     assert result.audit["boundary_retreat"]["max_allowed_mm"] == 3.0
     assert result.audit["boundary_retreat"]["max_distance_upper_mm"] <= 3.0
     assert result.relative_error <= .05
-    assert result.audit["coarsening"]["axis_score_after"] <= result.audit["coarsening"]["axis_score_before"]
+    assert result.audit["coarsening"]["boundary_score_after"] <= result.audit["coarsening"]["boundary_score_before"]
     assert any(r.height>70 for r in result.rectangles)
 
 

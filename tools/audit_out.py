@@ -25,7 +25,12 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         directory=path.parent
         meta=json.loads((directory/"diagnostics/run.json").read_text(encoding="utf-8"))
         materialmap=read_document(path)
-        assert meta["pipeline_fingerprint"]==pipeline_fingerprint()
+        if meta.get("numerical_backend") == "rust":
+            from pcbeq_rust import backend
+            with backend():
+                assert meta["pipeline_fingerprint"]==pipeline_fingerprint()
+        else:
+            assert meta["pipeline_fingerprint"]==pipeline_fingerprint()
         assert meta["drill_model"]=="solid_copper" and meta["drill_scope"]=="dielectric_only"
         assert all(not l["drill_overlays"] for l in meta["layers"] if l["type"]!="DIELECTRIC")
         assert not any(d["level"]=="error" for d in meta["diagnostics"])
@@ -53,8 +58,9 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
                 assert b.buffer(retreat,quad_segs=128).covers(a)
             assert geometry_audit["domains"][domain_id]["shared_boundary_retreat"]["within_limit"]
         rect_ids={(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]):rid for rid,r in enumerate(regions)}
-        xs,ys=meta["grid"]["x_lines_mm"],meta["grid"]["y_lines_mm"]
-        xi,yi={v:i for i,v in enumerate(xs)},{v:j for j,v in enumerate(ys)}
+        assert meta["grid"]["layout"]=="region-local-cartesian"
+        assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
+        local_grids={r["region_id"]:r for r in meta["grid"]["regions"]}
         limits=meta["grid"]["size_constraints_mm"]
         bounds=meta["raster"]["board_bounds_mm"]
         px,py=meta["raster"]["px"],meta["raster"]["py"]
@@ -66,6 +72,8 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             name=region.layer.name; layer=reports[name]
             a,c=region.bounds_mm.x; b,d=region.bounds_mm.y
             rid=rect_ids[(a,b,c,d)]
+            assert region.grid_counts.model_dump()==local_grids[rid]["grid_counts"]
+            assert local_grids[rid]["bounds_mm"]=={"x":[a,c],"y":[b,d]}
             assert rid in ids[layer["domain_id"]]
             shape=box(a,b,c,d)
             assert shape.difference(domains[layer["domain_id"]]).area<1e-8
@@ -74,7 +82,6 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             assert region.bounds_mm.z==expected_z
         for region,bounds5,values in iter_cells(materialmap):
             a,b,c,d=bounds5
-            assert (a,b,c,d)==(xs[xi[a]],ys[yi[b]],xs[xi[a]+1],ys[yi[b]+1])
             for axis,length in enumerate((c-a,d-b)):
                 assert 0<length<=limits["max"][axis]+1e-8
             columns=ax.range_for(a,c);rows=ay.range_for(b,d)
@@ -91,7 +98,8 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         assert counts=={name:layer["cell_count"] for name,layer in reports.items()}
         records.append({"case":directory.relative_to(out_dir).as_posix(),
             "region_count":len(regions),"physical_region_count":len(materialmap.regions),
-            "nx":len(xs)-1,"ny":len(ys)-1,"grid_cells":meta["grid"]["cell_count"],
+            "region_grid_counts":[r["grid_counts"] for r in local_grids.values()],
+            "grid_cells":meta["grid"]["cell_count"],
             "material_rows":sum(counts.values()),"raster":[px,py],
             "minimum_samples_per_axis":minimum,"area_loss_mm2":meta["rectification"]["lost_area_mm2"],
             "max_boundary_retreat_mm":retreat,

@@ -23,13 +23,30 @@ def test_resolution_does_not_change_region_or_cell_coordinates():
     assert results[0].fatal and not results[1].fatal
 
 
-def test_region_boundary_propagates_into_global_cartesian_axes():
+def test_neighbor_region_boundary_does_not_propagate_into_local_grid():
     rectangles=[__import__("pcbeq.rectify",fromlist=["Rect"]).Rect(0,0,1,1),
                 __import__("pcbeq.rectify",fromlist=["Rect"]).Rect(1,0,21,10)]
     grid=build_grid(rectangles,GridOptions(1,1,max_cell_mm=5))
     body=[c for c in grid.cells if c.region_id==1]
-    assert len(body)==12
-    assert sorted({c.rect.y0 for c in body})==[0,1,5.5]
+    assert len(body)==8
+    assert sorted({c.rect.y0 for c in body})==[0,5]
+    assert grid.regions[0].y_lines==[0,1]
+    assert grid.regions[1].y_lines==[0,5,10]
+
+
+def test_sampling_uses_physical_intervals_when_local_indices_repeat():
+    document=build_document(domains=[
+        {"id":"step_profile","source":"step_profile","polygons":[rect(0,0,21,10)]},
+        {"id":"corner","source":"layer_profile","polygons":[rect(0,0,1,1)]}],layers=[
+        {"name":"ALL","polygons":[rect(1,0,21,10)]},
+        {"name":"CORNER","domain_id":"corner","polygons":[]}])
+    result=equivalence_from_document(document,EquivalenceOptions(GridOptions(420,200,5)))
+    assert not result.fatal
+    reused=[c for c in result.cells if c.layer_name=="ALL" and c.i==0 and c.j==0]
+    assert len({c.region_id for c in reused})>1
+    for cell in result.cells:
+        expected=1 if cell.layer_name=="ALL" and cell.x0>=1 else 0
+        assert cell.copper_fraction==expected
 
 
 def test_rigidflex_cells_are_complete_in_each_layer_and_share_region_ids():
@@ -128,10 +145,11 @@ def test_default_raster_is_dense_and_presets_reject_few_samples():
     assert default.raster_px>=4096 and min(c.pixel_cols for c in default.cells)>=8
     assert coordinates(default)==coordinates(low)
     for c in default.grid.cells:
-        assert c.rect.x0==default.grid.x_lines[c.i]
-        assert c.rect.x1==default.grid.x_lines[c.i+1]
-        assert c.rect.y0==default.grid.y_lines[c.j]
-        assert c.rect.y1==default.grid.y_lines[c.j+1]
+        local=default.grid.regions[c.region_id]
+        assert c.rect.x0==local.x_lines[c.i]
+        assert c.rect.x1==local.x_lines[c.i+1]
+        assert c.rect.y0==local.y_lines[c.j]
+        assert c.rect.y1==local.y_lines[c.j+1]
 
 
 def test_expert_mode_retains_physical_limits_and_fails_zero_samples():
@@ -158,7 +176,8 @@ def test_cli_default_preset_and_invalid_combinations(tmp_path):
     meta=json.loads((output/"diagnostics/run.json").read_text(encoding="utf-8"))
     assert "schema" not in meta and "cells" not in meta["grid"]
     assert meta["grid"]["mesh_configuration"]["preset"]=="standard"
-    assert meta["grid"]["layout"]=="global-cartesian"
+    assert meta["grid"]["layout"]=="region-local-cartesian"
+    assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
     assert meta["raster"]["px"]>=4096
     assert meta["rectification"]["audit"]["boundary_retreat"]["max_allowed_mm"] == 3.0
     assert meta["rectification"]["audit"]["relative_area_budget"] == .05
@@ -268,7 +287,7 @@ def test_shared_common_interval_merge_cannot_disconnect_a_branch():
     assert audit["constraint_rejections"]>0
 
 
-def test_sharing_one_true_limit_does_not_force_an_excessive_other_edge_retreat():
+def test_physical_boundary_simplification_respects_the_opposite_contour_limit():
     from shapely.ops import unary_union
     from pcbeq.equiv import _coarsen_shared_partition
     from pcbeq.rectify import Rect,RectifyOptions

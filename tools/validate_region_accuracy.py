@@ -22,7 +22,7 @@ def publication_metrics(name, coordinates, retreat, ratio):
     audit = meta["rectification"]["audit"]
     rectangles = [tuple(r[k] for k in ("x0_mm","y0_mm","x1_mm","y1_mm"))
                   for r in meta["rectification"]["rectangles"]]
-    published = (rectangles,meta["grid"]["x_lines_mm"],meta["grid"]["y_lines_mm"])
+    published = (rectangles,meta["grid"]["regions"])
     if (published != coordinates or audit.get("boundary_retreat",{}).get("max_allowed_mm") != retreat
             or audit.get("relative_area_budget") != ratio):
         return None
@@ -55,7 +55,7 @@ def sampling_convergence(name, retreat, ratio, initial_step=None):
         assert np.isfinite(values).all() and (values>0).all()
         arrays.append(values)
         coordinates.append((keys,[r.bounds for r in result.rectification.rectangles],
-                            result.grid.x_lines,result.grid.y_lines))
+                            [r.as_dict() for r in result.grid.regions]))
         runs.append({"raster":[result.raster_px,result.raster_py],
                      "seconds":time.perf_counter()-start,"material_cells":len(rows)})
         options = replace(options,grid=replace(options.grid,px=2*result.raster_px,
@@ -101,9 +101,9 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
     seconds = time.perf_counter()-start
     _,peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    coordinates = ([r.bounds for r in geometry.rectangles],grid.x_lines,grid.y_lines)
+    coordinates = ([r.bounds for r in geometry.rectangles],[r.as_dict() for r in grid.regions])
     changed,_,changed_grid = plan(replace(options,grid=replace(options.grid,px=8192,py=8192)))
-    assert coordinates == ([r.bounds for r in changed.rectangles],changed_grid.x_lines,changed_grid.y_lines)
+    assert coordinates == ([r.bounds for r in changed.rectangles],[r.as_dict() for r in changed_grid.regions])
 
     domains = {d["id"]:profile_shape(_region_from_polygons(d["polygons"])) for d in step["domains"]}
     board = domains[step["profile_domain_id"]]
@@ -170,7 +170,7 @@ def main():
     baseline = {r["case"]:r for r in json.loads(args.baseline.read_text(encoding="utf-8"))} if args.baseline else {}
     report = {"date":datetime.now(timezone(timedelta(hours=8))).date().isoformat(),
         "measurement":"geometry planning + mesh with tracemalloc; Python allocation peak excludes native GEOS/NumPy allocations",
-        "resolution_independence_scope":"complete region and global-grid planning, without material sampling",
+        "resolution_independence_scope":"complete region and local-grid planning, without material sampling",
         "cases":[]}
     for case in args.case or CASES:
         report["cases"].append(validate_case(case,args.max_boundary_retreat_mm,

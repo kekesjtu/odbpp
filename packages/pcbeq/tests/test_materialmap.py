@@ -38,7 +38,8 @@ def test_region_payload_contains_no_indices_coordinates_per_cell_or_sampling_sta
     _, _, data = example(tmp_path)
     assert set(data) == {"units", "properties", "drill_model", "drill_scope", "regions"}
     for region in data["regions"]:
-        assert set(region) == {"layer", "bounds_mm", "x_lines_mm", "y_lines_mm", "values"}
+        assert set(region) == {"layer", "bounds_mm", "grid_counts", "values"}
+        assert region["grid_counts"]["z"]==1
         assert len(region["bounds_mm"]) == 3
         assert all(len(v) == 5 and all(isinstance(x, (int,float)) for x in v) for v in region["values"])
 
@@ -64,7 +65,7 @@ def test_interleaved_nonuniform_regions_are_written_y_major_x_fast(tmp_path):
     for region, bounds, values in iter_cells(restored):
         assert expected.pop((region.layer.name,*bounds)) == values
     assert not expected
-    assert len({round(b-a,8) for r in restored.regions for a,b in zip(r.x_lines_mm,r.x_lines_mm[1:])}) > 1
+    assert len({round((r.bounds_mm.x[1]-r.bounds_mm.x[0])/r.grid_counts.x,8) for r in restored.regions}) > 1
 
 
 @pytest.mark.parametrize("bad", [[], [1,2,3,4], [1]*6, [0,1,1,1,1],
@@ -77,24 +78,53 @@ def test_invalid_property_tuple_is_fatal_instead_of_shifting_rows(tmp_path, bad)
         read_materialmap(str(path))
 
 
-@pytest.mark.parametrize("failure", ["missing_row","extra_row","descending_axis","bounds","overlap","extra_field","global_axis"])
+@pytest.mark.parametrize("failure", ["missing_row","extra_row","zero_count","bounds","overlap","extra_field","legacy_axis","fraction_count","bool_count","nz","bool_z"])
 def test_corrupt_geometry_and_dense_shape_are_rejected(tmp_path, failure):
     _, _, data = example(tmp_path)
     r = data["regions"][0]
     if failure == "missing_row": r["values"].pop()
     if failure == "extra_row": r["values"].append(r["values"][0])
-    if failure == "descending_axis": r["x_lines_mm"].reverse()
-    if failure == "bounds": r["bounds_mm"]["x"][1] += 1
+    if failure == "zero_count": r["grid_counts"]["x"]=0
+    if failure == "fraction_count": r["grid_counts"]["x"]=1.5
+    if failure == "bool_count": r["grid_counts"]["x"]=True
+    if failure == "nz": r["grid_counts"]["z"]=2
+    if failure == "bool_z": r["grid_counts"]["z"]=True
+    if failure == "bounds": r["bounds_mm"]["x"].reverse()
     if failure == "overlap": data["regions"].append(deepcopy(r))
     if failure == "extra_field": r["cell_i"] = 0
-    if failure == "global_axis":
-        other=deepcopy(r); other["layer"]["name"]="OTHER"
-        # A global line passing through CU must also occur in CU's axes.
-        a,b=other["x_lines_mm"][:2]; other["x_lines_mm"].insert(1,(a+b)/2)
-        other["values"]=[other["values"][0]]*((len(other["x_lines_mm"])-1)*(len(other["y_lines_mm"])-1))
-        data["regions"].append(other)
+    if failure == "legacy_axis": r["x_lines_mm"]=[0,10]
     with pytest.raises(ValidationError):
         MaterialMapDocument.model_validate(data)
+
+
+def test_nonconforming_adjacent_regions_are_fully_reconstructed_from_counts(tmp_path):
+    _,_,data=example(tmp_path)
+    left=deepcopy(data["regions"][0]);right=deepcopy(left)
+    left["bounds_mm"].update(x=[0,1],y=[0,6])
+    right["bounds_mm"].update(x=[1,5],y=[0,6])
+    left["grid_counts"]={"x":1,"y":2,"z":1}
+    right["grid_counts"]={"x":2,"y":3,"z":1}
+    left["values"]=[[1,2,3,4,5]]*2
+    right["values"]=[[6,7,8,9,10]]*6
+    data["regions"]=[left,right]
+    path=tmp_path/"nonconforming.json"
+    path.write_text(json.dumps(data),encoding="utf-8")
+    document=read_document(path)
+    cells=list(iter_cells(document))
+    assert len(cells)==8
+    assert cells[0][1]==(0,0,1,3) and cells[2][1]==(1,0,3,2)
+    assert len(read_materialmap(str(path)).series[0])==8
+
+
+def test_nonuniform_internal_cells_cannot_be_encoded_as_counts(tmp_path):
+    result,path,_=example(tmp_path)
+    before=path.read_bytes()
+    middle=result.grid.regions[0].x_lines[1]
+    result.cells=[replace(c,x0=middle*.8 if c.x0==middle else c.x0,
+                           x1=middle*.8 if c.x1==middle else c.x1) for c in result.cells]
+    with pytest.raises(ValueError,match="uniform"):
+        write_materialmap(result,str(path))
+    assert path.read_bytes()==before
 
 
 @pytest.mark.parametrize("failure", ["missing_cell","duplicate_cell","fatal"])

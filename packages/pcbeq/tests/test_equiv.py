@@ -530,7 +530,7 @@ class TestOutput:
         assert len(list(iter_cells(document))) == len(result.cells)
         assert all(tuple(c.property_values()) == value for c, (_, _, value) in zip(result.cells, iter_cells(document)))
         raw = json.loads(path.read_text(encoding="utf-8"))
-        assert set(raw["regions"][0]) == {"layer", "bounds_mm", "x_lines_mm", "y_lines_mm", "values"}
+        assert set(raw["regions"][0]) == {"layer", "bounds_mm", "grid_counts", "values"}
         assert all(len(values) == 5 for r in raw["regions"] for values in r["values"])
         assert not list(tmp_path.glob("*.csv")) and not list(tmp_path.glob("*.meta.json"))
 

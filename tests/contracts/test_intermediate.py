@@ -32,8 +32,7 @@ def test_file_roundtrip_uses_the_shared_contract_and_preserves_equivalence(tmp_p
     assert loaded == model
     original, restored = run(document), run(loaded.model_dump(mode="json", exclude_none=True))
     assert original.cells == restored.cells
-    assert original.grid.x_lines == restored.grid.x_lines
-    assert original.grid.y_lines == restored.grid.y_lines
+    assert original.grid.regions == restored.grid.regions
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), "1.0", True])

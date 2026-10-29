@@ -45,8 +45,8 @@ def plot_regions(document: dict, directory: Path, *, metadata: dict) -> dict:
              "min_short_edge_mm": min(shortest),
              "short_edge_below_1mm_count": sum(v < 1 for v in shortest),
              "area_below_1mm2_count": sum(v < 1 for v in areas),
-             "forced_x_lines": len({x for r in rects for x in (r.x0,r.x1)}),
-             "forced_y_lines": len({y for r in rects for y in (r.y0,r.y1)})}
+             "x_boundary_levels": len({x for r in rects for x in (r.x0,r.x1)}),
+             "y_boundary_levels": len({y for r in rects for y in (r.y0,r.y1)})}
     stem = "regions"
     with (directory / f"{stem}.csv").open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(records[0]))
@@ -97,7 +97,7 @@ def plot_regions(document: dict, directory: Path, *, metadata: dict) -> dict:
         f"Retreat limit: {actual['audit']['boundary_retreat']['max_allowed_mm']:.4g} mm\n"
         f"Retreat upper: {actual['audit']['boundary_retreat']['max_distance_upper_mm']:.4g} mm\n"
         f"Area budget: {actual['audit']['relative_area_budget']:.2%}\n"
-        f"Forced lines: X={stats['forced_x_lines']}, Y={stats['forced_y_lines']}\n\n"
+        f"Boundary levels: X={stats['x_boundary_levels']}, Y={stats['y_boundary_levels']}\n\n"
         f"Area min / median / max:\n{min(areas):.3g} / {statistics.median(areas):.3g} / {max(areas):.3g} mm²\n"
         f"Shortest edge min: {min(shortest):.4g} mm\n"
         f"Short edge < 1 mm: {stats['short_edge_below_1mm_count']} regions\n"

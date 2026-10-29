@@ -1,15 +1,10 @@
-"""Build a shared XY grid with strict cell-size bounds in millimetres.
-
-Every region boundary is preserved. Each forced interval is subdivided into
-as few equal cells as its maximum size permits. Sampling is checked afterwards.
-nx/ny describe the result only.
-"""
-
+"""Independent uniform Cartesian grids within each physical region, in mm."""
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Optional, Sequence
+from dataclasses import dataclass
+from typing import Sequence
+from functools import cached_property
 
 from .diagnostics import (
     GRID_RESOURCE_LIMIT,
@@ -76,132 +71,125 @@ class Cell:
                 (self.rect.y0 + self.rect.y1) / 2.0)
 
 
+
+MAX_AXIS_CELLS = 1_000_000
+MAX_GRID_CELLS = 5_000_000
+
+
+def uniform_lines(low, high, count):
+    """Shared arithmetic for planning and count-based reconstruction."""
+    return [low]+[low+(high-low)*i/count for i in range(1,count)]+[high]
+
+
+@dataclass(frozen=True)
+class RegionGrid:
+    region_id: int
+    rect: Rect
+    nx: int
+    ny: int
+
+    @cached_property
+    def x_lines(self):
+        return uniform_lines(self.rect.x0,self.rect.x1,self.nx)
+
+    @cached_property
+    def y_lines(self):
+        return uniform_lines(self.rect.y0,self.rect.y1,self.ny)
+
+    def as_dict(self):
+        return {"region_id":self.region_id,
+                "bounds_mm":{"x":[self.rect.x0,self.rect.x1],"y":[self.rect.y0,self.rect.y1]},
+                "grid_counts":{"x":self.nx,"y":self.ny,"z":1}}
+
+
 @dataclass
 class BoardGrid:
-    """The shared XY grid plus the board cells that actually exist."""
-
-    x_lines: list[float]
-    y_lines: list[float]
-    forced_x: list[float]
-    forced_y: list[float]
+    regions: list[RegionGrid]
     rectangles: list[Rect]
     cells: list[Cell]
-    #: ``{j: [cell, ...]}`` so a rasteriser can stream one horizontal band.
-    cells_by_band: dict[int, list[Cell]] = field(default_factory=dict)
-    size_constraints_mm: Optional[dict] = None
-    mesh_configuration: Optional[dict] = None
+    size_constraints_mm: dict | None = None
+    mesh_configuration: dict | None = None
 
     @property
-    def nx(self) -> int:
-        return max(0, len(self.x_lines) - 1)
-
-    @property
-    def ny(self) -> int:
-        return max(0, len(self.y_lines) - 1)
-
-    @property
-    def bounds(self) -> Optional[tuple[float, float, float, float]]:
+    def bounds(self):
         if not self.rectangles:
             return None
-        return (min(r.x0 for r in self.rectangles),
-                min(r.y0 for r in self.rectangles),
-                max(r.x1 for r in self.rectangles),
-                max(r.y1 for r in self.rectangles))
+        return (min(r.x0 for r in self.rectangles),min(r.y0 for r in self.rectangles),
+                max(r.x1 for r in self.rectangles),max(r.y1 for r in self.rectangles))
 
-    def as_dict(self) -> dict:
-        widths = [c.rect.width for c in self.cells]
-        heights = [c.rect.height for c in self.cells]
-        return {
-            "size_constraints_mm": self.size_constraints_mm,
-            "actual_edge_range_mm": {
-                "x": [min(widths), max(widths)] if widths else None,
-                "y": [min(heights), max(heights)] if heights else None},
-            "layout": "global-cartesian",
-            "mesh_configuration": self.mesh_configuration,
-            "nx": self.nx,
-            "ny": self.ny,
-            "forced_x_line_count": len(self.forced_x),
-            "forced_y_line_count": len(self.forced_y),
-            "region_count": len(self.rectangles),
-            "cell_count": len(self.cells),
-            "bounds_mm": None if self.bounds is None else list(self.bounds),
-            "x_lines_mm": self.x_lines,
-            "y_lines_mm": self.y_lines,
-            "cells": [{"region_id":c.region_id,"i":c.i,"j":c.j,**c.rect.as_dict()} for c in self.cells],
-        }
-
+    def as_dict(self):
+        widths=[c.rect.width for c in self.cells]
+        heights=[c.rect.height for c in self.cells]
+        return {"layout":"region-local-cartesian","conformity_required":False,
+                "size_constraints_mm":self.size_constraints_mm,
+                "actual_edge_range_mm":{"x":[min(widths),max(widths)] if widths else None,
+                                        "y":[min(heights),max(heights)] if heights else None},
+                "mesh_configuration":self.mesh_configuration,
+                "region_count":len(self.regions),"cell_count":len(self.cells),
+                "bounds_mm":list(self.bounds) if self.bounds else None,
+                "regions":[r.as_dict() for r in self.regions],
+                "cells":[{"region_id":c.region_id,"i":c.i,"j":c.j,**c.rect.as_dict()} for c in self.cells]}
 
 
 def _allocate(lines, maximum, axis, diagnostics):
-    left,right = lines
-    length = right-left
-    ratio = length/maximum
-    if not math.isfinite(ratio) or ratio > 1_000_000:
+    left,right=lines
+    ratio=(right-left)/maximum
+    if not math.isfinite(ratio) or ratio>MAX_AXIS_CELLS:
         diagnostics.error(GRID_RESOURCE_LIMIT,
-                          f"{axis} interval [{left:g}, {right:g}] mm requires unrepresentable count {ratio:g}")
+            f"{axis} interval [{left:g}, {right:g}] mm, length={right-left:g}, max={maximum:g}: count={ratio:g}")
         return []
-    if (native := numerical.current()) is not None:
-        return native.allocate(left, right, maximum)
-    count = max(1,math.ceil(ratio-1e-10))
-    return [left]+[left+length*i/count for i in range(1,count)]+[right]
+    return uniform_lines(left,right,max(1,math.ceil(ratio)))
 
 
-def _build_layout(rectangles, options, diags):
-    forced_x = sorted({x for r in rectangles for x in (r.x0,r.x1)})
-    forced_y = sorted({y for r in rectangles for y in (r.y0,r.y1)})
-    axes=[]
-    for axis,forced,hi in zip("XY",(forced_x,forced_y),options.max_cell_mm):
-        lines=[]
-        for left,right in zip(forced,forced[1:]):
-            part=_allocate((left,right),hi,axis,diags)
-            if not part:
-                return BoardGrid([],[],forced_x,forced_y,list(rectangles),[])
-            lines.extend(part[:-1])
-        if forced: lines.append(forced[-1])
-        axes.append(lines)
-    xs,ys=axes
-    xi={x:i for i,x in enumerate(xs)}; yi={y:j for j,y in enumerate(ys)}
-    cells=[]; occupied=set()
-    for rid,r in enumerate(rectangles):
-        for j in range(yi[r.y0],yi[r.y1]):
-            for i in range(xi[r.x0],xi[r.x1]):
-                if (i,j) in occupied:
-                    raise ValueError(f"overlapping regions at global Cartesian cell ({i},{j})")
-                occupied.add((i,j))
-                cells.append(Cell(i,j,Rect(xs[i],ys[j],xs[i+1],ys[j+1]),rid))
-    grid=BoardGrid(xs,ys,forced_x,forced_y,list(rectangles),cells,
-                   size_constraints_mm={"max":list(options.max_cell_mm)})
-    for c in cells: grid.cells_by_band.setdefault(c.j,[]).append(c)
-    return grid
+def _check_rectangles(rectangles):
+    active=[]
+    for r in sorted(rectangles,key=lambda r:r.x0):
+        if not all(math.isfinite(v) for v in r.bounds) or r.width<=0 or r.height<=0:
+            raise ValueError(f"region must have finite positive extent: {r.bounds}")
+        active=[p for p in active if p.x1>r.x0]
+        if any(min(p.y1,r.y1)>max(p.y0,r.y0) for p in active):
+            raise ValueError(f"overlapping regions at {r.bounds}")
+        active.append(r)
 
 
 def build_grid(rectangles, options, *, diagnostics=None, capacity_x=None, capacity_y=None):
-    """Propagate physical region boundaries; check sampling only afterwards."""
-    diags = diagnostics if diagnostics is not None else Diagnostics()
-    if (native := numerical.current()) is None:
-        grid = _build_layout(rectangles, options, diags)
-    else:
+    diags=diagnostics if diagnostics is not None else Diagnostics()
+    rectangles=list(rectangles)
+    _check_rectangles(rectangles)
+    regions,cells=[],[]
+    if (native:=numerical.current()) is not None:
         try:
-            xs, ys, fx, fy, rows = native.build_grid([r.bounds for r in rectangles], options.max_cell_mm)
+            axes,rows=native.build_grid([r.bounds for r in rectangles],options.max_cell_mm)
         except ValueError as exc:
             if not str(exc).startswith("resource limit:"):
                 raise
-            diags.error(GRID_RESOURCE_LIMIT, str(exc))
-            return BoardGrid([], [], [], [], list(rectangles), [])
-        cells = [Cell(i, j, Rect(xs[i], ys[j], xs[i+1], ys[j+1]), rid) for rid, i, j in rows]
-        grid = BoardGrid(xs, ys, fx, fy, list(rectangles), cells,
-                         size_constraints_mm={"max":list(options.max_cell_mm)})
-        for c in cells:
-            grid.cells_by_band.setdefault(c.j, []).append(c)
-    if diags.errors:
-        return grid
-    cells = grid.cells
+            diags.error(GRID_RESOURCE_LIMIT,str(exc))
+            return BoardGrid([],rectangles,[])
+        regions=[RegionGrid(rid,r,len(xs)-1,len(ys)-1)
+                 for rid,(r,(xs,ys)) in enumerate(zip(rectangles,axes))]
+        cells=[Cell(i,j,Rect(axes[rid][0][i],axes[rid][1][j],
+                            axes[rid][0][i+1],axes[rid][1][j+1]),rid) for rid,i,j in rows]
+    else:
+        for rid,r in enumerate(rectangles):
+            xs=_allocate((r.x0,r.x1),options.max_cell_mm[0],f"X region {rid}",diags)
+            ys=_allocate((r.y0,r.y1),options.max_cell_mm[1],f"Y region {rid}",diags)
+            if not xs or not ys:
+                return BoardGrid([],rectangles,[])
+            if len(cells)+(len(xs)-1)*(len(ys)-1)>MAX_GRID_CELLS:
+                diags.error(GRID_RESOURCE_LIMIT,f"region {rid}: more than {MAX_GRID_CELLS} modeled cells")
+                return BoardGrid([],rectangles,[])
+            regions.append(RegionGrid(rid,r,len(xs)-1,len(ys)-1))
+            cells.extend(Cell(i,j,Rect(a,b,c,d),rid) for j,(b,d) in enumerate(zip(ys,ys[1:]))
+                         for i,(a,c) in enumerate(zip(xs,xs[1:])))
+    grid=BoardGrid(regions,rectangles,cells,size_constraints_mm={"max":list(options.max_cell_mm)})
     for cell in cells:
         for axis,lo,hi,capacity in (("X",cell.rect.x0,cell.rect.x1,capacity_x),
                                     ("Y",cell.rect.y0,cell.rect.y1,capacity_y)):
             if capacity is not None and capacity(lo,hi)<1:
                 diags.error(GRID_CELL_WITHOUT_PIXEL,
-                    f"{axis} region {cell.region_id} interval [{lo:g}, {hi:g}] mm has no pixel centre; increase px/py")
+                    f"{axis} region {cell.region_id} local cell ({cell.i},{cell.j}) "
+                    f"interval [{lo:g}, {hi:g}] mm has no pixel centre; increase px/py")
                 return grid
-    if not cells: diags.error(GRID_NO_BOARD_CELLS,"no modeled board cells")
+    if not cells:
+        diags.error(GRID_NO_BOARD_CELLS,"no modeled board cells")
     return grid

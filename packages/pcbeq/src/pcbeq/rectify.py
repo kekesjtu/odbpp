@@ -24,7 +24,7 @@ MAX_INITIAL_BANDS = 10000
 # Keep the established topology-safe seed when users relax the error budget;
 # coarsening can still consume the larger distance/area budgets afterwards.
 MAX_INITIAL_STEP_MM = 0.25
-MERGE_AXIS_CLEARANCE_MM = 0.1
+MERGE_BOUNDARY_CLEARANCE_MM = 0.1
 
 
 @dataclass(frozen=True)
@@ -77,8 +77,8 @@ class RectifyOptions:
     #: Internal retry cap for coarsening when independently valid layer models
     #: become invalid after shared-domain intersection. Public budgets stay fixed.
     coarsening_retreat_mm: Optional[float] = None
-    reference_x_lines_mm: tuple[float, ...] = ()
-    reference_y_lines_mm: tuple[float, ...] = ()
+    reference_x_boundaries_mm: tuple[float, ...] = ()
+    reference_y_boundaries_mm: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.max_boundary_retreat_mm) or self.max_boundary_retreat_mm <= 0:
@@ -461,8 +461,8 @@ def _pack(bands):
 
 def _coarsen(envelopes, original, allowed, topology_source=None,
              max_boundary_retreat_mm=DEFAULT_MAX_BOUNDARY_RETREAT_MM,
-             reference_x_lines_mm=(), reference_y_lines_mm=()):
-    """Spend boundary-loss budget to reduce globally propagated axis lines.
+             reference_x_boundaries_mm=(), reference_y_boundaries_mm=()):
+    """Spend boundary-loss budget to reduce distinct physical boundary coordinates.
 
     Every candidate is a subset of the already inscribed model. Vector topology
     protects narrow spans and connections before accepting any change.
@@ -486,12 +486,12 @@ def _coarsen(envelopes, original, allowed, topology_source=None,
     def axis_counts(bands):
         xs = Counter(x for a,b,spans in bands if spans for x in (a,b))
         ys = Counter(y for _,_,spans in bands for pair in spans for y in pair)
-        xs.update(reference_x_lines_mm)
-        ys.update(reference_y_lines_mm)
+        xs.update(reference_x_boundaries_mm)
+        ys.update(reference_y_boundaries_mm)
         return xs,ys
 
     def crowded(lines):
-        return sum(0 < b-a < MERGE_AXIS_CLEARANCE_MM for a,b in zip(lines,lines[1:]))
+        return sum(0 < b-a < MERGE_BOUNDARY_CLEARANCE_MM for a,b in zip(lines,lines[1:]))
 
     rejection_counts = {"area": 0, "boundary": 0, "topology": 0, "complexity": 0}
 
@@ -606,14 +606,14 @@ def _coarsen(envelopes, original, allowed, topology_source=None,
             merged_pairs += accepted
             if not accepted:
                 break
-    return chosen, {"objective": "remove crowded forced axes through adjacent merges, then reduce axes/regions",
+    return chosen, {"objective": "simplify adjacent physical boundaries, then reduce region count",
                     "strategy": "adjacent_true_interval_intersection",
-                    "axis_clearance_preference_mm":MERGE_AXIS_CLEARANCE_MM,
-                    "crowded_axis_intervals_before":crowded_before,
-                    "crowded_axis_intervals_after":sum(crowded(sorted(c)) for c in axis_counts(chosen)),
-                    "reference_axis_counts":[len(reference_x_lines_mm),len(reference_y_lines_mm)],
-                    "axis_score_before": list(before),
-                    "axis_score_after": list(score(chosen)),
+                    "boundary_clearance_preference_mm":MERGE_BOUNDARY_CLEARANCE_MM,
+                    "crowded_boundary_intervals_before":crowded_before,
+                    "crowded_boundary_intervals_after":sum(crowded(sorted(c)) for c in axis_counts(chosen)),
+                    "reference_boundary_counts":[len(reference_x_boundaries_mm),len(reference_y_boundaries_mm)],
+                    "boundary_score_before": list(before),
+                    "boundary_score_after": list(score(chosen)),
                     "merged_adjacent_pairs": merged_pairs,
                     "partial_interval_merges":partial_merges,
                     "topology_rejected_merges": rejected_topology,
@@ -742,8 +742,8 @@ def rectify_region(region, options=None, *, diagnostics=None):
     if topology["preserved"] and lost <= allowed+1e-8 and outside <= 1e-8 and contour["within_limit"]:
         envelopes, coarsening = _coarsen(envelopes, original, allowed,
                                          topology_source, max_boundary_retreat_mm=coarsening_limit,
-                                         reference_x_lines_mm=opts.reference_x_lines_mm,
-                                         reference_y_lines_mm=opts.reference_y_lines_mm)
+                                         reference_x_boundaries_mm=opts.reference_x_boundaries_mm,
+                                         reference_y_boundaries_mm=opts.reference_y_boundaries_mm)
         model = unary_union([box(*r.bounds) for r in _pack(envelopes)])
         topology = _topology(original,model,topology_source)
         lost = original.difference(model).area

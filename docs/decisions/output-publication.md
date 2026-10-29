@@ -43,5 +43,5 @@ region CSV 是几何编号 / 尺寸表，MaterialMap 的正式数值格式为 JS
 ## 依据
 
 数值、图片和本轮状态共同发布，便于工程核对同一次计算。
-热图读取正式 MaterialMap，region 图使用实际规划矩形，网格图还原最终全局轴线。
+热图读取正式 MaterialMap，region 图使用实际规划矩形，网格图从各 region 的边界与 XYZ 网格数还原最终局部网格。
 图像语义见 [pcbeq 可视化](pcbeq/pcbeq-visualization.md)，字段见 [中间 JSON](../interfaces/intermediate-json.md)与 [MaterialMap](../interfaces/materialmap.md)。

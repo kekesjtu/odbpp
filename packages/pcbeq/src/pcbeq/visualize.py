@@ -240,15 +240,13 @@ class LayerSeries:
     z_start_mm: Optional[float] = None
     z_end_mm: Optional[float] = None
     thickness_known: bool = False
-    i: array = field(default_factory=lambda: array("i"))
-    j: array = field(default_factory=lambda: array("i"))
     kx: array = field(default_factory=lambda: array("d"))
     ky: array = field(default_factory=lambda: array("d"))
     kz: array = field(default_factory=lambda: array("d"))
     rectangles: list = field(default_factory=list)
 
     def __len__(self) -> int:
-        return len(self.i)
+        return len(self.rectangles)
 
     def k_bounds(self) -> tuple[float, float]:
         """Smallest and largest conductivity over all three directions."""
@@ -270,25 +268,13 @@ class LayerSeries:
 
 @dataclass
 class MaterialMapData:
-    """The whole JSON as a rectilinear grid plus one series per layer."""
+    """Physical rectangles per layer; edge sets describe display coordinates."""
 
     x_edges: tuple[float, ...]
     y_edges: tuple[float, ...]
     series: list[LayerSeries]
     row_count: int = 0
     skipped_invalid: int = 0
-    #: Cell-grid column index -> interval index into :attr:`x_edges`.
-    x_interval_of_column: dict[int, int] = field(default_factory=dict, repr=False)
-    y_interval_of_row: dict[int, int] = field(default_factory=dict, repr=False)
-
-    @property
-    def column_count(self) -> int:
-        return max(0, len(self.x_edges) - 1)
-
-    @property
-    def row_band_count(self) -> int:
-        return max(0, len(self.y_edges) - 1)
-
     def bounds_mm(self) -> tuple[float, float, float, float]:
         return (self.x_edges[0], self.y_edges[0],
                 self.x_edges[-1], self.y_edges[-1])
@@ -305,9 +291,10 @@ def read_materialmap(path: str) -> MaterialMapData:
         document = read_document(path)
     except (OSError, ValueError) as exc:
         raise VisualizeError(f"cannot read MaterialMap JSON {path}: {exc}") from exc
-    xs = tuple(sorted({x for r in document.regions for x in r.x_lines_mm}))
-    ys = tuple(sorted({y for r in document.regions for y in r.y_lines_mm}))
-    xi, yi = {x:i for i,x in enumerate(xs)}, {y:j for j,y in enumerate(ys)}
+    # These coordinate sets describe display bounds only; no common lattice is
+    # inferred. PolyCollection uses every reconstructed cell's full rectangle.
+    xs = tuple(sorted({x for r in document.regions for x in r.axis_lines("x")}))
+    ys = tuple(sorted({y for r in document.regions for y in r.axis_lines("y")}))
     layers = {}
     count = 0
     for region, bounds, values in iter_cells(document):
@@ -318,14 +305,10 @@ def read_materialmap(path: str) -> MaterialMapData:
                 z_start_mm=a, z_end_mm=b, thickness_known=a is not None and b is not None)
         series = layers[name]
         series.rectangles.append(bounds)
-        series.i.append(xi[bounds[0]])
-        series.j.append(yi[bounds[1]])
         series.kx.append(values[0]); series.ky.append(values[1]); series.kz.append(values[2])
         count += 1
     return MaterialMapData(x_edges=xs, y_edges=ys, series=list(layers.values()),
-        row_count=count, skipped_invalid=0,
-        x_interval_of_column={i:i for i in range(len(xs)-1)},
-        y_interval_of_row={i:i for i in range(len(ys)-1)})
+        row_count=count, skipped_invalid=0)
 
 
 # ---------------------------------------------------------------------------

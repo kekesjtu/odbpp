@@ -95,7 +95,7 @@ def render_index(rows):
     for name, source, directory, data, report in rows:
         relative = escape(directory.relative_to(OUT).as_posix())
         items = ' · '.join(f'<a href="{relative}/{p}">{label}</a>' for p, label in links)
-        lines.append(f'<tr><td>{escape(name)}</td><td>{items}</td><td>{report["grid"]["nx"]}×{report["grid"]["ny"]}</td></tr>')
+        lines.append(f'<tr><td>{escape(name)}</td><td>{items}</td><td>{report["grid"]["region_count"]} regions / {report["grid"]["cell_count"]} cells</td></tr>')
     return "\n".join(lines + ["</table></html>"])
 
 def prune_unmatched(inputs):

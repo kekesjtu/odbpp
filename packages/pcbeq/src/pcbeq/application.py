@@ -170,7 +170,7 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     equivalent_layers = [r for r in result.layers if r.status == "equivalent"]
     print(f"step {step_name!r}: {count} equivalent cell(s) over "
           f"{len(equivalent_layers)} layer(s); raster {result.raster_px}x{result.raster_py}, "
-          f"grid {result.grid.nx}x{result.grid.ny}, "
+          f"{len(result.grid.regions)} local Cartesian grid(s), "
           f"{len(result.grid.cells)} board cell(s)")
     for report in result.layers:
         if report.status == "equivalent":
@@ -239,7 +239,7 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
                 if args.regions:
                     links.append('<a href="regions/regions.svg">Region geometry</a>')
                 if args.grids:
-                    links.append('<a href="grids/cartesian-grid.svg">Global Cartesian grid</a>')
+                    links.append('<a href="grids/cartesian-grid.svg">Region-local Cartesian grids</a>')
                 if links:
                     from pathlib import Path
                     page = Path(gallery_path)
@@ -342,7 +342,7 @@ def _gallery_note(result, args) -> str:
     """The provenance a picture cannot show: what was skipped and with what."""
     skipped = [r for r in result.layers if r.status != "equivalent"]
     parts = [f"raster {result.raster_px}x{result.raster_py}px",
-             f"grid {result.grid.nx}x{result.grid.ny}",
+             f"{len(result.grid.regions)} region-local grids, {len(result.grid.cells)} XY cells",
              "介质层钻孔按实心铜计算，铜层仅依据铜图案"]
     if result.grid.size_constraints_mm:
         limits = result.grid.size_constraints_mm

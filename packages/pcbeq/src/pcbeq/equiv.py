@@ -483,7 +483,7 @@ def _evaluate_layer(name, type_name, domain, black, z_start, z_end,
     d2,c2=materials.white.density_kg_m3,materials.white.specific_heat_j_kgk
     emitted=no_pixel=0
     minimum_samples=(grid.mesh_configuration or {}).get("minimum_samples_per_axis",1)
-    # Row-prefix integration avoids rescanning wide regions for each global cell.
+    # Row-prefix integration reuses statistics for matching physical row bands.
     if sampling_plan is None:
         sampling_plan = _sampling_plan(grid, x_axis, y_axis)
     for b0, b1, samples, xlo, xhi in sampling_plan:
@@ -526,10 +526,11 @@ def _sampling_plan(grid, x_axis, y_axis):
     bands = {}
     x_ranges = {}
     for cell in grid.cells:
-        if cell.i not in x_ranges:
-            x_ranges[cell.i] = x_axis.range_for(cell.rect.x0, cell.rect.x1)
-        a0, a1 = x_ranges[cell.i]
-        bands.setdefault(cell.j, []).append((cell, a0, a1))
+        x_key = (cell.rect.x0,cell.rect.x1)
+        if x_key not in x_ranges:
+            x_ranges[x_key] = x_axis.range_for(*x_key)
+        a0, a1 = x_ranges[x_key]
+        bands.setdefault((cell.rect.y0,cell.rect.y1), []).append((cell, a0, a1))
     plan = []
     for samples in bands.values():
         first = samples[0][0]
@@ -608,14 +609,14 @@ def _coarsen_shared_partition(rectangles, membership, originals, options):
     """
     from shapely.geometry import box
     from shapely.ops import unary_union
-    from .rectify import MERGE_AXIS_CLEARANCE_MM
+    from .rectify import MERGE_BOUNDARY_CLEARANCE_MM
     owners=[frozenset(key for key,ids in membership.items() if i in ids) for i in range(len(rectangles))]
     models={key:unary_union([box(*rectangles[i].bounds) for i in ids]) for key,ids in membership.items()}
     accepted=rejected=0
     def score(rows):
         xs={v for r in rows for v in (r.x0,r.x1)}
         ys=sorted({v for r in rows for v in (r.y0,r.y1)})
-        crowded=sum(b-a<MERGE_AXIS_CLEARANCE_MM for a,b in zip(ys,ys[1:]))
+        crowded=sum(b-a<MERGE_BOUNDARY_CLEARANCE_MM for a,b in zip(ys,ys[1:]))
         return len(xs)+len(ys),crowded,len(rows)
     for _ in range(256):
         before=score(rectangles)
@@ -642,7 +643,7 @@ def _coarsen_shared_partition(rectangles, membership, originals, options):
                 if high<=low or (left.y0==right.y0 and left.y1==right.y1):
                     continue
                 affected=set(li+ri)
-                # Sharing one limiting edge can remove a propagated axis even
+                # Sharing one limiting edge can simplify a boundary coordinate even
                 # when sharing both edges would exceed the contour budget.
                 for merge_low,merge_high in ((True,True),(True,False),(False,True)):
                     replacements={i:Rect(rectangles[i].x0,
@@ -707,8 +708,8 @@ def _plan_geometry_once(step, options, diagnostics):
 
     step_original=profile_shape(_region_from_polygons(domains[profile_id].get("polygons")))
     basis_options=replace(options.rectify,basis_mm=step_original.bounds,
-        reference_x_lines_mm=tuple(sorted({v for r in rectification.rectangles for v in (r.x0,r.x1)})),
-        reference_y_lines_mm=tuple(sorted({v for r in rectification.rectangles for v in (r.y0,r.y1)})))
+        reference_x_boundaries_mm=tuple(sorted({v for r in rectification.rectangles for v in (r.x0,r.x1)})),
+        reference_y_boundaries_mm=tuple(sorted({v for r in rectification.rectangles for v in (r.y0,r.y1)})))
     originals={profile_id:step_original}
     plans={profile_id:rectification}
     effective_regions={profile_id:_region_from_polygons(domains[profile_id].get("polygons"))}
