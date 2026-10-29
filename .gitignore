@@ -1,6 +1,8 @@
 # Scratch space and build-backend byproducts
 /tmp/
 build/
+/target/
+*.pyd
 .tmp_research/
 out/
 

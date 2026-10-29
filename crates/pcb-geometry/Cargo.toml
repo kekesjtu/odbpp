@@ -1,0 +1,11 @@
+[package]
+name = "pcb-geometry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Internal metric polygon and curve kernels for PCB products"
+license.workspace = true
+publish = false
+
+[dependencies]
+clipper2-rust.workspace = true

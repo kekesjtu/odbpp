@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Optional
 
 from .geometry import Region, Ring
+from . import numerical
 from .diagnostics import RECTIFY_AREA_ERROR, RECTIFY_EMPTY_PROFILE, Diagnostics
 
 __all__ = ["Rect", "RectifyOptions", "RectifyResult", "rectify_region",
@@ -413,6 +414,8 @@ def _envelope(region, a, b, index=None):
     their exact one-sided endpoint limits; an inward probe would miss an edge
     extremum, and rounding the resulting Y values can expand the rectangle.
     """
+    if (native := numerical.current()) is not None:
+        return native.envelope([r.points for r in region.rings], a, b)
     events,edges = (index or _ProfileIndex(region)).slab(a,b)
     spans = None
     for left,right in zip(events, events[1:]):

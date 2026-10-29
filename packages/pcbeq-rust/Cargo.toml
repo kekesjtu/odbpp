@@ -1,0 +1,15 @@
+[package]
+name = "pcbeq-rust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "PCB raster, grid and thermal equivalence numerical kernels"
+license.workspace = true
+
+[lib]
+name = "_pcbeq_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3.workspace = true
+pcb-geometry.workspace = true

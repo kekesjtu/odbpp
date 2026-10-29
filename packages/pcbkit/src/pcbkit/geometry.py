@@ -41,6 +41,7 @@ from typing import Iterable, Optional, Sequence
 from .errors import UnsupportedFeatureError
 from .model import ContourPart, Point, Polygon, SurfaceGeometry
 from .symbols import StandardSymbol
+from . import numerical
 
 __all__ = [
     "DEFAULT_SAGITTA_MM",
@@ -111,6 +112,8 @@ def arc_vertices(
 ) -> list[Point]:
     """Points along an arc given in polar form, **including both endpoints**."""
     opts = options or TessellationOptions()
+    if (native := numerical.current()) is not None:
+        return native.arc_vertices(center, radius, start_angle, sweep, opts.sagitta_mm, opts.max_segments)
     if radius <= 0.0:
         return []
     count = _segment_count(sweep, radius, opts)
@@ -138,6 +141,9 @@ def arc_points(
     authored start/end radii differ by a rounding amount.
     """
     opts = options or TessellationOptions()
+
+    if (native := numerical.current()) is not None:
+        return native.arc_points(start, end, center, clockwise, opts.sagitta_mm, opts.max_segments)
 
     dx1, dy1 = start[0] - center[0], start[1] - center[1]
     dx2, dy2 = end[0] - center[0], end[1] - center[1]
@@ -248,6 +254,8 @@ def signed_area(points: Sequence[Point]) -> float:
     A duplicated closing point contributes nothing, so either convention is
     accepted.
     """
+    if (native := numerical.current()) is not None:
+        return native.signed_area(points)
     total = 0.0
     n = len(points)
     for i in range(n):
@@ -296,6 +304,8 @@ def bounding_box(points: Iterable[Point]) -> tuple[float, float, float, float]:
 
 def rotate_points(points: Sequence[Point], degrees: float) -> list[Point]:
     """Rotate **clockwise** by *degrees* (spec p.34: ODB++ rotation is clockwise)."""
+    if (native := numerical.current()) is not None:
+        return native.transform_points(points, degrees, False)
     theta = math.radians(degrees)
     cos_t, sin_t = math.cos(theta), math.sin(theta)
     return [(x * cos_t + y * sin_t, -x * sin_t + y * cos_t) for x, y in points]
@@ -328,6 +338,8 @@ def transform_points(
 def _circle(diameter: float, opts: TessellationOptions) -> list[Point]:
     """Circle centred on the origin, clockwise from angle 0."""
     radius = diameter * 0.5
+    if (native := numerical.current()) is not None:
+        return native.arc_vertices((0., 0.), radius, 0., -_TWO_PI, opts.sagitta_mm, opts.max_segments)[:-1]
     if radius <= 0.0:
         return []
     count = _segment_count(_TWO_PI, radius, opts)

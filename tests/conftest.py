@@ -18,6 +18,25 @@ FIXTURES = REPO_ROOT / "tests" / "fixtures"
 CASES = REPO_ROOT / "cases"
 
 
+def pytest_addoption(parser):
+    if getattr(parser, "pcb_numerical_option_registered", False):
+        return
+    parser.pcb_numerical_option_registered = True
+    parser.addoption("--numerical-backend", choices=("python", "rust"), default="python",
+                     help="Run the shared numerical acceptance suite against Python or Rust")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def numerical_backend(request):
+    if request.config.getoption("--numerical-backend") == "rust":
+        from pcbkit_rust import backend as parser_backend
+        from pcbeq_rust import backend as equivalent_backend
+        with parser_backend(), equivalent_backend():
+            yield
+    else:
+        yield
+
+
 def fixture_path(name: str) -> Path:
     path = FIXTURES / name
     if not path.exists():

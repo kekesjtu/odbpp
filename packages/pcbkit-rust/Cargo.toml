@@ -1,0 +1,15 @@
+[package]
+name = "pcbkit-rust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "ODB++ geometry numerical kernels with Python bindings"
+license.workspace = true
+
+[lib]
+name = "_pcbkit_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3.workspace = true
+pcb-geometry.workspace = true

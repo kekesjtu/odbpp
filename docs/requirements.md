@@ -1,6 +1,7 @@
 # ODB++ 解析与 PCB 物性等效需求
 
 本文件定义 pcbkit / pcbeq 的功能范围、物理约束和验收要求，开发方向以此为准。
+产品提供 Python 版和独立安装的 `pcbkit-rust` / `pcbeq-rust` 数值核心版；可视化与图表统一使用 Python。各版本遵守相同的物理语义、JSON 契约和验收标准，Python 版保留用于对照。
 协作与开发规范见 [AGENTS.md](../AGENTS.md)，实现约定和资料入口见 [项目文档](../README.md#文档索引)。
 
 ## 总体数据流结构

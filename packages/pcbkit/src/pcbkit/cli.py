@@ -14,12 +14,12 @@ from .symbols import parse_standard_symbol
 from .application import (summarize, _run_export, _print_info, _print_layers,
     _print_symbols, _print_diagnostics, _print_summary)
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(*, prog="pcbkit") -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pcbkit",
+        prog=prog,
         description="Inspect an ODB++ v8.1 job (directory, .tgz or .zip).",
     )
-    parser.add_argument("--version", action="version", version=f"pcbkit {__version__}")
+    parser.add_argument("--version", action="version", version=f"{prog} {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def common(p: argparse.ArgumentParser) -> None:
@@ -77,10 +77,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Optional[Sequence[str]] = None, *, prog="pcbkit") -> int:
     import time
     started = time.perf_counter()
-    args = build_parser().parse_args(argv)
+    args = build_parser(prog=prog).parse_args(argv)
     args._started = started
 
     if args.command == "export":

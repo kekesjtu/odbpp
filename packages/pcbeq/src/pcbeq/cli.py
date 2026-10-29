@@ -8,9 +8,9 @@ from .diagnostics import MATERIALS_DEFAULT_USED, VISUALIZE_FAILED, Diagnostics
 
 from .application import run
 
-def build_parser():
-    parser = argparse.ArgumentParser(prog="pcbeq", description="PCB material equivalence from intermediate JSON only")
-    parser.add_argument("--version", action="version", version=f"pcbeq {__version__}")
+def build_parser(*, prog="pcbeq"):
+    parser = argparse.ArgumentParser(prog=prog, description="PCB material equivalence from intermediate JSON only")
+    parser.add_argument("--version", action="version", version=f"{prog} {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     p_eq = sub.add_parser(
         "run",

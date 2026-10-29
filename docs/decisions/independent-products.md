@@ -2,8 +2,9 @@
 
 ## 决策
 
-仓库以 uv workspace 管理 `packages/pcbkit` 与 `packages/pcbeq`，两者分别构建和发布 wheel / sdist。
-根项目是开发工作区，引用两个本地成员并统一锁定依赖。
+仓库以 uv workspace 管理 `pcbkit`、`pcbeq`、`pcbkit-rust` 与 `pcbeq-rust`，四个包分别构建和发布 wheel / sdist。
+根项目是开发工作区，统一锁定 Python 依赖；Cargo workspace 及 Cargo.lock 管理 Rust 核心。
+Python 版独立使用，Rust 版复用所属产品的 Python 输入、契约校验、工程核对及图表层。语言职责见 [Rust 数值核心](rust-numerical-cores.md)。
 
 `pcbkit` 负责 ODB++ 读取、单位解释、几何展开、极性和拓扑、逐层域及绝对 Z。
 `pcbeq` 读取中间 JSON 作为唯一板数据来源，独立完成 region、网格、材料采样和 MaterialMap。

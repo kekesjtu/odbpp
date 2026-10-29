@@ -7,16 +7,19 @@ dependencies = ["pcbkit", "pcbeq"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
+rust = ["pcbkit-rust", "pcbeq-rust"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/pcbkit", "packages/pcbeq"]
+members = ["packages/pcbkit", "packages/pcbeq", "packages/pcbkit-rust", "packages/pcbeq-rust"]
 
 [tool.uv.sources]
 pcbkit = { workspace = true }
 pcbeq = { workspace = true }
+pcbkit-rust = { workspace = true }
+pcbeq-rust = { workspace = true }
 
 [tool.pytest.ini_options]
 pythonpath = [".", "tests", "packages/pcbeq/tests", "packages/pcbkit/tests"]

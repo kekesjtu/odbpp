@@ -1,0 +1,30 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pcbkit-rust"
+version = "0.1.0"
+description = "Rust numerical backend and Python visualization for pcbkit"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pcbkit==0.1.0"]
+
+[project.scripts]
+pcbkit-rust = "pcbkit_rust.cli:main"
+
+[tool.maturin]
+python-source = "python"
+module-name = "pcbkit_rust._pcbkit_native"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../../Cargo.toml" },
+    { file = "../../Cargo.lock" },
+    { file = "../../crates/pcb-geometry/Cargo.toml" },
+    { file = "../../crates/pcb-geometry/src/**/*.rs" },
+]

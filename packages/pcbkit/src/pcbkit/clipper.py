@@ -32,6 +32,7 @@ from functools import cached_property
 from typing import Iterable, Iterator, Optional, Sequence
 
 import pyclipper
+from . import numerical
 
 from .geometry import TessellationOptions, bounding_box, is_clockwise
 from .model import ContourPart, Point, Polygon, SurfaceGeometry
@@ -148,6 +149,10 @@ class Region:
 # ---------------------------------------------------------------------------
 # conversion helpers
 # ---------------------------------------------------------------------------
+
+def _native_region(rings) -> Region:
+    return Region([Ring(tuple(points), hole) for points, hole in rings])
+
 
 def _to_clipper(points: Sequence[Point]) -> list[tuple[int, int]]:
     """Quantise a ring, dropping consecutive duplicates.
@@ -311,6 +316,9 @@ def union(*regions: Region) -> Region:
     if len(rings) == 1:
         return Region([rings[0]])
 
+    if (native := numerical.current()) is not None:
+        return _native_region(native.boolean_op("union", [(r.points,r.is_hole) for r in rings], [], SCALE))
+
     engine = pyclipper.Pyclipper()
     # Every ring is added as a subject: the NONZERO fill rule then does the work,
     # and a hole ring (counter-clockwise) correctly punches through its island
@@ -332,6 +340,8 @@ def difference(subject: Region, clip: Region) -> Region:
         return Region()
     if not clip:
         return Region(list(subject.rings))
+    if (native := numerical.current()) is not None:
+        return _native_region(native.boolean_op("difference", numerical.rings(subject), numerical.rings(clip), SCALE))
     engine = _clipper_for(subject.rings, clip.rings)
     tree = engine.Execute2(pyclipper.CT_DIFFERENCE, _FILL, _FILL)
     return _region_from_tree(tree)
@@ -356,6 +366,9 @@ def intersection(*regions: Region) -> Region:
     for other in regions[1:]:
         if not other:
             return Region()
+        if (native := numerical.current()) is not None:
+            result = _native_region(native.boolean_op("intersection", numerical.rings(result), numerical.rings(other), SCALE))
+            continue
         engine = _clipper_for(result.rings, other.rings)
         result = _region_from_tree(
             engine.Execute2(pyclipper.CT_INTERSECTION, _FILL, _FILL)
@@ -413,6 +426,9 @@ def snap_to_grid(region: Region, digits: int) -> tuple[Region, int]:
         return Region(), 0
 
     factor = float(10 ** max(0, int(digits)))
+    if (native := numerical.current()) is not None:
+        rings, collapsed = native.snap_to_grid(numerical.rings(region), factor)
+        return _native_region(rings), collapsed
     engine = pyclipper.Pyclipper()
     collapsed = 0
     added = 0
@@ -487,6 +503,8 @@ def simplify(region: Region) -> Region:
     """
     if not region:
         return Region()
+    if (native := numerical.current()) is not None:
+        return _native_region(native.boolean_op("union", numerical.rings(region), [], SCALE))
     engine = pyclipper.Pyclipper()
     for ring in region.rings:
         engine.AddPath(_to_clipper(ring.points), pyclipper.PT_SUBJECT, True)
@@ -512,6 +530,8 @@ def sweep_polyline(pattern: Iterable[Point], path: Sequence[Point]) -> Region:
     swept along a 5 mm 45-degree line is ``1 + 5*sqrt(2)*sqrt(2) = 11`` mm^2, not
     the 8 mm^2 a rotating aperture would give.
     """
+    if (native := numerical.current()) is not None:
+        return _native_region(native.sweep_paths([list(pattern)], [list(path)]))
     pattern_pts = _to_clipper(list(pattern))
     path_pts = _to_clipper(list(path))
     if len(pattern_pts) < 3 or len(path_pts) < 2:
@@ -605,6 +625,9 @@ def stroke_paths(paths: Iterable[Sequence[Point]], radius_mm: float,
         return Region()
     opts = options or TessellationOptions()
 
+    if (native := numerical.current()) is not None:
+        return _native_region(native.stroke_paths([list(p) for p in paths], radius_mm, opts.sagitta_mm))
+
     offsetter = pyclipper.PyclipperOffset()
     added = False
     for points in paths:
@@ -641,6 +664,9 @@ def sweep_paths(patterns: Iterable[Sequence[Point]],
     """
     from .geometry import signed_area
 
+    if (native := numerical.current()) is not None:
+        return _native_region(native.sweep_paths([list(p) for p in patterns], [list(p) for p in paths]))
+
     clipper_paths: list[list[tuple[int, int]]] = []
     for points in paths:
         path = _to_clipper(points)
@@ -676,6 +702,9 @@ def offset(region: Region, delta_mm: float, options=None) -> Region:
     if not region or delta_mm == 0.0:
         return Region()
     opts = options or TessellationOptions()
+
+    if (native := numerical.current()) is not None:
+        return _native_region(native.offset(numerical.rings(region), delta_mm, opts.sagitta_mm))
 
     offsetter = pyclipper.PyclipperOffset()
     added = False

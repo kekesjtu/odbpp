@@ -1,0 +1,30 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pcbeq-rust"
+version = "0.1.0"
+description = "Rust numerical backend and Python charts for pcbeq"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pcbeq==0.1.0"]
+
+[project.scripts]
+pcbeq-rust = "pcbeq_rust.cli:main"
+
+[tool.maturin]
+python-source = "python"
+module-name = "pcbeq_rust._pcbeq_native"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../../Cargo.toml" },
+    { file = "../../Cargo.lock" },
+    { file = "../../crates/pcb-geometry/Cargo.toml" },
+    { file = "../../crates/pcb-geometry/src/**/*.rs" },
+]

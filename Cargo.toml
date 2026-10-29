@@ -1,0 +1,18 @@
+[workspace]
+members = ["crates/pcb-geometry", "packages/pcbkit-rust", "packages/pcbeq-rust"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "LicenseRef-Proprietary"
+
+[workspace.dependencies]
+pyo3 = { version = "0.27", features = ["abi3-py310"] }
+clipper2-rust = "1.2"
+pcb-geometry = { path = "crates/pcb-geometry" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

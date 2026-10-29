@@ -18,6 +18,7 @@ from .diagnostics import (
     Diagnostics,
 )
 from .rectify import Rect
+from . import numerical
 
 __all__ = ["GridOptions", "Cell", "BoardGrid", "build_grid"]
 
@@ -139,13 +140,13 @@ def _allocate(lines, maximum, axis, diagnostics):
         diagnostics.error(GRID_RESOURCE_LIMIT,
                           f"{axis} interval [{left:g}, {right:g}] mm requires unrepresentable count {ratio:g}")
         return []
+    if (native := numerical.current()) is not None:
+        return native.allocate(left, right, maximum)
     count = max(1,math.ceil(ratio-1e-10))
     return [left]+[left+length*i/count for i in range(1,count)]+[right]
 
 
-def build_grid(rectangles, options, *, diagnostics=None, capacity_x=None, capacity_y=None):
-    """Propagate every region boundary into shared Cartesian axis lines."""
-    diags = diagnostics if diagnostics is not None else Diagnostics()
+def _build_layout(rectangles, options, diags):
     forced_x = sorted({x for r in rectangles for x in (r.x0,r.x1)})
     forced_y = sorted({y for r in rectangles for y in (r.y0,r.y1)})
     axes=[]
@@ -171,6 +172,30 @@ def build_grid(rectangles, options, *, diagnostics=None, capacity_x=None, capaci
     grid=BoardGrid(xs,ys,forced_x,forced_y,list(rectangles),cells,
                    size_constraints_mm={"max":list(options.max_cell_mm)})
     for c in cells: grid.cells_by_band.setdefault(c.j,[]).append(c)
+    return grid
+
+
+def build_grid(rectangles, options, *, diagnostics=None, capacity_x=None, capacity_y=None):
+    """Propagate physical region boundaries; check sampling only afterwards."""
+    diags = diagnostics if diagnostics is not None else Diagnostics()
+    if (native := numerical.current()) is None:
+        grid = _build_layout(rectangles, options, diags)
+    else:
+        try:
+            xs, ys, fx, fy, rows = native.build_grid([r.bounds for r in rectangles], options.max_cell_mm)
+        except ValueError as exc:
+            if not str(exc).startswith("resource limit:"):
+                raise
+            diags.error(GRID_RESOURCE_LIMIT, str(exc))
+            return BoardGrid([], [], [], [], list(rectangles), [])
+        cells = [Cell(i, j, Rect(xs[i], ys[j], xs[i+1], ys[j+1]), rid) for rid, i, j in rows]
+        grid = BoardGrid(xs, ys, fx, fy, list(rectangles), cells,
+                         size_constraints_mm={"max":list(options.max_cell_mm)})
+        for c in cells:
+            grid.cells_by_band.setdefault(c.j, []).append(c)
+    if diags.errors:
+        return grid
+    cells = grid.cells
     for cell in cells:
         for axis,lo,hi,capacity in (("X",cell.rect.x0,cell.rect.x1,capacity_x),
                                     ("Y",cell.rect.y0,cell.rect.y1,capacity_y)):

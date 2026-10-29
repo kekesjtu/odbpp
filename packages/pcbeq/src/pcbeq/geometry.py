@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Iterable, Iterator, Optional, Sequence
 import pyclipper
+from . import numerical
 
 Point = tuple[float, float]
 SCALE = 1_000_000
@@ -122,6 +123,10 @@ class Region:
 
 
 
+def _native_region(rings) -> Region:
+    return Region([Ring(tuple(points), hole) for points, hole in rings])
+
+
 def _to_clipper(points: Sequence[Point]) -> list[tuple[int, int]]:
     """Quantise a ring, dropping consecutive duplicates.
 
@@ -225,6 +230,9 @@ def union(*regions: Region) -> Region:
     if len(rings) == 1:
         return Region([rings[0]])
 
+    if (native := numerical.current()) is not None:
+        return _native_region(native.boolean_op("union", [(r.points,r.is_hole) for r in rings], [], SCALE))
+
     engine = pyclipper.Pyclipper()
     # Every ring is added as a subject: the NONZERO fill rule then does the work,
     # and a hole ring (counter-clockwise) correctly punches through its island
@@ -246,6 +254,8 @@ def difference(subject: Region, clip: Region) -> Region:
         return Region()
     if not clip:
         return Region(list(subject.rings))
+    if (native := numerical.current()) is not None:
+        return _native_region(native.boolean_op("difference", numerical.rings(subject), numerical.rings(clip), SCALE))
     engine = _clipper_for(subject.rings, clip.rings)
     tree = engine.Execute2(pyclipper.CT_DIFFERENCE, _FILL, _FILL)
     return _region_from_tree(tree)
@@ -270,6 +280,9 @@ def intersection(*regions: Region) -> Region:
     for other in regions[1:]:
         if not other:
             return Region()
+        if (native := numerical.current()) is not None:
+            result = _native_region(native.boolean_op("intersection", numerical.rings(result), numerical.rings(other), SCALE))
+            continue
         engine = _clipper_for(result.rings, other.rings)
         result = _region_from_tree(
             engine.Execute2(pyclipper.CT_INTERSECTION, _FILL, _FILL)

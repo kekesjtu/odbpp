@@ -26,6 +26,7 @@ from pydantic import ValidationError
 from .grid import BoardGrid, GridOptions, build_grid
 from .materials import MaterialBook, ResolvedMaterials
 from .raster import LayerMask, RasterAxis, region_edges
+from . import numerical
 from .rectify import (Rect, RectifyOptions, RectifyResult, rectify_region,
                       profile_shape, profile_region, _topology, boundary_retreat)
 
@@ -67,8 +68,11 @@ def pipeline_fingerprint() -> str:
     from pathlib import Path
     digest = hashlib.sha256()
     for name in ("equiv.py", "geometry.py", "rectify.py", "grid.py", "raster.py",
-                 "materials.py", "visualize.py", "mesh.py", "intermediate.py", "materialmap.py"):
+                 "materials.py", "visualize.py", "mesh.py", "intermediate.py", "materialmap.py",
+                 "numerical.py", "rust_sampling.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
+    if (native := numerical.current()) is not None:
+        digest.update(Path(native.__file__).read_bytes())
     return digest.hexdigest()
 
 
@@ -174,6 +178,9 @@ class EquivalenceResult:
     #: True when a problem makes the whole run untrustworthy (unknown drill span,
     #: unsupported schema, ...).  The caller must not write results silently.
     fatal: bool = False
+    numerical_backend: str = field(default_factory=lambda: "rust" if numerical.current() else "python")
+    implementation_fingerprint: str = field(default_factory=pipeline_fingerprint)
+    native_resource_limits: dict = field(default_factory=numerical.resource_limits)
 
     @property
     def cell_count(self) -> int:
@@ -182,7 +189,9 @@ class EquivalenceResult:
     def metadata(self, *, source_path: Optional[str] = None,
                  step_name: Optional[str] = None) -> dict:
         return {
-            "pipeline_fingerprint": pipeline_fingerprint(),
+            "pipeline_fingerprint": self.implementation_fingerprint,
+            **({"numerical_backend": "rust", "native_resource_limits": self.native_resource_limits}
+               if self.numerical_backend == "rust" else {}),
             "source": {
                 "path": source_path,
                 "step": step_name,
@@ -449,6 +458,11 @@ def _evaluate_layer(name, type_name, domain, black, z_start, z_end,
                     emit, *, mask=None, step_domain=None,
                     sampling_plan=None):
     """Independent full-board scanlines; integrate complete Cartesian cells."""
+    if (native := numerical.current()) is not None:
+        from .rust_sampling import evaluate_layer
+        return evaluate_layer(native, name, type_name, domain, black, z_start, z_end,
+            thickness_known, materials, grid, x_axis, y_axis, diagnostics, emit,
+            mask=mask, step_domain=step_domain, sampling_plan=sampling_plan)
     import numpy as np
     from .rectify import _intersect_spans
     # Exactly one layer resident. Complex material patterns are never booleaned.
