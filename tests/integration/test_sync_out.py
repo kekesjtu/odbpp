@@ -32,7 +32,7 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16", "--max-cell-mm", "10"])
 
     sync_out.main()
-    result = out / "minimal-test-odb"
+    result = out / "minimal-test-odb" / "python"
     preview = result / "pcbkit/intermediate.json"
     csv = result / "pcbeq/materialmap.json"
     meta = result / "pcbeq/diagnostics/run.json"
@@ -44,6 +44,8 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     assert len(list((result / "pcbeq/heatmaps").glob("*.png"))) == 2
     assert json.loads(meta.read_text(encoding="utf-8"))["raster"]["px"] == 16
     index = (out / "index.html").read_text(encoding="utf-8")
+    assert "minimal-test-odb/python/pcbeq/materialmap.json" in index
+    assert not (result.parent / "pcbkit").exists()
     assert "pcbeq/materialmap.json" in index
     assert "pcbeq/index.html" in index
     assert "pcbeq/grids/cartesian-grid.svg" in index
@@ -55,8 +57,13 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     assert grid_stats["cell_count"]==final_grid["cell_count"]
 
     before = csv.stat().st_mtime_ns
+    rust = result.parent / "rust"
+    (rust / "pcbeq/diagnostics").mkdir(parents=True)
+    shutil.copyfile(meta, rust / "pcbeq/diagnostics/run.json")
+    shutil.copyfile(csv, rust / "pcbeq/materialmap.json")
     sync_out.main()
     assert csv.stat().st_mtime_ns == before
+    assert "minimal-test-odb/rust/pcbeq/materialmap.json" in (out / "index.html").read_text(encoding="utf-8")
 
     stale = result / "pcbeq/masks" / "old-layer.png"
     stale.write_bytes(b"obsolete")
@@ -92,8 +99,17 @@ def test_sync_out_writes_and_reuses_all_case_artifacts(tmp_path, monkeypatch):
     assert sync_out.existing_equivalence(result, preview, px=16, py=16,
                                          max_cell_mm=(25,20)) is None
     before = csv.stat().st_mtime_ns
+    orphan = out / "obsolete" / "python"
+    (orphan / "pcbeq/diagnostics").mkdir(parents=True)
+    shutil.copyfile(meta, orphan / "pcbeq/diagnostics/run.json")
+    shutil.copyfile(csv, orphan / "pcbeq/materialmap.json")
+    monkeypatch.setattr(sys, "argv", ["sync_out.py", "--px", "16", "--py", "16",
+                                      "--max-cell-mm", "25", "20", "--heatmap-grid", "--prune"])
     sync_out.main()
     assert csv.stat().st_mtime_ns == before
+    index = (out / "index.html").read_text(encoding="utf-8")
+    assert not orphan.parent.exists() and "obsolete" not in index
+    assert "minimal-test-odb/rust/pcbeq/materialmap.json" in index
 
 
 def test_sync_rejects_invalid_size_bounds(monkeypatch):

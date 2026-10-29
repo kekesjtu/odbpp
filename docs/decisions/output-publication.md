@@ -3,7 +3,7 @@
 ## 正式产物
 
 ```text
-out/<case>/
+out/<case>/<python|rust>/
   pcbkit/
     intermediate.json
     preview.svg, preview.html
@@ -22,7 +22,7 @@ out/<case>/
     pcbeq.stdout.log, pcbeq.stderr.log
 ```
 
-`out/index.html` 索引各案例。解析器与等效器各有运行报告和产物清单；诊断独立于两个数值接口。
+`python/` 与 `rust/` 是同一 case 下的并列目录，分别存放对应版本的全部产物与管道报告；`out/index.html` 同时索引两种版本。解析器与等效器各有运行报告和产物清单；诊断独立于两个数值接口。
 region CSV 是几何编号 / 尺寸表，MaterialMap 的正式数值格式为 JSON。
 
 ## 发布决策

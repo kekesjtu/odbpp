@@ -19,7 +19,7 @@ uv run --all-extras python tools/<脚本> --help
 | `refresh_viewer_outputs.py` | 仅替换预览内联 CSS/JS 并检查其余载荷一致性 | 预览 HTML → 原位更新及默认 tmp/validation/reports/viewer-output-validation.json |
 
 `cases/` 是本地真实输入目录。合成夹具位于 `tests/fixtures/`，测试和基准过程输出位于 `tmp/`，正式结果位于 `out/`。
-Rust 管道通过 `run_pipeline.py --pcbkit-exe pcbkit-rust --pcbeq-exe pcbeq-rust` 选择两个独立入口；需要同时核对 Python 版时，可将 Rust 结果放在对应 case 的 `rust/` 子目录。
+正式案例按 `out/<case>/python/` 与 `out/<case>/rust/` 分别存放两种版本，各自包含 `pcbkit/`、`pcbeq/` 与 `pipeline/`。`sync_out.py` 维护 Python 产物，总索引保留两种版本；Rust 管道通过 `run_pipeline.py --pcbkit-exe pcbkit-rust --pcbeq-exe pcbeq-rust -o out/<case>/rust` 选择两个独立入口及输出位置。
 几何、标记或元数据改变时使用完整案例同步；CSS/JS 专项更新可用预览刷新工具。
 
 运行、测试和构建入口见 [项目说明](../README.md)，规范来源见 [参考资料](../docs/reference/format-sources.md)。

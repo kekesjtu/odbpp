@@ -98,6 +98,19 @@ def render_index(rows):
         lines.append(f'<tr><td>{escape(name)}</td><td>{items}</td><td>{report["grid"]["region_count"]} regions / {report["grid"]["cell_count"]} cells</td></tr>')
     return "\n".join(lines + ["</table></html>"])
 
+def published_rows():
+    """Keep both language variants in the index when only Python is refreshed."""
+    rows = []
+    paths = sorted(path for backend in ("python", "rust")
+                   for path in OUT.glob(f"**/{backend}/pcbeq/diagnostics/run.json"))
+    for path in paths:
+        directory = path.parents[2]
+        if not (directory / "pcbeq/materialmap.json").is_file():
+            continue
+        report = json.loads(path.read_text(encoding="utf-8"))
+        rows.append((directory.relative_to(OUT).as_posix(), None, directory, None, report))
+    return rows
+
 def prune_unmatched(inputs):
     root = OUT.resolve()
     expected = {name for name, _ in inputs}
@@ -137,9 +150,9 @@ def main():
         parser.error(str(exc))
     args.grid_level = args.grid_level or (None if expert else "standard")
     _, options = forwarded(args)
-    inputs, rows = case_inputs(), []
+    inputs = case_inputs()
     for name, source in inputs:
-        output = OUT / name
+        output = OUT / name / "python"
         valid = None if args.force else existing_preview(output, source)
         equivalent = None if valid is None or args.force_equivalent else existing_equivalence(
             output, valid[0], px=args.px, py=args.py, max_cell_mm=upper,
@@ -158,12 +171,11 @@ def main():
                                "max_boundary_retreat_mm":args.max_boundary_retreat_mm,
                                "max_area_loss_ratio":args.max_area_loss_ratio}}
         (output / "pipeline/cache.json").write_text(json.dumps(cache, indent=2), encoding="utf-8")
-        rows.append((name, source, output, json.loads(preview.read_text(encoding="utf-8")),
-                     json.loads((output / "pcbeq/diagnostics/run.json").read_text(encoding="utf-8"))))
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "index.html").write_text(render_index(rows), encoding="utf-8")
     if args.prune:
         prune_unmatched(inputs)
+    rows = published_rows()
+    (OUT / "index.html").write_text(render_index(rows), encoding="utf-8")
     print(f"index: {len(rows)} cases -> {OUT / 'index.html'}")
 
 if __name__ == "__main__":

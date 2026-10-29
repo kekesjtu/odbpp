@@ -9,8 +9,8 @@ ODB++ v8.1 单板解析器 `pcbkit` 与 PCB 物性等效器 `pcbeq` 分别安装
 
 ```powershell
 uv sync --extra test
-uv run pcbkit export cases/minimal-test-odb -o out/example/pcbkit --sagitta-mm 0.001 --digits 4
-uv run pcbeq run out/example/pcbkit/intermediate.json -o out/example/pcbeq --grid-level standard
+uv run pcbkit export cases/minimal-test-odb -o out/example/python/pcbkit --sagitta-mm 0.001 --digits 4
+uv run pcbeq run out/example/python/pcbkit/intermediate.json -o out/example/python/pcbeq --grid-level standard
 uv run --extra test pytest
 uv run python tools/sync_contract.py --check
 ```

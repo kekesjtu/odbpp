@@ -15,7 +15,7 @@ CASES = ("kicad-kitchen-sink", "kicad-video-odb.tgz", "designodb-rigidflex")
 
 
 def publication_metrics(name, coordinates, retreat, ratio):
-    path = ROOT/"out"/name/"pcbeq/diagnostics/run.json"
+    path = ROOT/"out"/name/"python/pcbeq/diagnostics/run.json"
     if not path.is_file():
         return None
     meta = json.loads(path.read_text(encoding="utf-8"))
@@ -36,7 +36,7 @@ def sampling_convergence(name, retreat, ratio, initial_step=None):
     from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
     from pcbeq.grid import GridOptions
     from pcbeq.rectify import RectifyOptions
-    path = ROOT/"out"/name/"pcbkit/intermediate.json"
+    path = ROOT/"out"/name/"python/pcbkit/intermediate.json"
     document = json.loads(path.read_text(encoding="utf-8"))
     options = EquivalenceOptions(GridOptions(4096,4096,mesh_preset="standard",auto_raster=True),
         rectify=RectifyOptions(max_boundary_retreat_mm=retreat,max_relative_area_error=ratio,
@@ -80,7 +80,7 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
     from pcbeq.mesh import resolve_mesh
     from pcbeq.rectify import RectifyOptions, profile_shape, _boundary_pairs, boundary_retreat
 
-    path = ROOT/"out"/name/"pcbkit/intermediate.json"
+    path = ROOT/"out"/name/"python/pcbkit/intermediate.json"
     step = json.loads(path.read_text(encoding="utf-8"))["steps"][0]
     options = EquivalenceOptions(GridOptions(4096,4096,mesh_preset="standard"),
         rectify=RectifyOptions(max_boundary_retreat_mm=retreat,max_relative_area_error=ratio,
