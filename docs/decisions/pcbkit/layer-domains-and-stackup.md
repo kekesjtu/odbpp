@@ -34,5 +34,5 @@ DRILL 保存投影和 `copper_span`，绝对跨度由起点铜层的 Z 起始和
 ## 依据与实现对照
 
 真实刚挠案例的局部层级 profile、INCH 铜重和盲埋孔提供输入依据。
-`pcbkit.model.Step.base_geometry` 选择基底，`pcbkit.stackup` 解释层次和厚度，`pcbkit.export` 输出域引用与层目录。
+`pcbkit_rust.model.Step.base_geometry` 选择基底，`pcbkit_rust.stackup` 解释层次和厚度，`pcbkit_rust.export` 输出域引用与层目录。
 等效器规划和采样分别消费域与跨度，接口形状见 [中间 JSON](../../interfaces/intermediate-json.md)。

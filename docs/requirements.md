@@ -1,7 +1,7 @@
 # ODB++ 解析与 PCB 物性等效需求
 
 本文件定义 pcbkit / pcbeq 的功能范围、物理约束和验收要求，开发方向以此为准。
-产品提供 Python 版和独立安装的 `pcbkit-rust` / `pcbeq-rust` 数值核心版；可视化与图表统一使用 Python。`pcbeq-rust` 从中间 JSON 读取校验至 MaterialMap 文件写入关闭全程使用 Rust，Python 只承担命令启动和读取 MaterialMap 绘图。各版本遵守相同的物理语义、JSON 契约和验收标准，Python 版保留用于对照。
+本分支提供独立安装的 `pcbkit-rust`、`pcbeq-rust`，各自携带所需适配与可视化。等效器 JSON 到 MaterialMap 全程使用 Rust；Python 仅作启动与 MaterialMap 图表。
 协作与开发规范见 [AGENTS.md](../AGENTS.md)，实现约定和资料入口见 [项目文档](../README.md#文档索引)。
 
 ## 总体数据流结构
@@ -60,7 +60,7 @@ region 是用于近似 PCB 板型的最小三维几何建模块；物性网格�
    - Parser 输出的 JSON 一律统一换算为 mm。
 5. 支持基础标准符号（r/s/rect/oval）的原生展开；自定义 `symbols/` 需递归读取其几何定义。
 6. 暂不需要支持 T/B 图元。
-7. 中间 JSON 必须为等效器明确提供每个待等效物理层的二维计算域、实体图案、Z 区间、厚度可信状态及其来源。铜图案多边形不能代替该层的计算域；板外区域不能被隐式当作 FR4。全项目保持唯一的当前 JSON 格式，不做 schema/generator 版本校验或兼容迁移；字段结构与必要物理语义须校验。Python 解析器导出与参考等效器导入共用 Pydantic 模型，文本 `.schema` 从模型生成；Rust 等效器使用原生 Serde 模型执行相同的字段和物理语义校验，不回调 Python。
+7. 中间 JSON 必须为等效器明确提供每个待等效物理层的二维计算域、实体图案、Z 区间、厚度可信状态及其来源。铜图案多边形不能代替该层的计算域；板外区域不能被隐式当作 FR4。全项目保持唯一的当前 JSON 格式，不做 schema/generator 版本校验或兼容迁移；字段结构与必要物理语义须校验。解析器导出使用包内 Pydantic 模型，文本 `.schema` 从权威模型生成；Rust 等效器使用原生 Serde 模型执行相同的字段和物理语义校验，不回调 Python。
 8. 待等效层的计算域优先取有效的层级 profile，缺失时取 step profile；存在但无法解析的层级 profile 必须报错。逐层计算域可以不同，例如刚挠结合板。等效器使用 step profile 确定整板范围，并使用逐层计算域规划该层真实存在的内接建模块；不能在几何块生成后仅凭部分覆盖率决定该层是否存在。
 
 ## 等效器输入与材料规则

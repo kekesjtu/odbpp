@@ -5,7 +5,7 @@ pcbkit / pcbeq AI 协作开发指南，说明项目结构、开发规范和文�
 ## 1. 项目概述
 
 本项目提供 ODB++ v8.1 单板解析器 `pcbkit` 和 PCB 物性等效器 `pcbeq`，两者分别安装和分发，通过中间 JSON 交接。
-独立 Rust 数值核心版本为 `pcbkit-rust`、`pcbeq-rust`；保留 Python 版，工程可视化和图表使用 Python。
+本分支仅维护 `pcbkit-rust`、`pcbeq-rust` 及包内 Python 适配与可视化；不得依赖 Python 产品源码。
 解析器交付正向实体多边形、逐层计算域和叠层信息；等效器生成内接三维 region、各 region 独立的局部笛卡尔网格与完整单元物性。
 SVG/HTML、材料掩膜和热图用于工程核对。
 
@@ -20,8 +20,6 @@ SVG/HTML、材料掩膜和热图用于工程核对。
 | `docs/requirements.md` | 需求定义       | 数据流、功能范围、物理语义、输出约束                     |
 | `docs/`                | 项目文档       | 技术决策、接口、开发说明、调研、推导、参考资料与验证方法 |
 | `contracts/`           | 中间 JSON 契约 | 共享 Pydantic 模型权威源和生成的文本 schema              |
-| `packages/pcbkit/`     | 解析器         | 独立包定义、生产代码和包内测试                           |
-| `packages/pcbeq/`      | 等效器         | 独立包定义、生产代码和包内测试                           |
 | `packages/pcbkit-rust/`、`packages/pcbeq-rust/` | Rust 核心版 | Rust 扩展、Python 入口及独立分发定义 |
 | `crates/`             | 内部 Rust 库   | 数值核心的共享实现，不作为产品间数据接口 |
 | `tests/`               | 跨包验证       | 接口、集成、分发测试及最小手写夹具                       |
@@ -41,7 +39,7 @@ SVG/HTML、材料掩膜和热图用于工程核对。
 
 ### 3.2 Git 规范
 
-- **分支策略**：无明确要求时，只使用单分支 `main` 来开发
+- **分支策略**：在当前 `dev/rust` 分支维护本产品线
 - **敏捷开发**：一次完整的变更一次提交
 - **提交信息**：使用中文，格式 `类型: 简述`（如 `feat: 添加XXX`）
 
@@ -89,7 +87,7 @@ SVG/HTML、材料掩膜和热图用于工程核对。
 
 使用 uv 管理 Python 解释器、依赖与仓库本地 `.venv`。
 `.python-version` 固定解释器版本，`pyproject.toml` 声明依赖，`uv.lock` 纳入版本控制。
-Rust 使用 Cargo workspace；`Cargo.lock` 纳入版本控制，PyO3 扩展由 Maturin 构建。Python 版开发无需 Rust 工具链。
+Rust 使用 Cargo workspace；`Cargo.lock` 纳入版本控制，PyO3 扩展由 Maturin 构建。
 
 ### 3.6 产物
 

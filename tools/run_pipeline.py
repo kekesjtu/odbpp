@@ -44,7 +44,7 @@ def execute(source: Path, out: Path, *, parser_args=(), equivalent_args=(),
     materialmap = out / "pcbeq/materialmap.json"
     try:
         if not reuse_parser:
-            stage = run_stage("pcbkit", [command(pcbkit_exe, "pcbkit"), "export", str(source),
+            stage = run_stage("pcbkit", [command(pcbkit_exe, "pcbkit-rust"), "export", str(source),
                 "-o", str(out / "pcbkit"), *parser_args], report_dir)
             report["stages"].append(stage)
             if stage["returncode"]:
@@ -53,7 +53,7 @@ def execute(source: Path, out: Path, *, parser_args=(), equivalent_args=(),
             raise ValueError(f"pcbkit did not publish {intermediate}")
         report["intermediate_sha256"] = hashlib.sha256(intermediate.read_bytes()).hexdigest()
         if not reuse_equivalent:
-            stage = run_stage("pcbeq", [command(pcbeq_exe, "pcbeq"), "run", str(intermediate),
+            stage = run_stage("pcbeq", [command(pcbeq_exe, "pcbeq-rust"), "run", str(intermediate),
                 "-o", str(out / "pcbeq"), *equivalent_args], report_dir)
             report["stages"].append(stage)
             if stage["returncode"]:

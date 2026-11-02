@@ -34,3 +34,25 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
                  "pcbeq/grids/cartesian-grid.png"):
         assert (tmp_path/name).stat().st_size>0
     assert list((tmp_path/"pcbeq/heatmaps").glob("*.png"))
+
+
+import shutil
+from tools import sync_out
+
+def test_sync_out_rust_owns_its_pipeline_and_reuses_numeric_and_image_artifacts(tmp_path,monkeypatch):
+    pytest.importorskip("pcbkit_rust")
+    pytest.importorskip("pcbeq_rust")
+    source=tmp_path/"cases/minimal-test-odb"
+    source.parent.mkdir()
+    shutil.copytree(case_path("minimal-test-odb"),source)
+    monkeypatch.setattr(sync_out,"CASES",source.parent)
+    monkeypatch.setattr(sync_out,"OUT",tmp_path/"out")
+    monkeypatch.setattr(sys,"argv",["sync_out.py","--backend","rust","--px","32","--py","32","--max-cell-mm","10"])
+    sync_out.main()
+    output=tmp_path/"out/minimal-test-odb/rust"
+    materialmap=output/"pcbeq/materialmap.json"
+    assert materialmap.is_file() and (output/"pcbeq/index.html").is_file()
+    assert not (output.parent/"python").exists()
+    before=materialmap.stat().st_mtime_ns
+    sync_out.main()
+    assert materialmap.stat().st_mtime_ns==before

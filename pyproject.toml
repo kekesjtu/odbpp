@@ -1,29 +1,25 @@
 [project]
 name = "pcb-development"
 version = "0.1.0"
-description = "Private development workspace for pcbkit and pcbeq"
+description = "Independent rust PCB development workspace"
 requires-python = ">=3.10"
-dependencies = ["pcbkit", "pcbeq"]
+dependencies = ['pcbkit-rust', 'pcbeq-rust']
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
-rust = ["pcbkit-rust", "pcbeq-rust"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["packages/pcbkit", "packages/pcbeq", "packages/pcbkit-rust", "packages/pcbeq-rust"]
+members = ['packages/pcbkit-rust', 'packages/pcbeq-rust']
 
 [tool.uv.sources]
-pcbkit = { workspace = true }
-pcbeq = { workspace = true }
 pcbkit-rust = { workspace = true }
 pcbeq-rust = { workspace = true }
 
 [tool.pytest.ini_options]
-pythonpath = [".", "tests", "packages/pcbeq/tests", "packages/pcbkit/tests"]
-testpaths = ["tests", "packages/pcbkit/tests", "packages/pcbeq/tests"]
-# Load the shared fixture for package tests outside the tests/ directory.
+pythonpath = [".", "tests", "tests/rust"]
+testpaths = ["tests/rust", "tests/distribution"]
 addopts = "-q --basetemp=tmp/pytest-tmp -p conftest"
 filterwarnings = ["error"]

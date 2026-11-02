@@ -48,6 +48,6 @@ region 规划只读取物理坐标、域和几何参数，不读取光栅、铜�
 
 诊断记录原始面积、建模面积、损失与比例、用户面积预算、内部规划预算、内接性、拓扑、局部细化和共享域重规划。
 内接面积的数值容差为 `1e-8 mm²`，不能作为额外物理损失预算。
-Rust 执行完整 JSON 到 MaterialMap 流程；Python 仅作其命令启动和 MaterialMap 可视化，参考实现使用相同物理约束。
+Rust 执行完整 JSON 到 MaterialMap 流程；Python 仅作其命令启动和 MaterialMap 可视化。
 
 局部网格规则见 [region 局部笛卡尔网格](region-local-cartesian-grid.md)。

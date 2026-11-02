@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from pcbkit.svg import _CSS, _JS
+from pcbkit_rust.svg import _CSS, _JS
 
 ROOT = Path(__file__).resolve().parents[1]
 

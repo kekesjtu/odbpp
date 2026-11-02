@@ -47,7 +47,7 @@ features 的 `$` 表声明符号，`@` 表声明属性名称，`&` 表声明属�
 
 ## 实现对照与证据范围
 
-`pcbkit.textio/metadata/features/units` 分别处理文本、来源、图元和换算。
+`pcbkit_rust.textio/metadata/features/units` 分别处理文本、来源、图元和换算。
 几何核使用 1e-6 mm 整数量化，最终输出分辨率由 `--digits` 明确指定；浮点比较与量化容差分开处理。
 `.sum` 的 SUM 算法在采用规范中缺少完整定义；样本及其旁车保持字节稳定。
 XML 扩展及拼板范围由 [需求](../requirements.md) 定义，单板接口见 [中间 JSON](../interfaces/intermediate-json.md)。

@@ -1,42 +1,26 @@
-# pcbkit / pcbeq
+# pcbkit-rust / pcbeq-rust
 
-ODB++ v8.1 单板解析器 `pcbkit` 与 PCB 物性等效器 `pcbeq` 分别安装和分发，通过中间 JSON 交接。
-`pcbkit-rust` 与 `pcbeq-rust` 提供 Rust 数值核心版本；`pcbeq-rust` 从中间 JSON 读取校验至 MaterialMap 发布全程使用 Rust，Python 仅作命令启动和结果图表。Python 参考版本可独立使用并用于结果对照。
-两条产品线各自携带运行模块，不跨包源码导入。`main` 保留两条线；`dev/py`、`dev/rust` 分别保留各自产品、依赖与开发入口。
+`dev/rust` 只维护本产品线，两产品通过中间 JSON 交接，分别构建和安装，不依赖另一条产品线的源码或分发包。
+Rust 等效器完整处理 JSON → MaterialMap；包内 Python 只作启动和 MaterialMap 可视化。解析器自带 Python 输入和工程预览适配。
 
 ## 快速开始
 
-在项目根目录使用 uv：
-
 ```powershell
 uv sync --extra test
-uv run pcbkit export cases/minimal-test-odb -o out/example/python/pcbkit --sagitta-mm 0.001 --digits 4
-uv run pcbeq run out/example/python/pcbkit/intermediate.json -o out/example/python/pcbeq --grid-level standard
-uv run --extra test pytest
-uv run python tools/sync_contract.py --check
-```
-
-Rust 版本需要 Rust 工具链与平台链接器；安装后使用相同参数：
-
-```powershell
-uv sync --all-extras
-uv run --extra rust pcbkit-rust export cases/minimal-test-odb -o out/example/rust/pcbkit
-uv run --extra rust pcbeq-rust run out/example/rust/pcbkit/intermediate.json -o out/example/rust/pcbeq --grid-level standard
-uv run --all-extras pytest tests/rust
+uv run pcbkit-rust export cases/minimal-test-odb -o out/example/rust/pcbkit
+uv run pcbeq-rust run out/example/rust/pcbkit/intermediate.json -o out/example/rust/pcbeq --grid-level standard
+uv run pytest
 cargo test --workspace
 ```
 
-独立构建使用 `uv build --package <包名>`，包名为 `pcbkit`、`pcbeq`、`pcbkit-rust` 或 `pcbeq-rust`。命令参数可通过对应命令的 `--help` 查看，案例管道和维护工具见 [tools/README.md](tools/README.md)。
+源码构建需要 Cargo、Rust 工具链与平台链接器。
 
 ## 项目结构
 
-- `packages/pcbkit/`：ODB++ 解析、正向实体和预览。
-- `packages/pcbeq/`：内接 region、网格、材料等效及可视化。
-- `packages/pcbkit-rust/`、`packages/pcbeq-rust/`：两个 Rust 扩展及独立命令；`crates/`：内部共享 Rust 几何。
-- `contracts/`：共享中间 JSON 模型和 schema。
-- `tests/`：跨包测试和夹具；`tools/`：长期维护工具。
-- `cases/`：本地 PCB 案例；`out/`：案例产物。
-- `docs/`：需求、决策、领域参考与调研；`tmp/`、`build/`：可再生工作文件与构建中间文件。
+- `packages/pcbkit-rust/`、`packages/pcbeq-rust/`：Rust 核心与各自的 Python 适配/可视化；`crates/`：内部 Rust 几何库。
+- `contracts/`：中间 JSON 契约；`tests/`：对应测试与手写夹具。
+- `tools/`：维护工具；`docs/`：决策与领域资料。
+- `cases/`、`out/`：本地案例与正式产物；`tmp/`：可再生任务文件。
 
 ## 文档索引
 

@@ -3,17 +3,16 @@
 ## 正式产物
 
 ```text
-out/<case>/<python|rust>/
+out/<case>/rust/
   pcbkit/
     intermediate.json
     preview.svg, preview.html
     diagnostics/run.json, artifacts.json
   pcbeq/
     materialmap.json
-    masks/*.png
     heatmaps/*.png
-    regions/regions.png, regions.svg, regions.csv, regions.stats.json
-    grids/cartesian-grid.png, cartesian-grid.svg, cartesian-grid.stats.json
+    regions/regions.png, regions.svg
+    grids/cartesian-grid.png, cartesian-grid.svg
     index.html
     diagnostics/run.json, artifacts.json
   pipeline/
@@ -22,18 +21,18 @@ out/<case>/<python|rust>/
     pcbeq.stdout.log, pcbeq.stderr.log
 ```
 
-`python/` 与 `rust/` 是同一 case 下的并列目录，分别存放对应版本的全部产物与管道报告；`out/index.html` 同时索引两种版本。解析器与等效器各有运行报告和产物清单；诊断独立于两个数值接口。
-region CSV 是几何编号 / 尺寸表，MaterialMap 的正式数值格式为 JSON。
+`out/<case>/rust/` 保存本产品线的全部产物与管道报告；`out/index.html` 索引本产品线。解析器与等效器各有运行报告和产物清单，诊断独立于数值接口。
+MaterialMap 的正式数值格式为 JSON。
 Rust 等效器的图表仅从 MaterialMap 恢复 region、局部网格和物性；不生成采样掩膜及依赖输入轮廓的对照图。其数值清单为 `diagnostics/artifacts.json`，图片清单为 `diagnostics/image-artifacts.json`。
 
 ## 发布决策
 
-解析器与 Python 参考等效器在同级临时目录完成计算和所请求的图片，再发布正式目录；发布失败执行回滚。
+解析器在同级临时目录完成数据和工程预览，再发布正式目录；发布失败执行回滚。
 Rust 等效器在原生事务中完成 MaterialMap、诊断和数值发布；发布失败由 Rust 回滚，成功时使登记的旧图片失效。Python 随后只从正式 MaterialMap 绘图，并独立事务发布图片。绘图失败须报告错误，已经成功发布的 MaterialMap 仍可使用。
 产物清单只管理本软件生成的文件，成功替换时清理登记中失效的产物，保留用户自行放入的文件。
 
-`pcbkit` 返回 0 表示成功，1 表示带显式失败层的部分预览，2 表示直接失败。
-管道遇上游非零即停止；`pcbeq` 请求的绘图失败也视为整轮失败，保留上一轮正式产物。`pcbeq-rust` 的绘图失败返回非零，但不回滚已经验收成功的数值结果。
+`pcbkit-rust` 返回 0 表示成功，1 表示带显式失败层的部分预览，2 表示直接失败。
+管道遇上游非零即停止；`pcbeq-rust` 的绘图失败返回非零，但不回滚已经验收成功的数值结果。
 失败状态和本轮日志明确显示在管道报告中。
 
 ## 来源与复用
