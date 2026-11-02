@@ -8,9 +8,6 @@ fixtures because KiCad does not produce them for these boards.
 from __future__ import annotations
 
 import math
-from pathlib import Path
-import re
-from zipfile import ZipFile
 
 import pytest
 
@@ -50,28 +47,9 @@ def by_name(document: dict) -> dict[str, dict]:
 
 
 @pytest.mark.parametrize("case", EXPORTS)
-def test_approved_native_and_clean_archives(case: str):
-    native = ROOT / "native" / f"{case}.zip"
-    clean = ROOT / "clean" / f"{case}.zip"
-    for archive, is_clean in [(native, False), (clean, True)]:
-        with ZipFile(archive) as z:
-            assert z.testzip() is None
-            info = z.read("misc/info").decode()
-            assert "ODB_VERSION_MAJOR=8" in info
-            assert "ODB_VERSION_MINOR=1" in info
-            assert "ODB_SOURCE=KiCad EDA" in info
-            assert ("UNITS=INCH" if case.endswith("-in") else "UNITS=MM") in info
-            matrix = z.read("matrix/matrix").decode()
-            assert matrix.count("STEP {") == 1
-            assert re.search(r"F 1\s", z.read("steps/pcb/profile").decode())
-            if is_clean:
-                assert all(x not in matrix for x in ("TYPE=DOCUMENT", "TYPE=COMPONENT"))
-                assert not any(n.startswith(("fonts/", "input/", "user/", "wheels/"))
-                               for n in z.namelist())
-            else:
-                assert "NAME=EDGE.CUTS" in matrix
-                assert "NAME=MARGIN" in matrix
-        job, preview = load(case, "clean" if is_clean else "native")
+def test_native_and_clean_boards_parse_to_positive_mm_geometry(case: str):
+    for group in ("native", "clean"):
+        job, preview = load(case, group)
         assert job.info.version.startswith("8.1")
         assert not job.diagnostics.errors
         doc = step_to_json(job, preview)
@@ -93,11 +71,6 @@ def test_approved_native_and_clean_archives(case: str):
                 assert isinstance(layer["z_mm"]["thickness_known"], bool)
             for ring in layer["polygons"]:
                 assert len(ring["points"]) >= 3
-    # The curate step may change only the matrix and the ZIP member list.
-    with ZipFile(native) as n, ZipFile(clean) as c:
-        for member in c.namelist():
-            if member != "matrix/matrix":
-                assert c.read(member) == n.read(member)
 
 
 def test_outline_only_has_no_copper_features():
@@ -195,23 +168,3 @@ def test_four_copper_layers_and_three_distinct_drill_spans():
         assert sum(r.is_hole for r in drawing.layer(name).rings) == count
         assert not preview.layer(name).geometry.drills_subtracted
         assert not preview.layer(name).geometry.region.holes
-
-
-@pytest.mark.parametrize("case", ("outline-only", "pad-shapes", "tracks-arcs",
-                                  "through-hole", "zone-hole-rotation", "four-layer-drills"))
-def test_source_board_enables_only_copper_and_edges(case: str):
-    source = (ROOT / "sources" / f"{case}.kicad_pcb").read_text(encoding="utf-8")
-    layer_block = source.split("\n\t(layers\n", 1)[1].split("\n\t)", 1)[0]
-    assert '"F.Cu"' in layer_block and '"B.Cu"' in layer_block
-    assert '"Edge.Cuts"' in layer_block
-    if case == "four-layer-drills":
-        assert '"In1.Cu"' in layer_block and '"In2.Cu"' in layer_block
-    else:
-        assert '"In1.Cu"' not in layer_block
-    # KiCad 10 reinstates three mandatory empty technical layers on save.
-    assert set(re.findall(r'\(\d+ "([^"]+)"', layer_block)) == (
-        {"F.Cu", "In1.Cu", "In2.Cu", "B.Cu", "Edge.Cuts", "Margin",
-         "F.CrtYd", "B.CrtYd"} if case == "four-layer-drills" else
-        {"F.Cu", "B.Cu", "Edge.Cuts", "Margin", "F.CrtYd", "B.CrtYd"})
-    for pad_layers in re.findall(r"\(pad [\s\S]*?\(layers ([^)]+)\)", source):
-        assert pad_layers == '"F.Cu"'

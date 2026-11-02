@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import gc
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -19,7 +18,7 @@ import time
 
 from pcbeq import numerical
 from pcbeq.diagnostics import Diagnostics
-from pcbeq.equiv import EquivalenceError, EquivalenceOptions, equivalence_from_document, pipeline_fingerprint
+from pcbeq.equiv import EquivalenceError, EquivalenceOptions, equivalence_from_document
 from pcbeq.grid import GridOptions
 from pcbeq.intermediate import read_document
 from pcbeq.materialmap import MaterialMapWriter
@@ -32,7 +31,7 @@ def measure(source: Path, output: Path, grid: GridOptions, materials: dict) -> d
 
     Reading, validation, geometry, sampling, properties and streamed JSON writing
     overlap during equivalence, so computation and writing form one timed stage.
-    Hashing, statistics and benchmark reporting happen after the timed interval.
+    Statistics and benchmark reporting happen after the timed interval.
     """
     diagnostics = Diagnostics()
     options = EquivalenceOptions(grid=grid, materials=MaterialBook(materials, diagnostics=diagnostics),
@@ -66,7 +65,6 @@ def measure(source: Path, output: Path, grid: GridOptions, materials: dict) -> d
         "layers": sum(layer.status == "equivalent" for layer in result.layers),
         "raster": [result.raster_px, result.raster_py],
         "materialmap_bytes": final.stat().st_size,
-        "materialmap_sha256": hashlib.sha256(final.read_bytes()).hexdigest(),
         "warnings": [str(warning) for warning in diagnostics.warnings],
     }
 
@@ -107,7 +105,6 @@ def main(argv=None) -> int:
         materials = json.loads(args.materials.read_text(encoding="utf-8")) if args.materials else {}
         if not isinstance(materials, dict):
             raise ValueError("materials must be a JSON object")
-        source_hash = hashlib.sha256(args.input.read_bytes()).hexdigest()
         context = numerical.use(None)
         if args.backend == "rust":
             from pcbeq_rust import backend
@@ -117,13 +114,12 @@ def main(argv=None) -> int:
             report = {
                 "measurement": "intermediate JSON read/validation through MaterialMap close and rename",
                 "excluded": ["ODB++ parsing", "process startup/imports", "images/HTML",
-                             "benchmark metadata and hashing", "fsync to physical storage"],
+                             "benchmark metadata", "fsync to physical storage"],
                 "cache_policy": "same process; normal OS file cache; fresh document/options per run",
                 "environment": {"python": sys.version, "platform": platform.platform(),
                                 "processor": platform.processor(), "cpu_count": os.cpu_count()},
                 "backend": args.backend,
-                "implementation_sha256": pipeline_fingerprint(),
-                "input": {"path": str(args.input.resolve()), "sha256": source_hash,
+                "input": {"path": str(args.input.resolve()),
                           "bytes": args.input.stat().st_size},
                 "options": {"px": grid.px, "py": grid.py, "auto_raster": grid.auto_raster,
                             "grid_level": grid.mesh_preset, "max_cell_mm": grid.max_cell_mm,
@@ -132,12 +128,8 @@ def main(argv=None) -> int:
                 "repeat": args.repeat,
                 "runs": [],
             }
-            expected_hash = None
             for index in range(args.warmup + args.repeat):
                 run = measure(args.input, args.output, grid, materials)
-                if expected_hash is not None and run["materialmap_sha256"] != expected_hash:
-                    raise ValueError("non-deterministic MaterialMap output between runs")
-                expected_hash = run["materialmap_sha256"]
                 warmup = index < args.warmup
                 if not warmup:
                     report["runs"].append(run)

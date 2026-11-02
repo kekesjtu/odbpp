@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 from pathlib import Path
 import time
@@ -137,7 +136,7 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
                                  for r in old["rectangles"]])
         before = {k:v for k,v in baseline.items() if k not in ("geometry","errors")}
         before["retreat_upper_mm"] = boundary_retreat(board,old_model,retreat)["max_distance_upper_mm"]
-    row = {"case":name,"input_sha256":hashlib.sha256(path.read_bytes()).hexdigest(),
+    row = {"case":name,
         "max_boundary_retreat_mm":retreat,"max_area_loss_ratio":ratio,
         "internal_initial_step_override_mm":initial_step,
         "before":before,"after":{"regions":len(geometry.rectangles),"xy_cells":len(grid.cells),
@@ -148,7 +147,6 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
         "shared_domain_replanning":geometry.audit.get("shared_domain_replanning",[]),
         "domains":domain_checks,"raster_dimensions_compared":[[4096,4096],[8192,8192]],
         "region_and_grid_coordinates_identical":True,
-        "geometry_sha256":hashlib.sha256(json.dumps(coordinates).encode()).hexdigest(),
         "published_run":publication_metrics(name,coordinates,retreat,ratio),
         "all_checks_passed":True}
     print(json.dumps({"case":name,**row["after"]},ensure_ascii=False),flush=True)

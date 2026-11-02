@@ -1,8 +1,6 @@
 """Keep the sole benchmark bounded to JSON input through material file output."""
-import hashlib
 import json
 import sys
-from types import SimpleNamespace
 
 import pytest
 
@@ -24,7 +22,7 @@ def arguments(source, output):
             "--max-cell-mm", "5"]
 
 
-def test_benchmark_delivers_valid_deterministic_map_without_visualization(source, tmp_path, monkeypatch):
+def test_benchmark_delivers_materialmap_without_visualization(source, tmp_path, monkeypatch):
     # Even importing a rendering module must be unnecessary for this benchmark.
     for name in ("pcbeq.visualize", "pcbeq.plotting.regions", "pcbeq.plotting.grids", "matplotlib"):
         monkeypatch.setitem(sys.modules, name, None)
@@ -45,17 +43,14 @@ def test_benchmark_delivers_valid_deterministic_map_without_visualization(source
     assert document.regions[0].values == [(385, 385, 385, 8960, 385)] * 4
     report = json.loads((output / "benchmark.json").read_text(encoding="utf-8"))
     assert len(report["runs"]) == 2  # Warmup is excluded from statistics.
-    assert report["input"]["sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
-    digest = hashlib.sha256((output / "materialmap.json").read_bytes()).hexdigest()
     for run in report["runs"]:
-        assert run["materialmap_sha256"] == digest
         assert (run["cells"], run["regions"], run["layers"], run["raster"]) == (4, 1, 1, [32, 32])
         times = run["durations_s"]
         assert times["total"] == pytest.approx(times["read_json"] + times["equivalence_and_write"])
         assert times["total"] > 0 and run["cpu_s"] >= 0
 
 
-def test_timing_includes_input_and_writer_close_but_excludes_result_hash(source, tmp_path, monkeypatch):
+def test_timing_includes_json_read_and_materialmap_close(source, tmp_path, monkeypatch):
     clock = [0.0]
     original_read = benchmark.read_document
     original_writer = benchmark.MaterialMapWriter
@@ -69,19 +64,11 @@ def test_timing_includes_input_and_writer_close_but_excludes_result_hash(source,
             super().__exit__(*args)
             clock[0] += 3
 
-    original_hash = benchmark.hashlib.sha256
-
-    def slow_hash(data):
-        clock[0] += 100
-        return original_hash(data)
-
     monkeypatch.setattr(benchmark.time, "perf_counter", lambda: clock[0])
     monkeypatch.setattr(benchmark, "read_document", slow_read)
     monkeypatch.setattr(benchmark, "MaterialMapWriter", SlowCloseWriter)
-    monkeypatch.setattr(benchmark, "hashlib", SimpleNamespace(sha256=slow_hash))
     result = benchmark.measure(source, tmp_path, benchmark.GridOptions(px=32, py=32), {})
     assert result["durations_s"] == {"read_json": 2, "equivalence_and_write": 3, "total": 5}
-    assert clock[0] == 105
 
 
 def test_failed_equivalence_preserves_previous_map_and_cleans_partial_file(source, tmp_path, monkeypatch):
