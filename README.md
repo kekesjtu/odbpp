@@ -2,6 +2,7 @@
 
 ODB++ v8.1 单板解析器 `pcbkit` 与 PCB 物性等效器 `pcbeq` 分别安装和分发，通过中间 JSON 交接。
 `pcbkit-rust` 与 `pcbeq-rust` 提供 Rust 数值核心版本；`pcbeq-rust` 从中间 JSON 读取校验至 MaterialMap 发布全程使用 Rust，Python 仅作命令启动和结果图表。Python 参考版本可独立使用并用于结果对照。
+两条产品线各自携带运行模块，不跨包源码导入。`main` 保留两条线；`dev/py`、`dev/rust` 分别保留各自产品、依赖与开发入口。
 
 ## 快速开始
 
@@ -21,7 +22,7 @@ Rust 版本需要 Rust 工具链与平台链接器；安装后使用相同参数
 uv sync --all-extras
 uv run --extra rust pcbkit-rust export cases/minimal-test-odb -o out/example/rust/pcbkit
 uv run --extra rust pcbeq-rust run out/example/rust/pcbkit/intermediate.json -o out/example/rust/pcbeq --grid-level standard
-uv run --all-extras pytest --numerical-backend rust
+uv run --all-extras pytest tests/rust
 cargo test --workspace
 ```
 

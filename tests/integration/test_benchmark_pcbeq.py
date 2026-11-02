@@ -3,6 +3,8 @@ import json
 import sys
 
 import pytest
+from pcbeq import intermediate, materialmap, equiv
+from pcbeq.grid import GridOptions
 
 from pcbeq.materialmap import read_document
 from test_equiv import build_document, rect
@@ -27,13 +29,13 @@ def test_benchmark_delivers_materialmap_without_visualization(source, tmp_path, 
     for name in ("pcbeq.visualize", "pcbeq.plotting.regions", "pcbeq.plotting.grids", "matplotlib"):
         monkeypatch.setitem(sys.modules, name, None)
     reads = []
-    original = benchmark.read_document
+    original = intermediate.read_document
 
     def record_read(path):
         reads.append(path)
         return original(path)
 
-    monkeypatch.setattr(benchmark, "read_document", record_read)
+    monkeypatch.setattr(intermediate, "read_document", record_read)
     output = tmp_path / "benchmark"
     assert benchmark.main(arguments(source, output) + ["--repeat", "2", "--warmup", "1"]) == 0
     assert reads == [source] * 3
@@ -52,8 +54,8 @@ def test_benchmark_delivers_materialmap_without_visualization(source, tmp_path, 
 
 def test_timing_includes_json_read_and_materialmap_close(source, tmp_path, monkeypatch):
     clock = [0.0]
-    original_read = benchmark.read_document
-    original_writer = benchmark.MaterialMapWriter
+    original_read = intermediate.read_document
+    original_writer = materialmap.MaterialMapWriter
 
     def slow_read(path):
         clock[0] += 2
@@ -65,9 +67,9 @@ def test_timing_includes_json_read_and_materialmap_close(source, tmp_path, monke
             clock[0] += 3
 
     monkeypatch.setattr(benchmark.time, "perf_counter", lambda: clock[0])
-    monkeypatch.setattr(benchmark, "read_document", slow_read)
-    monkeypatch.setattr(benchmark, "MaterialMapWriter", SlowCloseWriter)
-    result = benchmark.measure(source, tmp_path, benchmark.GridOptions(px=32, py=32), {})
+    monkeypatch.setattr(intermediate, "read_document", slow_read)
+    monkeypatch.setattr(materialmap, "MaterialMapWriter", SlowCloseWriter)
+    result = benchmark.measure(source, tmp_path, GridOptions(px=32, py=32), {})
     assert result["durations_s"] == {"read_json": 2, "equivalence_and_write": 3, "total": 5}
 
 
@@ -78,9 +80,9 @@ def test_failed_equivalence_preserves_previous_map_and_cleans_partial_file(sourc
     final.write_bytes(b"previous result")
 
     def fail(*args, **kwargs):
-        raise benchmark.EquivalenceError("injected failure")
+        raise equiv.EquivalenceError("injected failure")
 
-    monkeypatch.setattr(benchmark, "equivalence_from_document", fail)
+    monkeypatch.setattr(equiv, "equivalence_from_document", fail)
     assert benchmark.main(arguments(source, output) + ["--warmup", "0", "--repeat", "1"]) == 2
     assert final.read_bytes() == b"previous result"
     assert not (output / "materialmap.json.tmp").exists()

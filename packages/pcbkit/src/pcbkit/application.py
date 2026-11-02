@@ -304,7 +304,6 @@ def _run_export(job: Job, args: argparse.Namespace, diagnostics: Diagnostics) ->
     from pathlib import Path
     from .publication import OutputRun
     from .report import runtime_metrics
-    from .numerical import current
     import time
     directory = args.out or str(Path("out") / Path(job.source_path).name)
     try:
@@ -325,7 +324,6 @@ def _run_export(job: Job, args: argparse.Namespace, diagnostics: Diagnostics) ->
             report = output.path / "diagnostics/run.json"
             report.parent.mkdir(parents=True, exist_ok=True)
             report.write_text(json.dumps({"source": job.source_path,
-                **({"numerical_backend": "rust"} if current() is not None else {}),
                 "step": step.name, "status": "partial" if code else "success",
                 "precision": {"sagitta_mm": args.sagitta, "digits": args.digits},
                 "runtime": runtime_metrics(getattr(args, "_started", time.perf_counter())),

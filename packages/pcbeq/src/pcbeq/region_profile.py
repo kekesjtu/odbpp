@@ -2,7 +2,7 @@
 from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from .geometry import Region, Ring
-from . import numerical
+
 
 def perimeter(region: Region) -> float:
     """Total boundary length of *region* in millimetres."""
@@ -102,8 +102,6 @@ def _envelope(region, a, b, index=None):
     their exact one-sided endpoint limits; an inward probe would miss an edge
     extremum, and rounding the resulting Y values can expand the rectangle.
     """
-    if (native := numerical.current()) is not None:
-        return native.envelope([r.points for r in region.rings], a, b)
     events,edges = (index or _ProfileIndex(region)).slab(a,b)
     spans = None
     for left,right in zip(events, events[1:]):

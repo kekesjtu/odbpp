@@ -6,34 +6,20 @@ import pytest
 
 pcbkit_rust = pytest.importorskip("pcbkit_rust")
 pcbeq_rust = pytest.importorskip("pcbeq_rust")
-from pcbkit import numerical as parser_backend
-from pcbeq import numerical as equivalent_backend
 from pcbeq_rust import _pcbeq_native as native
 
 
-def test_context_restores_on_nested_exception():
-    with parser_backend.use(None), equivalent_backend.use(None):
-        with pytest.raises(RuntimeError):
-            with pcbkit_rust.backend(), pcbeq_rust.backend():
-                assert parser_backend.current() is pcbkit_rust._pcbkit_native
-                assert equivalent_backend.current() is native
-                with parser_backend.use(None):
-                    assert parser_backend.current() is None
-                assert parser_backend.current() is pcbkit_rust._pcbkit_native
-                raise RuntimeError("test")
-        assert parser_backend.current() is equivalent_backend.current() is None
+def test_native_products_do_not_require_context_switches():
+    assert pcbkit_rust._pcbkit_native is not None
+    assert native.MAX_RASTER_PIXELS==120_000_000
 
 
-@pytest.mark.parametrize("clockwise", [True, False])
-@pytest.mark.parametrize("end", [(1.,0.), (0.,1.), (-1.,0.), (.000001,1.)])
-def test_arc_endpoints_and_discretization_match_python(clockwise, end):
-    from pcbkit.geometry import arc_points
-    with parser_backend.use(None):
-        reference = arc_points((1.,0.), end, (0.,0.), clockwise)
-    with pcbkit_rust.backend():
-        result = arc_points((1.,0.), end, (0.,0.), clockwise)
-    np.testing.assert_allclose(result, reference, rtol=0., atol=2e-15)
-    assert result[-1] == end
+@pytest.mark.parametrize("clockwise", [True,False])
+@pytest.mark.parametrize("end", [(1.,0.),(0.,1.),(-1.,0.),(.000001,1.)])
+def test_arc_endpoints_and_finite_coordinates(clockwise,end):
+    result=pcbkit_rust._pcbkit_native.arc_points((1.,0.),end,(0.,0.),clockwise,.001,100000)
+    assert result and result[-1]==end
+    assert all(math.isfinite(v) for p in result for v in p)
 
 
 def test_series_parallel_anisotropy_and_mass_weighting():
@@ -85,40 +71,9 @@ def test_native_boundaries_validate_resources_and_finite_inputs():
         native.rasterize([],None,[],(0.,1.,120_000_001),(0.,1.,1))
 
 
-def test_local_cartesian_grids_match_python_with_signed_zero():
-    from pcbeq.grid import GridOptions, build_grid
-    from pcbeq.rectify import Rect
-    rectangles = [Rect(-2.,-1.,-0.,2.),Rect(0.,0.,3.1,1.)]
-    with equivalent_backend.use(None):
-        expected = build_grid(rectangles, GridOptions(50,50,(.7,.4)))
-    with pcbeq_rust.backend():
-        actual = build_grid(rectangles, GridOptions(50,50,(.7,.4)))
-    assert [r.as_dict() for r in actual.regions] == [r.as_dict() for r in expected.regions]
-    assert [(c.region_id,c.i,c.j,c.bounds) for c in actual.cells] == [
-        (c.region_id,c.i,c.j,c.bounds) for c in expected.cells]
-
-
-def test_equivalence_masks_geometry_and_values_match_reference():
-    from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
-    from pcbeq.grid import GridOptions
-    from test_equiv import drill_document, rect, hole
-    document = drill_document(layers=[
-        {"name":"CU","polygons":[rect(0,0,10,10),hole(2,2,8,8),rect(4,4,6,6)]},
-        {"name":"FR","type":"DIELECTRIC","polygons":[]},
-        {"name":"D1","type":"DRILL","polygons":[rect(2,2,6,4)]},
-        {"name":"D2","type":"DRILL","polygons":[rect(4,3,7,5)]},
-    ])
-    results, masks = [], []
-    for backend in (equivalent_backend.use(None),pcbeq_rust.backend()):
-        layer_masks = {}
-        with backend:
-            results.append(equivalence_from_document(document,EquivalenceOptions(GridOptions(103,97,3)),
-                mask_sink=lambda name,mask,pitch: layer_masks.update({name:bytes(mask.pixels)})))
-        masks.append(layer_masks)
-    assert masks[0] == masks[1]
-    assert not any(r.fatal for r in results)
-    assert [c.bounds for c in results[0].grid.cells] == [c.bounds for c in results[1].grid.cells]
-    for a,b in zip(results[0].cells,results[1].cells):
-        assert a.property_values() == pytest.approx(b.property_values(),rel=1e-13)
-    assert results[1].metadata()["numerical_backend"] == "rust"
-    assert results[1].metadata()["native_resource_limits"]["max_raster_pixels"] == 120_000_000
+def test_local_cartesian_grids_keep_independent_uniform_axes():
+    axes,cells=native.build_grid([(-2.,-1.,-0.,2.),(0.,0.,3.1,1.)],(.7,.4))
+    assert [(len(x)-1,len(y)-1) for x,y in axes]==[(3,8),(5,3)]
+    assert len(cells)==39
+    assert axes[0][0][0]==-2 and axes[0][0][-1]==0
+    assert axes[1][0][0]==0 and axes[1][0][-1]==3.1

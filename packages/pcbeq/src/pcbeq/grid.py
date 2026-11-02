@@ -13,7 +13,7 @@ from .diagnostics import (
     Diagnostics,
 )
 from .rectify import Rect
-from . import numerical
+
 
 __all__ = ["GridOptions", "Cell", "BoardGrid", "build_grid"]
 
@@ -157,30 +157,17 @@ def build_grid(rectangles, options, *, diagnostics=None, capacity_x=None, capaci
     rectangles=list(rectangles)
     _check_rectangles(rectangles)
     regions,cells=[],[]
-    if (native:=numerical.current()) is not None:
-        try:
-            axes,rows=native.build_grid([r.bounds for r in rectangles],options.max_cell_mm)
-        except ValueError as exc:
-            if not str(exc).startswith("resource limit:"):
-                raise
-            diags.error(GRID_RESOURCE_LIMIT,str(exc))
+    for rid,r in enumerate(rectangles):
+        xs=_allocate((r.x0,r.x1),options.max_cell_mm[0],f"X region {rid}",diags)
+        ys=_allocate((r.y0,r.y1),options.max_cell_mm[1],f"Y region {rid}",diags)
+        if not xs or not ys:
             return BoardGrid([],rectangles,[])
-        regions=[RegionGrid(rid,r,len(xs)-1,len(ys)-1)
-                 for rid,(r,(xs,ys)) in enumerate(zip(rectangles,axes))]
-        cells=[Cell(i,j,Rect(axes[rid][0][i],axes[rid][1][j],
-                            axes[rid][0][i+1],axes[rid][1][j+1]),rid) for rid,i,j in rows]
-    else:
-        for rid,r in enumerate(rectangles):
-            xs=_allocate((r.x0,r.x1),options.max_cell_mm[0],f"X region {rid}",diags)
-            ys=_allocate((r.y0,r.y1),options.max_cell_mm[1],f"Y region {rid}",diags)
-            if not xs or not ys:
-                return BoardGrid([],rectangles,[])
-            if len(cells)+(len(xs)-1)*(len(ys)-1)>MAX_GRID_CELLS:
-                diags.error(GRID_RESOURCE_LIMIT,f"region {rid}: more than {MAX_GRID_CELLS} modeled cells")
-                return BoardGrid([],rectangles,[])
-            regions.append(RegionGrid(rid,r,len(xs)-1,len(ys)-1))
-            cells.extend(Cell(i,j,Rect(a,b,c,d),rid) for j,(b,d) in enumerate(zip(ys,ys[1:]))
-                         for i,(a,c) in enumerate(zip(xs,xs[1:])))
+        if len(cells)+(len(xs)-1)*(len(ys)-1)>MAX_GRID_CELLS:
+            diags.error(GRID_RESOURCE_LIMIT,f"region {rid}: more than {MAX_GRID_CELLS} modeled cells")
+            return BoardGrid([],rectangles,[])
+        regions.append(RegionGrid(rid,r,len(xs)-1,len(ys)-1))
+        cells.extend(Cell(i,j,Rect(a,b,c,d),rid) for j,(b,d) in enumerate(zip(ys,ys[1:]))
+                     for i,(a,c) in enumerate(zip(xs,xs[1:])))
     grid=BoardGrid(regions,rectangles,cells,size_constraints_mm={"max":list(options.max_cell_mm)})
     for cell in cells:
         for axis,lo,hi,capacity in (("X",cell.rect.x0,cell.rect.x1,capacity_x),

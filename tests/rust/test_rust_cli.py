@@ -20,8 +20,7 @@ def test_cli_identity_and_independent_import(package):
     result = subprocess.run([sys.executable,"-c",
         f"import {module},sys,json;print(json.dumps(sorted(sys.modules)))"],
         check=True,capture_output=True,text=True)
-    other = "pcbeq" if package == "pcbkit" else "pcbkit"
-    assert not any(m.split(".")[0] in (other,other+"_rust") for m in json.loads(result.stdout))
+    assert not any(m.split(".")[0] in {"pcbkit","pcbeq"} for m in json.loads(result.stdout))
 
 
 def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):

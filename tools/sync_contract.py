@@ -22,7 +22,12 @@ def expected_files() -> dict[Path, bytes]:
     files = {ROOT / "contracts/intermediate.schema": schema_bytes,
              ROOT / "docs/interfaces/intermediate.schema": schema_bytes}
     for package in ("pcbkit", "pcbeq"):
-        files[ROOT / f"packages/{package}/src/{package}/intermediate.py"] = source.read_bytes()
+        directory = ROOT / f"packages/{package}/src/{package}"
+        if directory.is_dir():
+            files[directory / "intermediate.py"] = source.read_bytes()
+    directory = ROOT / "packages/pcbkit-rust/python/pcbkit_rust"
+    if directory.is_dir():
+        files[directory / "intermediate.py"] = source.read_bytes()
     return files
 
 

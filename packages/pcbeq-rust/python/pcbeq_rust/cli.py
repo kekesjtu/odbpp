@@ -5,7 +5,7 @@ import sys
 
 from . import __version__
 from .native import run
-from pcbeq.errors import EquivalenceErrorBase
+from .errors import EquivalenceErrorBase
 
 
 def build_parser():
@@ -53,7 +53,7 @@ def main(argv=None):
         for warning in result["warnings"]:
             print(f"warning: {warning}", file=sys.stderr)
         if any((args.heatmap, args.regions, args.grids, args.gallery)):
-            from pcbeq.map_images import render
+            from .map_images import render
             render(output / "materialmap.json", output, heatmap=args.heatmap,
                    regions=args.regions, grids=args.grids, gallery=args.gallery,
                    panel_width=args.heatmap_panel_width, shared_scale=args.heatmap_shared_scale,

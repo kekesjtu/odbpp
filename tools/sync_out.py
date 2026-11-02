@@ -30,7 +30,14 @@ def case_inputs():
 
 def fingerprint(package):
     digest = hashlib.sha256()
-    for path in sorted((SOURCE_ROOT / f"packages/{package}/src/{package}").rglob("*.py")):
+    root = SOURCE_ROOT / "packages" / package
+    sources = root / ("python" if package.endswith("-rust") else "src") / package.replace("-", "_")
+    paths = list(sources.rglob("*.py"))
+    if package.endswith("-rust"):
+        paths += list((root / "src").rglob("*.rs"))
+        paths += list((SOURCE_ROOT / "crates").rglob("*.rs"))
+        paths += [root / "Cargo.toml", SOURCE_ROOT / "Cargo.toml", SOURCE_ROOT / "Cargo.lock"]
+    for path in sorted(paths):
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
@@ -47,14 +54,14 @@ def sizes(value, default):
         raise ValueError("provide one or two finite positive cell sizes")
     return result
 
-def existing_preview(directory, source):
+def existing_preview(directory, source, *, backend="python"):
     path = directory / "pcbkit/intermediate.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         cache = json.loads((directory / "pipeline/cache.json").read_text(encoding="utf-8"))
         if Path(data["source"]["path"]).resolve() != source.resolve() or len(data["steps"]) != 1:
             return None
-        if cache["parser"] != fingerprint("pcbkit") or cache["source_mtime_ns"] != source_mtime(source):
+        if cache["parser"] != fingerprint("pcbkit-rust" if backend=="rust" else "pcbkit") or cache["source_mtime_ns"] != source_mtime(source):
             return None
         if not all((directory / "pcbkit" / p).is_file() for p in ("preview.svg", "preview.html", "diagnostics/run.json")):
             return None
@@ -64,18 +71,20 @@ def existing_preview(directory, source):
 
 def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5,
                          grid_level=None, draw_grid=False,
-                         max_area_loss_ratio=.05):
+                         max_area_loss_ratio=.05, backend="python"):
     try:
         cache = json.loads((directory / "pipeline/cache.json").read_text(encoding="utf-8"))
         requested = {"px": px, "py": py, "max": sizes(max_cell_mm, 5),
                      "grid_level": grid_level, "draw_grid": draw_grid,
                      "max_area_loss_ratio":max_area_loss_ratio}
-        if cache["equivalent"] != fingerprint("pcbeq") or cache["requested"] != requested:
+        if cache["equivalent"] != fingerprint("pcbeq-rust" if backend=="rust" else "pcbeq") or cache["requested"] != requested:
             return None
         if cache["json_sha256"] != hashlib.sha256(preview.read_bytes()).hexdigest():
             return None
         base = directory / "pcbeq"
         owned = json.loads((base / "diagnostics/artifacts.json").read_text(encoding="utf-8"))["files"]
+        if backend=="rust":
+            owned += json.loads((base / "diagnostics/image-artifacts.json").read_text(encoding="utf-8"))["files"]
         if not {"materialmap.json", "index.html", "regions/regions.png", "grids/cartesian-grid.png"}.issubset(owned):
             return None
         if any(not (base / p).is_file() or not (base / p).stat().st_size for p in owned):
@@ -129,6 +138,7 @@ def prune_unmatched(inputs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--backend", choices=("python","rust"), default="python")
     for flag in ("force", "force-equivalent", "prune", "heatmap-grid"):
         parser.add_argument("--" + flag, action="store_true")
     parser.add_argument("--px", type=int)
@@ -150,18 +160,21 @@ def main():
     _, options = forwarded(args)
     inputs = case_inputs()
     for name, source in inputs:
-        output = OUT / name / "python"
-        valid = None if args.force else existing_preview(output, source)
+        output = OUT / name / args.backend
+        valid = None if args.force else existing_preview(output, source, backend=args.backend)
         equivalent = None if valid is None or args.force_equivalent else existing_equivalence(
             output, valid[0], px=args.px, py=args.py, max_cell_mm=upper,
             grid_level=args.grid_level, draw_grid=args.heatmap_grid,
-            max_area_loss_ratio=args.max_area_loss_ratio)
+            max_area_loss_ratio=args.max_area_loss_ratio, backend=args.backend)
         result = execute(source, output, equivalent_args=options, reuse_parser=valid is not None,
-                         reuse_equivalent=equivalent is not None)
+                         reuse_equivalent=equivalent is not None,
+                         pcbkit_exe="pcbkit-rust" if args.backend=="rust" else None,
+                         pcbeq_exe="pcbeq-rust" if args.backend=="rust" else None)
         if result["status"] != "success":
             raise RuntimeError(f"pipeline failed for {name}: {result}")
         preview = output / "pcbkit/intermediate.json"
-        cache = {"parser": fingerprint("pcbkit"), "equivalent": fingerprint("pcbeq"),
+        cache = {"parser": fingerprint("pcbkit-rust" if args.backend=="rust" else "pcbkit"),
+                 "equivalent": fingerprint("pcbeq-rust" if args.backend=="rust" else "pcbeq"),
                  "source_mtime_ns": source_mtime(source), "json_sha256": hashlib.sha256(preview.read_bytes()).hexdigest(),
                  "requested": {"px": args.px, "py": args.py, "max": upper,
                                "grid_level": args.grid_level, "draw_grid": args.heatmap_grid,

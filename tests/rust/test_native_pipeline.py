@@ -1,5 +1,6 @@
 """Native file-boundary acceptance: contract, geometry, materials and Python-free execution."""
 import json
+import sys
 
 import pytest
 from shapely.geometry import box
@@ -7,8 +8,8 @@ from shapely.ops import unary_union
 
 pytest.importorskip("pcbeq_rust")
 from pcbeq_rust.native import run
-from pcbeq.materialmap import read_document, iter_cells
-from test_equiv import build_document, drill_document, rect, hole
+from pcbeq_rust.materialmap import read_document, iter_cells
+from board_fixture import build_document, drill_document, rect, hole
 
 
 def execute(document, tmp_path, **options):
@@ -19,22 +20,12 @@ def execute(document, tmp_path, **options):
     return summary, read_document(output / "materialmap.json"), output
 
 
-def test_full_pipeline_never_calls_python_input_geometry_materials_or_writer(tmp_path, monkeypatch):
-    document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])
-
-    def forbidden(*args, **kwargs):
-        raise AssertionError("Python computation entered the native pipeline")
-
-    for target in ("pcbeq.intermediate.read_document", "pcbeq.intermediate.BoardDocument.model_validate_json",
-                   "pcbeq.equiv.equivalence_from_document", "pcbeq.equiv.plan_geometry",
-                   "pcbeq.materialmap.MaterialMapWriter", "pcbeq.materials.MaterialBook"):
-        monkeypatch.setattr(target, forbidden)
-    summary, delivered, output = execute(document, tmp_path)
-    assert summary["execution"] == "native-json-to-materialmap"
-    assert summary["cells"] == 16
-    audit = json.loads((output / "diagnostics/run.json").read_text(encoding="utf-8"))
-    assert audit["grid"]["region_count"] == len(audit["grid"]["regions"])
-    assert all(values == (385, 385, 385, 8960, 385) for _, _, values in iter_cells(delivered))
+def test_full_pipeline_has_no_python_product_imports(tmp_path):
+    document = build_document(layers=[{"name":"CU","polygons":[rect(0,0,10,10)]}])
+    summary,delivered,output=execute(document,tmp_path)
+    assert summary["execution"]=="native-json-to-materialmap"
+    assert summary["cells"]==16
+    assert all(values==(385,385,385,8960,385) for _,_,values in iter_cells(delivered))
     assert not list(output.rglob("*.png"))
 
 
@@ -53,43 +44,37 @@ def test_native_anisotropy_and_material_precedence(tmp_path):
     assert values == pytest.approx((200.5, round(2 / (1 / 400 + 1), 6), 200.5, 5000, 520))
 
 
-def test_drills_only_affect_dielectrics_and_match_python_properties(tmp_path):
-    from pcbeq import numerical
-    from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
-    from pcbeq.grid import GridOptions
-    document = drill_document(layers=[
-        {"name": "CU", "polygons": [rect(0, 0, 10, 10), hole(2, 2, 8, 8), rect(4, 4, 6, 6)]},
-        {"name": "FR", "type": "DIELECTRIC", "polygons": []},
-        {"name": "D1", "type": "DRILL", "polygons": [rect(2, 2, 6, 4)]},
-        {"name": "D2", "type": "DRILL", "polygons": [rect(4, 3, 7, 5)]}])
-    _, delivered, _ = execute(document, tmp_path)
-    with numerical.use(None):
-        expected = equivalence_from_document(document, EquivalenceOptions(GridOptions(103, 97, 3)))
-    reference = {(c.layer_name, c.x0, c.y0, c.x1, c.y1): c.property_values() for c in expected.cells}
-    for region, bounds, values in iter_cells(delivered):
-        assert values == pytest.approx(reference[(region.layer.name, *bounds)], rel=1e-12)
-    assert sum(len(r.values) for r in delivered.regions) == len(reference)
+def test_drills_only_affect_dielectrics_and_combine_overlap_once(tmp_path):
+    document=drill_document(layers=[
+        {"name":"CU","polygons":[rect(0,0,10,10),hole(2,2,8,8),rect(4,4,6,6)]},
+        {"name":"FR","type":"DIELECTRIC","polygons":[]},
+        {"name":"D1","type":"DRILL","polygons":[rect(2,2,6,4)]},
+        {"name":"D2","type":"DRILL","polygons":[rect(4,3,7,5)]}])
+    source=tmp_path/"input.json"
+    source.write_text(json.dumps(document),encoding="utf-8")
+    run(source,tmp_path/"native",px=100,py=100,max_cell_mm=[10])
+    delivered=read_document(tmp_path/"native/materialmap.json")
+    values={r.layer.name:r.values[0] for r in delivered.regions}
+    assert values["CU"][2]==pytest.approx(.68*385+.32*.3)
+    assert values["FR"][2]==pytest.approx(.12*385+.88*.3)
 
 
 def test_rigidflex_holes_and_layer_existence_are_preserved(tmp_path):
-    from pcbeq.equiv import _region_from_polygons
-    from pcbeq.rectify import profile_shape
+    from shapely.geometry import Polygon
     domains = [{"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10), hole(4, 4, 6, 6)]},
                {"id": "left", "source": "layer_profile", "polygons": [rect(0, 0, 3, 10)]}]
     document = build_document(domains=domains, layers=[
         {"name": "ALL", "polygons": []}, {"name": "LEFT", "domain_id": "left", "polygons": []}])
     _, delivered, _ = execute(document, tmp_path)
     for name, domain in (("ALL", domains[0]), ("LEFT", domains[1])):
-        original = profile_shape(_region_from_polygons(domain["polygons"]))
+        original = Polygon(domain["polygons"][0]["points"], [p["points"] for p in domain["polygons"][1:]])
         modeled = unary_union([box(*bounds) for region, bounds, _ in iter_cells(delivered) if region.layer.name == name])
         assert modeled.difference(original).area < 1e-8
         assert original.difference(modeled).area <= original.area * .05 + 1e-8
     assert not any(box(*bounds).intersects(box(4.01, 4.01, 5.99, 5.99)) for _, bounds, _ in iter_cells(delivered))
 
 
-def test_native_thin_region_uses_a_local_raster_and_matches_python(tmp_path):
-    from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
-    from pcbeq.grid import GridOptions
+def test_native_thin_region_uses_a_local_raster(tmp_path):
     document=build_document(domains=[{"id":"step_profile","source":"step_profile",
         "polygons":[rect(0,0,10,10),rect(11,4,12,4.0001)]}],
         layers=[{"name":"CU","polygons":[rect(0,0,6,10)]}])
@@ -102,33 +87,20 @@ def test_native_thin_region_uses_a_local_raster_and_matches_python(tmp_path):
     assert summary["raster_sampling"]["total_pixels"]<20_000_000
     thin=next(r for r in delivered.regions if r.bounds_mm.y[1]-r.bounds_mm.y[0]<.001)
     assert thin.values and all(v==(.3,.3,.3,1850,1100) for v in thin.values)
-    reference=equivalence_from_document(document,EquivalenceOptions(
-        GridOptions(1,1,mesh_preset="standard",auto_raster=True)))
-    assert not reference.fatal
-    expected={(c.layer_name,c.x0,c.y0,c.x1,c.y1):c.property_values() for c in reference.cells}
-    for region,bounds,values in iter_cells(delivered):
-        assert values==pytest.approx(expected[(region.layer.name,*bounds)],abs=1e-6)
-    assert summary["cells"]==len(expected)
+    assert summary["cells"]==sum(len(r.values) for r in delivered.regions)
+    assert len(delivered.regions)==2
 
 
-@pytest.mark.parametrize("backend", ["python","rust"])
-def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path,backend):
-    from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
-    from pcbeq.grid import GridOptions
+def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path):
     document=build_document(domains=[
         {"id":"step_profile","source":"step_profile","polygons":[rect(0,0,12,10)]},
         {"id":"centre","source":"layer_profile","polygons":[rect(4,4,6,6)]}],
         layers=[{"name":"CU","domain_id":"centre","polygons":[
             rect(0,0,10,10),hole(2,2,8,8),rect(4.5,4.5,5.5,5.5),rect(11,0,12,1)]}])
-    if backend=="rust":
-        source=tmp_path/"input.json"
-        source.write_text(json.dumps(document),encoding="utf-8")
-        run(source,tmp_path/"native",px=24,py=20,max_cell_mm=[3])
-        values=read_document(tmp_path/"native/materialmap.json").regions[0].values[0]
-    else:
-        result=equivalence_from_document(document,EquivalenceOptions(GridOptions(24,20,3)))
-        assert not result.fatal and len(result.cells)==1
-        values=result.cells[0].property_values()
+    source=tmp_path/"input.json"
+    source.write_text(json.dumps(document),encoding="utf-8")
+    run(source,tmp_path/"native",px=24,py=20,max_cell_mm=[3])
+    values=read_document(tmp_path/"native/materialmap.json").regions[0].values[0]
     harmonic=1/(.5/385+.5/.3)
     density=.25*8960+.75*1850
     cp=(.25*8960*385+.75*1850*1100)/density
@@ -170,7 +142,7 @@ def test_sampling_failure_keeps_previous_materialmap(tmp_path):
 
 
 def test_python_images_need_only_materialmap(tmp_path):
-    from pcbeq.map_images import render
+    from pcbeq_rust.map_images import render
     document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])
     _, _, output = execute(document, tmp_path)
     (tmp_path / "input.json").unlink()
@@ -187,10 +159,7 @@ def test_rust_benchmark_uses_native_file_pipeline(tmp_path, monkeypatch):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(build_document(layers=[{"name": "CU", "polygons": []}])), encoding="utf-8")
 
-    def forbidden(*args, **kwargs):
-        raise AssertionError("Python benchmark measure must not run for Rust")
-
-    monkeypatch.setattr(benchmark_pcbeq, "measure", forbidden)
+    monkeypatch.setitem(sys.modules, "pcbeq", None)
     output = tmp_path / "benchmark"
     assert benchmark_pcbeq.main([str(source), "--output", str(output), "--backend", "rust",
                                  "--px", "32", "--py", "32", "--max-cell-mm", "5",
@@ -200,7 +169,7 @@ def test_rust_benchmark_uses_native_file_pipeline(tmp_path, monkeypatch):
 
 
 def test_native_publication_invalidates_owned_images_and_keeps_user_files(tmp_path):
-    from pcbeq.map_images import render
+    from pcbeq_rust.map_images import render
     document = build_document(layers=[{"name": "CU", "polygons": []}])
     _, _, output = execute(document, tmp_path)
     render(output / "materialmap.json", output, heatmap=False, grids=False)

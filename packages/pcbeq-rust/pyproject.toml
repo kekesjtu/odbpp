@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Rust numerical backend and Python charts for pcbeq"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pcbeq==0.1.0"]
+dependencies = ["pydantic>=2.12,<3", "shapely>=2.0", "numpy>=1.26", "matplotlib>=3.9"]
 
 [project.scripts]
 pcbeq-rust = "pcbeq_rust.cli:main"
@@ -20,6 +20,7 @@ features = ["pyo3/extension-module"]
 
 [tool.uv]
 cache-keys = [
+    { file = "python/**/*.py" },
     { file = "pyproject.toml" },
     { file = "Cargo.toml" },
     { file = "src/**/*.rs" },

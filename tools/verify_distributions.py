@@ -16,11 +16,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=ROOT / "tmp/distribution-check")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--cache-dir", type=Path, help="reuse an existing uv package cache")
     parser.add_argument("--backend", choices=("python", "rust"), default="python")
     args = parser.parse_args()
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    uv = [shutil.which("uv"), "--cache-dir", str(output / "uv-cache")]
+    uv = [shutil.which("uv"), "--cache-dir", str(args.cache_dir or output / "uv-cache")]
     if args.offline:
         uv.append("--offline")
     def call(argv, **kwargs):
@@ -32,7 +33,7 @@ def main():
         {"pcbkit", "pcbeq", "pcbkit-rust", "pcbeq-rust", "odbpp"})) + "\n", encoding="utf-8")
     suffix = "-rust" if args.backend == "rust" else ""
     products = ["pcbkit"+suffix, "pcbeq"+suffix]
-    targets = ["pcbkit", "pcbeq"] + (products if suffix else [])
+    targets = products
     for package in targets:
         call([*uv, "build", "--package", package, "--project", str(ROOT), "--out-dir", str(wheels), "--no-sources", "--no-build-logs"])
     executables = {}
@@ -50,7 +51,8 @@ def main():
         call([*uv, "pip", "install", "--python", str(python), "--constraint", str(constraints),
               "--reinstall-package", package, "--find-links", str(wheels), str(wheel)])
         other = "pcbeq" if package.startswith("pcbkit") else "pcbkit"
-        code = f"import importlib.util; import {normalized}; assert importlib.util.find_spec('{other}') is None"
+        forbidden = ({"pcbkit", "pcbeq", "pcbkit_rust", "pcbeq_rust"} - {normalized})
+        code = f"import importlib.util; import {normalized}; assert all(importlib.util.find_spec(n) is None for n in {sorted(forbidden)!r})"
         if package.startswith("pcbkit"):
             code += "; assert importlib.util.find_spec('numpy') is None; assert importlib.util.find_spec('matplotlib') is None"
         call([str(python), "-I", "-c", code])

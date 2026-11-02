@@ -7,7 +7,6 @@ Example (from the repository root):
 from __future__ import annotations
 
 import argparse
-from contextlib import nullcontext
 import gc
 import json
 import os
@@ -17,23 +16,21 @@ import statistics
 import sys
 import time
 
-from pcbeq import numerical
-from pcbeq.diagnostics import Diagnostics
-from pcbeq.equiv import EquivalenceError, EquivalenceOptions, equivalence_from_document
-from pcbeq.grid import GridOptions
-from pcbeq.intermediate import read_document
-from pcbeq.materialmap import MaterialMapWriter
-from pcbeq.materials import MaterialBook
-from pcbeq.rectify import RectifyOptions
 
 
-def measure(source: Path, output: Path, grid: GridOptions, materials: dict, *, max_area_loss_ratio=.05) -> dict:
+def measure(source: Path, output: Path, grid, materials: dict, *, max_area_loss_ratio=.05) -> dict:
     """Use the production streaming writer; no mask sink or visualization imports.
 
     Reading, validation, geometry, sampling, properties and streamed JSON writing
     overlap during equivalence, so computation and writing form one timed stage.
     Statistics and benchmark reporting happen after the timed interval.
     """
+    from pcbeq.diagnostics import Diagnostics
+    from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
+    from pcbeq.intermediate import read_document
+    from pcbeq.materialmap import MaterialMapWriter
+    from pcbeq.materials import MaterialBook
+    from pcbeq.rectify import RectifyOptions
     diagnostics = Diagnostics()
     options = EquivalenceOptions(grid=grid, materials=MaterialBook(materials, diagnostics=diagnostics),
                                  rectify=RectifyOptions(max_relative_area_error=max_area_loss_ratio))
@@ -108,13 +105,16 @@ def main(argv=None) -> int:
     if args.input.resolve() in {args.output.resolve() / name for name in
                                 ("materialmap.json", "materialmap.json.tmp", "benchmark.json")}:
         parser.error("input must not be overwritten by benchmark outputs")
+    errors = (OSError, ValueError, ImportError, RuntimeError)
     try:
         settings = {"px": args.px, "py": args.py,
                     "grid_level": args.grid_level or ("standard" if args.max_cell_mm is None else None),
                     "max_cell_mm": args.max_cell_mm if args.max_cell_mm is not None else [5, 5],
                     "max_area_loss_ratio": args.max_area_loss_ratio}
-        context = nullcontext()
         if args.backend == "python":
+            from pcbeq.grid import GridOptions
+            from pcbeq.equiv import EquivalenceError
+            errors += (EquivalenceError,)
             grid = GridOptions(px=4096 if args.px is None else args.px,
                                py=4096 if args.py is None else args.py,
                                auto_raster=args.px is None, mesh_preset=settings["grid_level"],
@@ -122,37 +122,35 @@ def main(argv=None) -> int:
             materials = json.loads(args.materials.read_text(encoding="utf-8")) if args.materials else {}
             if not isinstance(materials, dict):
                 raise ValueError("materials must be a JSON object")
-            context = numerical.use(None)
         args.output.mkdir(parents=True, exist_ok=True)
-        with context:
-            report = {
-                "measurement": "intermediate JSON read/validation through MaterialMap close and rename",
-                "excluded": ["ODB++ parsing", "process startup/imports", "images/HTML",
-                             "benchmark metadata", "fsync to physical storage"],
-                "cache_policy": "same process; normal OS file cache; fresh document/options per run",
-                "environment": {"python": sys.version, "platform": platform.platform(),
-                                "processor": platform.processor(), "cpu_count": os.cpu_count()},
-                "backend": args.backend,
-                "input": {"path": str(args.input.resolve()),
-                          "bytes": args.input.stat().st_size},
-                "options": {**settings, "materials_path": str(args.materials) if args.materials else None},
-                "warmup": args.warmup,
-                "repeat": args.repeat,
-                "runs": [],
-            }
-            for index in range(args.warmup + args.repeat):
-                run = (measure_native(args.input, args.output, settings, args.materials)
-                       if args.backend == "rust" else measure(args.input, args.output, grid, materials,
-                                                              max_area_loss_ratio=args.max_area_loss_ratio))
-                warmup = index < args.warmup
-                if not warmup:
-                    report["runs"].append(run)
-                print(f"{'warmup' if warmup else 'run'} {index + 1}: "
-                      f"{run['durations_s']['total']:.6f} s, {run['cells']} cells", flush=True)
-            report["summary_s"] = {
-                stage: {"median": statistics.median(values), "min": min(values), "max": max(values)}
-                for stage in ("read_json", "equivalence_and_write", "total")
-                for values in [[run["durations_s"][stage] for run in report["runs"]]]}
+        report = {
+            "measurement": "intermediate JSON read/validation through MaterialMap close and rename",
+            "excluded": ["ODB++ parsing", "process startup/imports", "images/HTML",
+                         "benchmark metadata", "fsync to physical storage"],
+            "cache_policy": "same process; normal OS file cache; fresh document/options per run",
+            "environment": {"python": sys.version, "platform": platform.platform(),
+                            "processor": platform.processor(), "cpu_count": os.cpu_count()},
+            "backend": args.backend,
+            "input": {"path": str(args.input.resolve()),
+                      "bytes": args.input.stat().st_size},
+            "options": {**settings, "materials_path": str(args.materials) if args.materials else None},
+            "warmup": args.warmup,
+            "repeat": args.repeat,
+            "runs": [],
+        }
+        for index in range(args.warmup + args.repeat):
+            run = (measure_native(args.input, args.output, settings, args.materials)
+                   if args.backend == "rust" else measure(args.input, args.output, grid, materials,
+                                                          max_area_loss_ratio=args.max_area_loss_ratio))
+            warmup = index < args.warmup
+            if not warmup:
+                report["runs"].append(run)
+            print(f"{'warmup' if warmup else 'run'} {index + 1}: "
+                  f"{run['durations_s']['total']:.6f} s, {run['cells']} cells", flush=True)
+        report["summary_s"] = {
+            stage: {"median": statistics.median(values), "min": min(values), "max": max(values)}
+            for stage in ("read_json", "equivalence_and_write", "total")
+            for values in [[run["durations_s"][stage] for run in report["runs"]]]}
         (args.output / "benchmark.json").write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         for warning in report["runs"][-1]["warnings"]:
@@ -160,7 +158,7 @@ def main(argv=None) -> int:
         print(f"median: {report['summary_s']['total']['median']:.6f} s; "
               f"report: {args.output / 'benchmark.json'}")
         return 0
-    except (OSError, ValueError, ImportError, RuntimeError, EquivalenceError) as exc:
+    except errors as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

@@ -11,22 +11,27 @@ from conftest import REPO_ROOT
 tomllib = pytest.importorskip("tomllib")
 
 
-@pytest.mark.parametrize("package", ["pcbkit", "pcbeq"])
+@pytest.mark.parametrize("package", ["pcbkit", "pcbeq", "pcbkit-rust", "pcbeq-rust"])
 def test_distribution_metadata_and_import_boundaries(package):
     root = REPO_ROOT / "packages" / package
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert project["name"] == package
-    assert project["scripts"] == {package: f"{package}.cli:main"}
+    module = package.replace("-", "_")
+    assert project["scripts"] == {package: f"{module}.cli:main"}
     dependencies = {r.split(">=")[0] for r in project["dependencies"]}
-    assert "pydantic" in dependencies and "pyclipper" in dependencies
-    assert not ({"pcbkit", "pcbeq", "odbpp"} & dependencies)
+    assert "pydantic" in dependencies
+    if package != "pcbeq-rust":
+        assert "pyclipper" in dependencies
+    forbidden = {"pcbkit", "pcbeq", "pcbkit_rust", "pcbeq_rust", "pcbkit-rust", "pcbeq-rust", "odbpp"}-{module}
+    assert not (forbidden & dependencies)
     for name in dependencies:
         assert importlib.metadata.version(name)
-    for file in (root / "src" / package).rglob("*.py"):
+    source = root / ("python" if package.endswith("-rust") else "src") / module
+    for file in source.rglob("*.py"):
         for node in ast.walk(ast.parse(file.read_text(encoding="utf-8"))):
             names = ([node.module or ""] if isinstance(node, ast.ImportFrom) and not node.level
                      else [a.name for a in node.names] if isinstance(node, ast.Import) else [])
-            assert all(name.split(".")[0] not in ({"pcbkit", "pcbeq", "odbpp"} - {package}) for name in names), file
+            assert all(name.split(".")[0] not in forbidden for name in names), file
 
 
 def test_parser_import_does_not_load_equivalence_dependencies():
