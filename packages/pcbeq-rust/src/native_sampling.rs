@@ -1,18 +1,12 @@
-//! Region-local physical windows, grouped by matching Y bands for prefix reuse.
+//! Material sampling on independent region rasters in physical coordinates.
 use crate::{
     document::{Layer, Polygon, Step},
     geos::Result,
     native_mesh::Mesh,
     planning::Geometry,
-    raster::{self, Axis},
-    sampling,
+    raster_index, sampling,
 };
 use serde_json::{Value, json};
-pub type Window = (usize, usize, usize, usize);
-pub struct Samples {
-    pub windows: Vec<Window>,
-    pub locations: Vec<(usize, usize, usize)>,
-}
 pub fn edges(polygons: &[Polygon]) -> Vec<(f64, f64, f64, f64)> {
     polygons
         .iter()
@@ -24,36 +18,6 @@ pub fn edges(polygons: &[Polygon]) -> Vec<(f64, f64, f64, f64)> {
                 .map(|(&(x, y), &(a, b))| (x, y, a, b))
         })
         .collect()
-}
-fn pixel_range(lo: f64, hi: f64, axis: Axis) -> (usize, usize) {
-    (raster::pixel_index(lo, axis), raster::pixel_index(hi, axis))
-}
-pub fn sample_plan(mesh: &Mesh, geometry: &Geometry, domain: usize) -> Samples {
-    let r = geometry.bounds;
-    let x = (r[0], (r[2] - r[0]) / mesh.pixels[0] as f64, mesh.pixels[0]);
-    let y = (r[1], (r[3] - r[1]) / mesh.pixels[1] as f64, mesh.pixels[1]);
-    let mut bands: Vec<((f64, f64), Vec<(Window, (usize, usize, usize))>)> = vec![];
-    for &rid in &geometry.members[domain] {
-        let (xs, ys) = &mesh.axes[rid];
-        for (j, pair) in ys.windows(2).enumerate() {
-            let (b0, b1) = pixel_range(pair[0], pair[1], y);
-            let band = if let Some(i) = bands.iter().position(|b| b.0 == (pair[0], pair[1])) {
-                i
-            } else {
-                bands.push(((pair[0], pair[1]), vec![]));
-                bands.len() - 1
-            };
-            for (i, pair) in xs.windows(2).enumerate() {
-                let (a0, a1) = pixel_range(pair[0], pair[1], x);
-                bands[band].1.push(((a0, a1, b0, b1), (rid, i, j)));
-            }
-        }
-    }
-    let pairs: Vec<_> = bands.into_iter().flat_map(|b| b.1).collect();
-    Samples {
-        windows: pairs.iter().map(|p| p.0).collect(),
-        locations: pairs.into_iter().map(|p| p.1).collect(),
-    }
 }
 pub struct Drill<'a> {
     pub layer: &'a Layer,
@@ -133,12 +97,8 @@ pub fn evaluate(
     geometry: &Geometry,
     mesh: &Mesh,
     domain: usize,
-    plan: &Samples,
     materials: [f64; 6],
 ) -> Result<(Vec<Vec<[f64; 5]>>, Value)> {
-    let r = geometry.bounds;
-    let x = (r[0], (r[2] - r[0]) / mesh.pixels[0] as f64, mesh.pixels[0]);
-    let y = (r[1], (r[3] - r[1]) / mesh.pixels[1] as f64, mesh.pixels[1]);
     let domain_doc = step
         .domains
         .iter()
@@ -154,51 +114,52 @@ pub fn evaluate(
     } else {
         vec![]
     };
-    let black = if layer.copper() {
-        vec![edges(&layer.polygons)]
+    let black: Vec<&[Polygon]> = if layer.copper() {
+        vec![&layer.polygons]
     } else {
-        covering.iter().map(|d| edges(&d.layer.polygons)).collect()
+        covering
+            .iter()
+            .map(|d| d.layer.polygons.as_slice())
+            .collect()
     };
-    let pixels = raster::rasterize_pixels(
+    let source = raster_index::Materials::new(
         edges(&domain_doc.polygons),
-        Some(edges(&profile.polygons)),
-        black,
-        x,
-        y,
-    )?;
-    let values = sampling::integrate_pixels(
-        &pixels,
-        mesh.pixels[0],
-        mesh.pixels[1],
-        plan.windows.clone(),
-        materials,
-        mesh.minimum,
-    )?;
+        edges(&profile.polygons),
+        &black,
+    );
     let mut regions = vec![vec![]; geometry.rectangles.len()];
+    let mut cells = 0;
     for &rid in &geometry.members[domain] {
-        let (xs, ys) = &mesh.axes[rid];
-        regions[rid] = vec![[0.; 5]; (xs.len() - 1) * (ys.len() - 1)];
-    }
-    for (q, value) in values.into_iter().enumerate() {
-        let (rid, i, j) = plan.locations[q];
-        let value=value.ok_or(format!("layer {:?} region {rid} cell ({i},{j}) bounds={:?}: insufficient raster samples or domain/geometry contradiction; increase px/py",layer.name,geometry.rectangles[rid]))?;
-        let mut properties = [value[1], value[2], value[3], value[4], value[5]];
-        for (i, v) in properties.iter_mut().enumerate() {
-            let factor = if i < 3 { 1e6 } else { 1e4 };
-            let rounded = (*v * factor).round_ties_even() / factor;
-            if rounded > 0. {
-                *v = rounded;
+        let tile = &mesh.rasters[rid];
+        let pixels = source.render(tile.x, tile.y)?;
+        let values = sampling::integrate_pixels(
+            &pixels,
+            tile.x.2,
+            tile.y.2,
+            tile.windows.clone(),
+            materials,
+            mesh.minimum,
+        )?;
+        cells += values.len();
+        for (q, value) in values.into_iter().enumerate() {
+            let value = value.ok_or(format!("layer {:?} region {rid} cell {q}: insufficient raster samples or domain/geometry contradiction; increase px/py",layer.name))?;
+            let mut properties = [value[1], value[2], value[3], value[4], value[5]];
+            for (i, v) in properties.iter_mut().enumerate() {
+                let factor = if i < 3 { 1e6 } else { 1e4 };
+                let rounded = (*v * factor).round_ties_even() / factor;
+                if rounded > 0. {
+                    *v = rounded;
+                }
+                if !v.is_finite() || *v <= 0. {
+                    return Err("non-finite/nonpositive material property".into());
+                }
             }
-            if !v.is_finite() || *v <= 0. {
-                return Err("non-finite/nonpositive material property".into());
-            }
+            regions[rid].push(properties);
         }
-        let nx = mesh.axes[rid].0.len() - 1;
-        regions[rid][j * nx + i] = properties;
     }
     let z = layer.z_mm.as_ref().ok_or("missing layer Z")?;
     let report = json!({"name":layer.name,"type":layer.kind,"status":"equivalent","domain_id":layer.domain_id,
-        "domain_source":domain_doc.source,"cell_count":plan.locations.len(),"partial_domain_cells":0,
+        "domain_source":domain_doc.source,"cell_count":cells,"partial_domain_cells":0,
         "z_mm":{"start_mm":z.start_mm,"end_mm":z.end_mm,"thickness_known":z.thickness_known,"source":z.source},
         "drill_overlays":covering.iter().map(|d|&d.layer.name).collect::<Vec<_>>()});
     Ok((regions, report))

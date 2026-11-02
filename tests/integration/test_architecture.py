@@ -162,6 +162,38 @@ def test_expert_mode_retains_physical_limits_and_fails_zero_samples():
     assert high.grid.size_constraints_mm=={"max":[1,1]}
 
 
+def test_thin_region_only_refines_its_own_raster_and_preserves_all_cells():
+    domains=[{"id":"step_profile","source":"step_profile","polygons":[
+        rect(0,0,10,10),rect(11,4,12,4.0001)]}]
+    document=build_document(domains=domains,layers=[{"name":"CU","polygons":[rect(0,0,12,10)]}])
+    result=equivalence_from_document(document,EquivalenceOptions(
+        GridOptions(1,1,mesh_preset="standard",auto_raster=True)))
+    assert not result.fatal
+    assert len(result.rectification.rectangles)==2
+    raster=result.metadata()["raster"]
+    assert raster["layout"]=="region-local"
+    assert raster["total_pixels"]<20_000_000
+    thin=next(r for r in result.grid.regions if r.rect.height<.001)
+    tile=next(t for t in raster["regions"] if t["region_id"]==thin.region_id)
+    assert tile["py"]==9
+    assert all(c.pixel_rows>=8 and c.pixel_cols>=8 for c in result.cells)
+    assert len(result.cells)==len(result.grid.cells)
+    assert all(c.property_values()==pytest.approx((385,385,385,8960,385)) for c in result.cells)
+
+
+def test_explicit_sampling_retains_board_pixel_centres_at_shared_region_seams():
+    document=build_document(domains=[
+        {"id":"step_profile","source":"step_profile","polygons":[rect(0,0,10,10)]},
+        {"id":"left","source":"layer_profile","polygons":[rect(0,0,5,10)]}],
+        layers=[{"name":"CU","polygons":[rect(5,0,10,10)]},
+                {"name":"LEFT","domain_id":"left","polygons":[]}])
+    result=equivalence_from_document(document,EquivalenceOptions(GridOptions(5,7,5)))
+    assert not result.fatal
+    for cell in result.cells:
+        assert cell.pixel_cols==(2 if cell.x1<=5 else 3)
+        assert cell.copper_fraction==(1 if cell.layer_name=="CU" and cell.x0>=5 else 0)
+
+
 def test_cli_default_preset_and_invalid_combinations(tmp_path):
     from pcbeq.cli import main
     import json

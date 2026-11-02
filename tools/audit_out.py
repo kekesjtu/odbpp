@@ -51,10 +51,9 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
         local_grids={r["region_id"]:r for r in meta["grid"]["regions"]}
         limits=meta["grid"]["size_constraints_mm"]
-        bounds=meta["raster"]["board_bounds_mm"]
-        px,py=meta["raster"]["px"],meta["raster"]["py"]
-        ax=RasterAxis(bounds[0],(bounds[2]-bounds[0])/px,px)
-        ay=RasterAxis(bounds[1],(bounds[3]-bounds[1])/py,py)
+        raster=meta["raster"]
+        px,py=raster["px"],raster["py"]
+        tiles={r["region_id"]:r for r in raster["regions"]}
         required=meta["grid"]["mesh_configuration"]["minimum_samples_per_axis"]
         counts={}; minimum=10**9
         for region in materialmap.regions:
@@ -73,6 +72,10 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             a,b,c,d=bounds5
             for axis,length in enumerate((c-a,d-b)):
                 assert 0<length<=limits["max"][axis]+1e-8
+            x0,x1=region.bounds_mm.x; y0,y1=region.bounds_mm.y
+            tile=tiles[rect_ids[(x0,y0,x1,y1)]]
+            ax=RasterAxis(tile["origin_mm"][0],tile["pixel_step_mm"][0],tile["px"])
+            ay=RasterAxis(tile["origin_mm"][1],tile["pixel_step_mm"][1],tile["py"])
             columns=ax.range_for(a,c);rows=ay.range_for(b,d)
             samples=min(columns[1]-columns[0],rows[1]-rows[0])
             assert samples>=required;minimum=min(minimum,samples)
@@ -90,7 +93,8 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             "region_count":len(regions),"physical_region_count":len(materialmap.regions),
             "region_grid_counts":[r["grid_counts"] for r in local_grids.values()],
             "grid_cells":meta["grid"]["cell_count"],
-            "material_rows":sum(counts.values()),"raster":[px,py],
+            "material_rows":sum(counts.values()),"raster_base":[px,py],
+            "total_region_pixels":raster["total_pixels"],"peak_region_pixels":raster["peak_region_pixels"],
             "minimum_samples_per_axis":minimum,"area_loss_mm2":meta["rectification"]["lost_area_mm2"],
             "max_area_loss_ratio":ratio,"area_and_topology_checks_passed":True,
             "layer_count":len(reports),"drill_scope":meta["drill_scope"],

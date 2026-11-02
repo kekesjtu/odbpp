@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 pub struct Mesh {
     pub axes: Vec<(Vec<f64>, Vec<f64>)>,
     pub pixels: [usize; 2],
+    pub rasters: Vec<crate::region_raster::RegionRaster>,
+    pub raster_report: Value,
     pub cell_count: usize,
     pub minimum: usize,
     pub config: Value,
@@ -62,7 +64,6 @@ pub fn build(engine: &Geos, step: &Step, geometry: &Geometry, options: &Options)
     config["max_cell_mm"] = json!(maximum);
     let mut axes = vec![];
     let mut cell_count = 0usize;
-    let mut widths = [f64::INFINITY; 2];
     for (i, r) in geometry.rectangles.iter().enumerate() {
         let x = grid::axis(r[0], r[2], maximum[0]).map_err(|e| format!("X region {i}: {e}"))?;
         let y = grid::axis(r[1], r[3], maximum[1]).map_err(|e| format!("Y region {i}: {e}"))?;
@@ -76,44 +77,19 @@ pub fn build(engine: &Geos, step: &Step, geometry: &Geometry, options: &Options)
         if cell_count > grid::MAX_GRID_CELLS {
             return Err("grid cell resource limit: 5000000".into());
         }
-        widths[0] = widths[0].min(
-            x.windows(2)
-                .map(|p| p[1] - p[0])
-                .fold(f64::INFINITY, f64::min),
-        );
-        widths[1] = widths[1].min(
-            y.windows(2)
-                .map(|p| p[1] - p[0])
-                .fold(f64::INFINITY, f64::min),
-        );
         axes.push((x, y));
     }
     if cell_count == 0 {
         return Err("no modeled board cells".into());
     }
-    let pixels = if let (Some(x), Some(y)) = (options.px, options.py) {
-        [x, y]
-    } else {
-        std::array::from_fn(|i| {
-            ((4096. * spans[i] / spans[0].max(spans[1])).ceil() as usize)
-                .max((spans[i] * (minimum + 1) as f64 / widths[i]).ceil() as usize)
-                .max(1)
-        })
-    };
-    if pixels[0]
-        .checked_mul(pixels[1])
-        .is_none_or(|n| n > 120_000_000)
-    {
-        return Err(format!(
-            "raster resource limit: {}x{} exceeds 120000000 pixels",
-            pixels[0], pixels[1]
-        ));
-    }
-    config["raster"] = json!({"mode":if options.px.is_some(){"explicit"}else{"automatic"},"px":pixels[0],"py":pixels[1],
-        "default_long_side_px":4096,"max_default_pixels":120000000});
+    let (pixels, rasters, raster_report) =
+        crate::region_raster::build(bounds, &axes, minimum, options)?;
+    config["raster"] = raster_report.clone();
     Ok(Mesh {
         axes,
         pixels,
+        rasters,
+        raster_report,
         cell_count,
         minimum,
         config,

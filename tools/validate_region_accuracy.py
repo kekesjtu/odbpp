@@ -25,7 +25,9 @@ def publication_metrics(name, coordinates, ratio):
     if published != coordinates or audit.get("relative_area_budget") != ratio:
         return None
     return {**meta["runtime"],"measurement":"full pcbeq CLI, including imports, IO, images; native process peak",
-            "raster":[meta["raster"]["px"],meta["raster"]["py"]],
+            "raster_base":[meta["raster"]["px"],meta["raster"]["py"]],
+            "total_region_pixels":meta["raster"]["total_pixels"],
+            "peak_region_pixels":meta["raster"]["peak_region_pixels"],
             "material_cells":sum(l["cell_count"] for l in meta["layers"] if l["status"]=="equivalent")}
 
 

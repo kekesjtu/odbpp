@@ -65,6 +65,7 @@ def measure(source: Path, output: Path, grid: GridOptions, materials: dict, *, m
         "regions": len(writer.headers),
         "layers": sum(layer.status == "equivalent" for layer in result.layers),
         "raster": [result.raster_px, result.raster_py],
+        "raster_sampling": result.grid.mesh_configuration["raster"],
         "materialmap_bytes": final.stat().st_size,
         "warnings": [str(warning) for warning in diagnostics.warnings],
     }

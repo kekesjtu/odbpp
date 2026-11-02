@@ -1,4 +1,4 @@
-"""PCB equivalence: independent inscribed geometry and per-layer raster sampling.
+"""PCB equivalence: independent inscribed geometry and region-local material sampling.
 Properties apply to complete cells and complete physical layer Z intervals.
 """
 
@@ -25,7 +25,7 @@ from .intermediate import BoardDocument, validate_document
 from pydantic import ValidationError
 from .grid import BoardGrid, GridOptions, build_grid
 from .materials import MaterialBook, ResolvedMaterials
-from .raster import LayerMask, RasterAxis, region_edges
+from .raster import LayerMask
 from . import numerical
 from .rectify import (Rect, RectifyOptions, RectifyResult, rectify_region,
                       profile_shape, profile_region, _topology)
@@ -69,7 +69,7 @@ def pipeline_fingerprint() -> str:
     digest = hashlib.sha256()
     for name in ("equiv.py", "geometry.py", "rectify.py", "grid.py", "raster.py",
                  "materials.py", "visualize.py", "mesh.py", "intermediate.py", "materialmap.py",
-                 "numerical.py", "rust_sampling.py", "region_profile.py", "region_topology.py", "region_coarsen.py"):
+                 "numerical.py", "rust_sampling.py", "region_profile.py", "region_topology.py", "region_coarsen.py", "local_raster.py", "scanline.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
     if (native := numerical.current()) is not None:
         digest.update(Path(native.__file__).read_bytes())
@@ -215,6 +215,7 @@ class EquivalenceResult:
                              "Profile approximation loss is recorded separately.",
             },
             "raster": {
+                **((self.grid.mesh_configuration or {}).get("raster", {})),
                 "px": self.raster_px,
                 "py": self.raster_py,
                 "pixel_step_mm": list(self.pixel_step_mm),
@@ -399,84 +400,24 @@ def _topological_overlap(layer_doc: Mapping[str, Any],
 # per-layer evaluation
 # ---------------------------------------------------------------------------
 
-class _Scanline:
-    """Active-edge scanline index over a fixed edge set.
-
-    Rows must be queried in non-decreasing ``y``.  Each edge enters the active
-    set when the scanline reaches its lower end and leaves when it passes its
-    upper end, so a 30k-polygon layer costs O(edges) setup rather than O(edges)
-    per pixel row.
-    """
-
-    def __init__(self, edges: Sequence[tuple[float, float, float, float]]) -> None:
-        # Horizontal edges never cross. Precompute bounds and deltas once,
-        # retaining the original interpolation arithmetic (no slope rounding).
-        self._edges = sorted(
-            ((min(y1, y2), max(y1, y2), x1, y1, x2-x1, y2-y1)
-             for x1, y1, x2, y2 in edges if y1 != y2), key=lambda e: e[0])
-        self._cursor = 0
-        self._active: list[tuple] = []
-
-    def spans_at(self, y: float) -> list[tuple[float, float]]:
-        edges = self._edges
-        while self._cursor < len(edges):
-            edge = edges[self._cursor]
-            if edge[0] <= y:
-                self._active.append(edge)
-                self._cursor += 1
-            else:
-                break
-        active = [edge for edge in self._active if edge[1] > y]
-        self._active = active
-        crossings: list[float] = []
-        for low, high, x1, y1, dx, dy in active:
-            t = (y - y1) / dy
-            crossings.append(x1 + dx * t)
-        if len(crossings) < 2:
-            return []
-        crossings.sort()
-        spans: list[tuple[float, float]] = []
-        for k in range(0, len(crossings) - 1, 2):
-            left, right = crossings[k], crossings[k + 1]
-            if right > left:
-                spans.append((left, right))
-        return spans
-
-
-
-def _merge_spans(spans):
-    out = []
-    for a,b in sorted(spans):
-        if out and a <= out[-1][1]:
-            out[-1]=(out[-1][0],max(b,out[-1][1]))
-        else: out.append((a,b))
-    return out
+from .scanline import Scanline as _Scanline
 
 
 def _evaluate_layer(name, type_name, domain, black, z_start, z_end,
                     thickness_known, materials, grid, x_axis, y_axis, diagnostics,
                     emit, *, mask=None, step_domain=None,
-                    sampling_plan=None):
-    """Independent full-board scanlines; integrate complete Cartesian cells."""
+                    sampling_plan=None, raster_source=None):
+    """Independent physical scanlines; integrate complete Cartesian cells."""
     if (native := numerical.current()) is not None:
         from .rust_sampling import evaluate_layer
         return evaluate_layer(native, name, type_name, domain, black, z_start, z_end,
             thickness_known, materials, grid, x_axis, y_axis, diagnostics, emit,
             mask=mask, step_domain=step_domain, sampling_plan=sampling_plan)
     import numpy as np
-    from .rectify import _intersect_spans
-    # Exactly one layer resident. Complex material patterns are never booleaned.
-    raster = mask if mask is not None else LayerMask(x_axis.count,y_axis.count)
-    domain_scan = _Scanline(region_edges(domain))
-    step_scan = _Scanline(region_edges(step_domain)) if step_domain is not None else None
-    scans = [_Scanline(region_edges(r)) for r in black if r]
-    for b in range(y_axis.count):
-        y = y_axis.centre(b)
-        dom = domain_scan.spans_at(y)
-        if step_scan is not None:
-            dom = _intersect_spans(dom, step_scan.spans_at(y))
-        ink = _merge_spans([span for scan in scans for span in scan.spans_at(y)])
-        raster.set_spans(b,dom,_intersect_spans(dom,ink),x_axis)
+    from .scanline import PreparedRaster
+    raster = (raster_source or PreparedRaster(domain, black, step_domain)).render(x_axis, y_axis)
+    if mask is not None:
+        mask.pixels[:] = raster.pixels
     pixels=np.frombuffer(raster.pixels,dtype=np.uint8).reshape(y_axis.count,x_axis.count)
     k1,k2=materials.k1,materials.k2
     d1,c1=materials.black.density_kg_m3,materials.black.specific_heat_j_kgk
@@ -853,12 +794,9 @@ def equivalence_from_document(
     cells: a board-wide grid at high ``px``/``py`` can hold millions of them, and
     the caller writing a CSV only ever needs one at a time.
 
-    *mask_sink* receives ``(layer name, LayerMask, pixel_step_mm)`` once per
-    equivalented layer, holding exactly the black/white raster that layer's cells
-    were computed from plus the physical size of one raster pixel along X and Y
-    (a picture that keeps the board's proportions needs both).  The callback owns
-    the mask from then on, so a caller that writes an image can drop it
-    immediately and never keep 43 of them resident.
+    *mask_sink* receives a bounded whole-board material preview per equivalented
+    layer, plus its X/Y pixel pitches. Numerical sampling uses independent region
+    rasters; the preview never controls geometry, sampling or properties.
     """
     diags = diagnostics if diagnostics is not None else Diagnostics()
     try:
@@ -886,16 +824,15 @@ def equivalence_from_document(
     bounds = _region_from_polygons(domains[profile_id].get("polygons")).bounds
     assert bounds is not None
     x_min, y_min, x_max, y_max = bounds
-    from .mesh import resolve_mesh, resolve_raster
+    from .mesh import resolve_mesh
+    from .local_raster import plan_rasters, domain_plans, evaluate_regions
     mesh_options,mesh_config=resolve_mesh(step,rectification.rectangles,options.grid)
     grid = build_grid(rectification.rectangles,mesh_options,diagnostics=diags)
     if grid.cells:
-        px,py=resolve_raster(bounds,grid,mesh_options,mesh_config)
+        (px,py),base_axes,rasters=plan_rasters(bounds,grid,mesh_options,mesh_config)
     grid.mesh_configuration=mesh_config
     dx = (x_max - x_min) / px
     dy = (y_max - y_min) / py
-    x_axis = RasterAxis(x_min, dx, px)
-    y_axis = RasterAxis(y_min, dy, py)
 
     if not grid.cells:
         return EquivalenceResult(
@@ -1048,29 +985,17 @@ def equivalence_from_document(
         report.drill_overlays = [d.name for d in covering]
         black = [pattern] + [d.region for d in covering]
         if domain_id not in domain_sampling:
-            members = set(membership.get(domain_id, []))
-            domain_grid = replace(grid, cells=[c for c in grid.cells if c.region_id in members])
-            domain_sampling[domain_id] = (domain_grid, _sampling_plan(domain_grid, x_axis, y_axis))
-        domain_grid, sampling_plan = domain_sampling[domain_id]
-        mask = LayerMask(px, py) if mask_sink is not None else None
-        cell_count, partial, no_pixel = _evaluate_layer(
-            name, type_name, domain, black,
-            z_start, z_end, thickness_known, materials,
-            domain_grid,
-            x_axis, y_axis, diags, emit,
-            mask=mask,
-            step_domain=step_domain,
-            sampling_plan=sampling_plan,
-        )
+            domain_sampling[domain_id] = domain_plans(grid, rasters,
+                set(membership.get(domain_id, [])), base_axes)
+        cell_count, partial, no_pixel = evaluate_regions(
+            name, type_name, domain, black, z_start, z_end, thickness_known,
+            materials, domain_sampling[domain_id], diags, emit,
+            step_domain=step_domain, base=base_axes, mask_sink=mask_sink)
         report.status = "equivalent"
         report.cell_count = cell_count
         report.partial_cells = partial
         cell_without_pixel += no_pixel
         reports.append(report)
-        if mask is not None:
-            # Hand the raster over as soon as the layer is done; the sink writes
-            # it out and drops it, so only one layer mask is ever resident.
-            mask_sink(name, mask, (dx, dy))
 
     if cell_without_pixel or any(r.status == "failed" for r in reports):
         fatal = True

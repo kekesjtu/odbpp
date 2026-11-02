@@ -87,6 +87,54 @@ def test_rigidflex_holes_and_layer_existence_are_preserved(tmp_path):
     assert not any(box(*bounds).intersects(box(4.01, 4.01, 5.99, 5.99)) for _, bounds, _ in iter_cells(delivered))
 
 
+def test_native_thin_region_uses_a_local_raster_and_matches_python(tmp_path):
+    from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
+    from pcbeq.grid import GridOptions
+    document=build_document(domains=[{"id":"step_profile","source":"step_profile",
+        "polygons":[rect(0,0,10,10),rect(11,4,12,4.0001)]}],
+        layers=[{"name":"CU","polygons":[rect(0,0,6,10)]}])
+    source=tmp_path/"input.json"
+    source.write_text(json.dumps(document),encoding="utf-8")
+    output=tmp_path/"native"
+    summary=run(source,output,grid_level="standard")
+    delivered=read_document(output/"materialmap.json")
+    assert summary["raster_sampling"]["layout"]=="region-local"
+    assert summary["raster_sampling"]["total_pixels"]<20_000_000
+    thin=next(r for r in delivered.regions if r.bounds_mm.y[1]-r.bounds_mm.y[0]<.001)
+    assert thin.values and all(v==(.3,.3,.3,1850,1100) for v in thin.values)
+    reference=equivalence_from_document(document,EquivalenceOptions(
+        GridOptions(1,1,mesh_preset="standard",auto_raster=True)))
+    assert not reference.fatal
+    expected={(c.layer_name,c.x0,c.y0,c.x1,c.y1):c.property_values() for c in reference.cells}
+    for region,bounds,values in iter_cells(delivered):
+        assert values==pytest.approx(expected[(region.layer.name,*bounds)],abs=1e-6)
+    assert summary["cells"]==len(expected)
+
+
+@pytest.mark.parametrize("backend", ["python","rust"])
+def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path,backend):
+    from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
+    from pcbeq.grid import GridOptions
+    document=build_document(domains=[
+        {"id":"step_profile","source":"step_profile","polygons":[rect(0,0,12,10)]},
+        {"id":"centre","source":"layer_profile","polygons":[rect(4,4,6,6)]}],
+        layers=[{"name":"CU","domain_id":"centre","polygons":[
+            rect(0,0,10,10),hole(2,2,8,8),rect(4.5,4.5,5.5,5.5),rect(11,0,12,1)]}])
+    if backend=="rust":
+        source=tmp_path/"input.json"
+        source.write_text(json.dumps(document),encoding="utf-8")
+        run(source,tmp_path/"native",px=24,py=20,max_cell_mm=[3])
+        values=read_document(tmp_path/"native/materialmap.json").regions[0].values[0]
+    else:
+        result=equivalence_from_document(document,EquivalenceOptions(GridOptions(24,20,3)))
+        assert not result.fatal and len(result.cells)==1
+        values=result.cells[0].property_values()
+    harmonic=1/(.5/385+.5/.3)
+    density=.25*8960+.75*1850
+    cp=(.25*8960*385+.75*1850*1100)/density
+    assert values==pytest.approx(((.3+harmonic)/2,)*2+(96.475,density,cp),abs=1e-4)
+
+
 @pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "domain", "z", "span"])
 def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
     document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])

@@ -228,7 +228,7 @@ class TestLayerMask:
 
 
 class TestMaskFromEquivalence:
-    def test_the_mask_is_the_raster_the_formulas_integrated(self, tmp_path):
+    def test_material_preview_keeps_its_own_physical_pixel_pitch(self, tmp_path):
         captured: list[tuple[str, LayerMask, tuple[float, float]]] = []
         result = run(document([{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}],
                               profile=rect(0, 0, 10, 5)),

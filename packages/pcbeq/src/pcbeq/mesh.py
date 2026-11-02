@@ -3,8 +3,6 @@ from dataclasses import replace
 import math
 
 MIN_SAMPLES_PER_AXIS = 8
-DEFAULT_RASTER_LONG_SIDE = 4096
-MAX_DEFAULT_RASTER_PIXELS = 120_000_000
 
 def resolve_mesh(step, rectangles, options):
     # Resolve the physical target from the original physical domain. The
@@ -43,22 +41,3 @@ def resolve_mesh(step, rectangles, options):
                 "target_max_cell_mm":target}
     config["max_cell_mm"]=list(options.max_cell_mm)
     return options,config
-
-def resolve_raster(bounds, grid, options, config):
-    spans=(bounds[2]-bounds[0],bounds[3]-bounds[1])
-    widths=[min(getattr(c.rect,a+"1")-getattr(c.rect,a+"0") for c in grid.cells) for a in "xy"]
-    threshold=config["minimum_samples_per_axis"]
-    if options.auto_raster:
-        # One extra sample per smallest interval protects arbitrary pixel phase.
-        counts=tuple(max(1,math.ceil(DEFAULT_RASTER_LONG_SIDE*s/max(spans)),
-                         math.ceil(s*(threshold+1)/w)) for s,w in zip(spans,widths))
-        if counts[0]*counts[1]>MAX_DEFAULT_RASTER_PIXELS:
-            raise ValueError(f"default raster needs {counts[0]}x{counts[1]} pixels; "
-                             "exceeds 120 million pixel budget; use expert sizes or explicit --px/--py")
-    else:
-        counts=(options.px,options.py)
-    config["raster"]={"mode":"automatic" if options.auto_raster else "explicit",
-                       "px":counts[0],"py":counts[1],
-                       "default_long_side_px":DEFAULT_RASTER_LONG_SIDE,
-                       "max_default_pixels":MAX_DEFAULT_RASTER_PIXELS}
-    return counts

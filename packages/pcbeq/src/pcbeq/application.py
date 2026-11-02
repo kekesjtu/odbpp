@@ -108,8 +108,8 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
     report_path = os.path.join(out_dir, "diagnostics", "run.json")
     temp_path = map_path + ".tmp"
 
-    # Raster masks are written while the layers are equivalented, so only one
-    # mask is ever resident.  They go to a temporary name and are moved into
+    # Bounded material previews are written one layer at a time. They go to a
+    # temporary name and are moved into
     # place only once the whole run is known to be trustworthy, exactly like the
     # JSON: a fatal run must not leave half a result behind.
     masks_dir = os.path.join(out_dir, "masks")
@@ -167,7 +167,7 @@ def _run_to_stage(args: argparse.Namespace, diagnostics: Diagnostics) -> int:
 
     equivalent_layers = [r for r in result.layers if r.status == "equivalent"]
     print(f"step {step_name!r}: {count} equivalent cell(s) over "
-          f"{len(equivalent_layers)} layer(s); raster {result.raster_px}x{result.raster_py}, "
+          f"{len(equivalent_layers)} layer(s); region-local rasters, base density {result.raster_px}x{result.raster_py}, "
           f"{len(result.grid.regions)} local Cartesian grid(s), "
           f"{len(result.grid.cells)} board cell(s)")
     for report in result.layers:

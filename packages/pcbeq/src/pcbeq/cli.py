@@ -22,9 +22,9 @@ def build_parser(*, prog="pcbeq"):
     p_eq.add_argument("-o", "--out", default=None,
                       help="output directory (default: out/<job name>)")
     p_eq.add_argument("--px", type=int, default=None,
-                      help="X raster pixels (default: dense geometry-aware sampling)")
+                      help="board-reference X sampling density (default: region-local automatic sampling)")
     p_eq.add_argument("--py", type=int, default=None,
-                      help="Y raster pixels (provide together with --px)")
+                      help="board-reference Y sampling density (provide together with --px)")
     p_eq.add_argument("--grid-level", choices=("coarse","standard","fine"), default=None,
                       help="adaptive mesh preset (default: standard; expert sizes override)")
     p_eq.add_argument("--max-cell-mm", type=float, nargs="+", default=None, metavar="MM",
@@ -49,7 +49,7 @@ def build_parser(*, prog="pcbeq"):
                       help="isotropic nearest-neighbour zoom for the mask PNGs, "
                            "stretching a non-square board (default 0 = auto: "
                            "about 1400 px on the long side, board proportions "
-                           "kept; 1 = exactly px x py)")
+                           "kept; 1 = preview pixels without zoom)")
     p_eq.add_argument("--no-heatmap", dest="heatmap", action="store_false",
                       default=True,
                       help="do not write the per-layer kx/ky/kz heat maps "

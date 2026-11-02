@@ -13,9 +13,8 @@ and hole nesting alternates.  The fill therefore never depends on the order the
 rings happen to be in -- which is exactly the trap requirements.md parser constraint 6 warns
 about.
 
-The raster itself is only ever materialised one pixel row at a time
-(``bytearray`` of length ``px``), so a 5000x5000 board at 43 layers does not
-need gigabytes of resident masks.
+Numerical rasters cover individual regions. Material previews use a separate
+bounded whole-board raster; both retain the same physical coordinate system.
 """
 
 from __future__ import annotations
