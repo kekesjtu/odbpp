@@ -25,6 +25,10 @@ fn intersect(a: &[Span], b: &[Span]) -> Vec<Span> {
 
 #[pyfunction]
 pub fn envelope(rings: Vec<Vec<Point>>, a: f64, b: f64) -> PyResult<Vec<Span>> {
+    common_y(rings, a, b).map_err(PyValueError::new_err)
+}
+
+pub fn common_y(rings: Vec<Vec<Point>>, a: f64, b: f64) -> Result<Vec<Span>, String> {
     if !a.is_finite()
         || !b.is_finite()
         || b <= a
@@ -33,9 +37,7 @@ pub fn envelope(rings: Vec<Vec<Point>>, a: f64, b: f64) -> PyResult<Vec<Span>> {
             .flatten()
             .any(|p| !p.0.is_finite() || !p.1.is_finite())
     {
-        return Err(PyValueError::new_err(
-            "non-finite profile or invalid X interval",
-        ));
+        return Err("non-finite profile or invalid X interval".into());
     }
     let mut events = vec![a, b];
     let mut edges: Vec<Edge> = vec![];

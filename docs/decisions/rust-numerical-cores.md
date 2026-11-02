@@ -7,9 +7,11 @@
 
 ## 语言职责
 
-Rust 承担几何离散、整数布尔与扫掠、物理区间计算、扫描线材料采样和串并联物性积分等数值内核。
-Python 承担文件与参数处理、Pydantic 契约、规划调度、几何约束和拓扑审计、诊断、发布及全部 SVG/HTML/PNG/Matplotlib 可视化。
-region 的自适应细化、相邻合并和共享域验收保留 Python/Shapely 调度，竖条真实共同 Y 区间由 Rust 计算。Rust 核心版是混合语言产品，运行环境包含 Python。
+`pcbkit-rust` 使用 Rust 几何离散、整数布尔与扫掠内核，Python 承担其文件调度、契约与工程预览。
+`pcbeq-rust` 从中间 JSON 读取开始，到 MaterialMap 文件关闭与发布为止，全部由 Rust 执行：Serde 输入校验、region 规划、局部网格、材料配置与采样、物性积分、几何验收和运行诊断均不得回调 Python。
+Python 仅承担等效器命令启动和 MaterialMap 的 SVG/HTML/PNG/Matplotlib 可视化；图表不得重新读取中间 JSON 或重新计算物性。
+region 的自适应细化、相邻合并、共享分区和验收均使用 Rust 调度。连续几何谓词通过 Rust 直接调用 GEOS C API，保留孔洞、连接、内接性和误差预算语义；不得以简化验收换取速度。GEOS 可来自 Shapely wheel 的原生库目录或 `PCBEQ_GEOS_LIBRARY`，计算流程不使用 Shapely Python API。
+Python 参考等效器保留用于同输入、同物理约束的数值与性能对照。纯数值调用不导入绘图库，性能计时包含 JSON 读取校验至 MaterialMap 写入关闭，不包含图表和诊断报告序列化。
 
 Rust 经 PyO3 扩展以批量数据调用，Maturin 构建平台 wheel / sdist。共享 Rust 几何仅作为内部 crate 复用，不形成产品间运行依赖。
 整数几何保持 1e-6 mm 坐标量化、显式岛孔和 NonZero 极性；输出精度仍由用户设置。几何算法间可有离散坐标和环排序差异，应以物理区域、拓扑、误差预算和物性容差验收。

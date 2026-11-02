@@ -1,5 +1,7 @@
 # pcbeq 可视化决策
 
+`pcbeq-rust` 的 Python 绘图只读取正式 MaterialMap：从 region 范围与网格数恢复模型几何、局部网格和物性热图，不读取中间 JSON，也不依赖计算诊断。采样掩膜、原始 profile 叠加及几何损失对照只适用于 Python 参考等效器；不能从 MaterialMap 推断并绘制这些输入信息。
+
 ## 输出含义
 
 | 产物 | 数据来源 | 用途 |

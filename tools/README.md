@@ -25,7 +25,7 @@ uv run python tools/benchmark_pcbeq.py out/minimal-test-odb/python/pcbkit/interm
 uv run --extra rust python tools/benchmark_pcbeq.py out/minimal-test-odb/python/pcbkit/intermediate.json --output tmp/2026-11-02-pcbeq-benchmark/rust --backend rust --repeat 3
 ```
 
-默认预热一次；导入、预热和基准报告不计时。每轮重新读取 JSON，使用生产流式写入器，计时包含几何规划、材料采样、物性等效和文件关闭/重命名，不要求物理磁盘落盘。读取与等效写入分别计时；采样期间同步写入，等效和写入不单独拆分。报告记录每轮数据、最小/中位/最大耗时、CPU 时间、吞吐量、实际光栅及三维 region/单元数，等效失败时返回非零。默认网格与光栅策略和 `pcbeq run` 相同，可用 `--px/--py`、`--grid-level` 或 `--max-cell-mm` 控制负载。
+默认预热一次；导入、预热和基准报告不计时。每轮重新读取 JSON，计时包含几何规划、材料采样、物性等效和文件关闭/重命名，不要求物理磁盘落盘。Python 使用生产流式写入器；Rust 直接调用完整原生文件接口，不经过 Python 输入校验、几何规划或 MaterialMap 写入。报告记录每轮数据、最小/中位/最大耗时、CPU 时间、吞吐量、实际光栅及三维 region/单元数；Rust 同时记录几何、网格、采样、写入和 GEOS 运算耗时，诊断报告序列化不计入 MaterialMap 时间。等效失败时返回非零。默认网格与光栅策略和 `pcbeq run` 相同，可用 `--px/--py`、`--grid-level` 或 `--max-cell-mm` 控制负载。
 
 正式案例按 `out/<case>/python/` 与 `out/<case>/rust/` 分别存放两种版本，各自包含 `pcbkit/`、`pcbeq/` 与 `pipeline/`。`sync_out.py` 维护 Python 产物，总索引保留两种版本；Rust 管道通过 `run_pipeline.py --pcbkit-exe pcbkit-rust --pcbeq-exe pcbeq-rust -o out/<case>/rust` 选择两个独立入口及输出位置。
 几何、标记或元数据改变时使用完整案例同步；CSS/JS 专项更新可用预览刷新工具。

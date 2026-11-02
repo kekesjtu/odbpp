@@ -34,5 +34,4 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
                  "pcbeq/materialmap.json","pcbeq/index.html","pcbeq/regions/regions.png",
                  "pcbeq/grids/cartesian-grid.png"):
         assert (tmp_path/name).stat().st_size>0
-    assert list((tmp_path/"pcbeq/masks").glob("*.png"))
     assert list((tmp_path/"pcbeq/heatmaps").glob("*.png"))

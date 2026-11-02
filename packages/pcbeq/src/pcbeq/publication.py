@@ -15,8 +15,9 @@ def public_path(path, args) -> str:
 
 
 class OutputRun:
-    def __init__(self, directory: str | Path):
+    def __init__(self, directory: str | Path, *, manifest="diagnostics/artifacts.json"):
         self.directory = Path(directory).resolve()
+        self.manifest = Path(manifest)
 
     def __enter__(self):
         self.directory.parent.mkdir(parents=True, exist_ok=True)
@@ -26,7 +27,7 @@ class OutputRun:
         return self
 
     def commit(self):
-        manifest = Path("diagnostics/artifacts.json")
+        manifest = self.manifest
         previous = self.directory / manifest
         old = json.loads(previous.read_text(encoding="utf-8"))["files"] if previous.is_file() else []
         files = sorted(p.relative_to(self.path).as_posix() for p in self.path.rglob("*") if p.is_file())

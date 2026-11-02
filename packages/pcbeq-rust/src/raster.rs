@@ -12,12 +12,12 @@ struct Scan {
     cursor: usize,
 }
 impl Scan {
-    fn new(edges: Vec<Edge>) -> PyResult<Self> {
+    fn new(edges: Vec<Edge>) -> Result<Self, String> {
         if edges
             .iter()
             .any(|e| !e.0.is_finite() || !e.1.is_finite() || !e.2.is_finite() || !e.3.is_finite())
         {
-            return Err(PyValueError::new_err("non-finite raster edge"));
+            return Err("non-finite raster edge".into());
         }
         let mut edges: Vec<_> = edges
             .into_iter()
@@ -85,19 +85,32 @@ pub fn rasterize<'py>(
     x: Axis,
     y: Axis,
 ) -> PyResult<Bound<'py, PyBytes>> {
+    let pixels = py
+        .detach(|| rasterize_pixels(domain, step, black, x, y))
+        .map_err(PyValueError::new_err)?;
+    Ok(PyBytes::new(py, &pixels))
+}
+
+pub fn rasterize_pixels(
+    domain: Vec<Edge>,
+    step: Option<Vec<Edge>>,
+    black: Vec<Vec<Edge>>,
+    x: Axis,
+    y: Axis,
+) -> Result<Vec<u8>, String> {
     for a in [x, y] {
         if !a.0.is_finite() || !a.1.is_finite() || a.1 <= 0. || a.2 == 0 {
-            return Err(PyValueError::new_err("invalid raster axis"));
+            return Err("invalid raster axis".into());
         }
     }
     let count =
         x.2.checked_mul(y.2)
             .filter(|n| *n <= MAX_RASTER_PIXELS)
-            .ok_or_else(|| PyValueError::new_err("raster resource limit: 120000000 pixels"))?;
+            .ok_or("raster resource limit: 120000000 pixels")?;
     let mut domain = Scan::new(domain)?;
     let mut step = step.map(Scan::new).transpose()?;
-    let mut black: Vec<Scan> = black.into_iter().map(Scan::new).collect::<PyResult<_>>()?;
-    let pixels = py.detach(move || {
+    let mut black: Vec<Scan> = black.into_iter().map(Scan::new).collect::<Result<_, _>>()?;
+    let pixels = {
         let mut pixels = vec![160u8; count];
         for row in 0..y.2 {
             let yy = y.0 + (row as f64 + 0.5) * y.1;
@@ -127,6 +140,6 @@ pub fn rasterize<'py>(
             }
         }
         pixels
-    });
-    Ok(PyBytes::new(py, &pixels))
+    };
+    Ok(pixels)
 }

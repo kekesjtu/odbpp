@@ -2,10 +2,44 @@ use pcb_geometry::{Ring, boolean};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+mod coarsen;
+mod document;
+mod geos;
 mod grid;
+mod native_materials;
+mod native_mesh;
+mod native_output;
+mod native_publication;
+mod native_sampling;
+mod options;
+mod pipeline;
+mod planning;
 mod profile;
 mod raster;
+mod rectification;
 mod sampling;
+mod shared;
+mod topology;
+
+#[pyfunction]
+fn run_materialmap(
+    py: Python<'_>,
+    input: String,
+    output: String,
+    options_json: String,
+) -> PyResult<String> {
+    py.detach(move || {
+        let options: options::Options =
+            serde_json::from_str(&options_json).map_err(|e| e.to_string())?;
+        let summary = pipeline::run(
+            std::path::Path::new(&input),
+            std::path::Path::new(&output),
+            options,
+        )?;
+        serde_json::to_string(&summary).map_err(|e| e.to_string())
+    })
+    .map_err(PyValueError::new_err)
+}
 
 #[pyfunction]
 fn boolean_op(
@@ -30,5 +64,6 @@ fn _pcbeq_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(profile::envelope, m)?)?;
     m.add_function(wrap_pyfunction!(raster::rasterize, m)?)?;
     m.add_function(wrap_pyfunction!(sampling::integrate, m)?)?;
+    m.add_function(wrap_pyfunction!(run_materialmap, m)?)?;
     Ok(())
 }

@@ -7,6 +7,7 @@ Example (from the repository root):
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import gc
 import json
 import os
@@ -86,6 +87,15 @@ def build_parser():
     return parser
 
 
+def measure_native(source: Path, output: Path, settings: dict, materials_path: Path | None) -> dict:
+    from pcbeq_rust.native import run
+    gc.collect()
+    cpu_start = time.process_time()
+    result = run(source, output, **settings, materials_path=str(materials_path) if materials_path else None)
+    result["cpu_s"] = time.process_time() - cpu_start
+    return result
+
+
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -97,18 +107,19 @@ def main(argv=None) -> int:
                                 ("materialmap.json", "materialmap.json.tmp", "benchmark.json")}:
         parser.error("input must not be overwritten by benchmark outputs")
     try:
-        grid = GridOptions(px=4096 if args.px is None else args.px,
-                           py=4096 if args.py is None else args.py,
-                           auto_raster=args.px is None,
-                           mesh_preset=args.grid_level or ("standard" if args.max_cell_mm is None else None),
-                           max_cell_mm=args.max_cell_mm if args.max_cell_mm is not None else 5)
-        materials = json.loads(args.materials.read_text(encoding="utf-8")) if args.materials else {}
-        if not isinstance(materials, dict):
-            raise ValueError("materials must be a JSON object")
-        context = numerical.use(None)
-        if args.backend == "rust":
-            from pcbeq_rust import backend
-            context = backend()
+        settings = {"px": args.px, "py": args.py,
+                    "grid_level": args.grid_level or ("standard" if args.max_cell_mm is None else None),
+                    "max_cell_mm": args.max_cell_mm if args.max_cell_mm is not None else [5, 5]}
+        context = nullcontext()
+        if args.backend == "python":
+            grid = GridOptions(px=4096 if args.px is None else args.px,
+                               py=4096 if args.py is None else args.py,
+                               auto_raster=args.px is None, mesh_preset=settings["grid_level"],
+                               max_cell_mm=settings["max_cell_mm"])
+            materials = json.loads(args.materials.read_text(encoding="utf-8")) if args.materials else {}
+            if not isinstance(materials, dict):
+                raise ValueError("materials must be a JSON object")
+            context = numerical.use(None)
         args.output.mkdir(parents=True, exist_ok=True)
         with context:
             report = {
@@ -121,15 +132,14 @@ def main(argv=None) -> int:
                 "backend": args.backend,
                 "input": {"path": str(args.input.resolve()),
                           "bytes": args.input.stat().st_size},
-                "options": {"px": grid.px, "py": grid.py, "auto_raster": grid.auto_raster,
-                            "grid_level": grid.mesh_preset, "max_cell_mm": grid.max_cell_mm,
-                            "materials": materials},
+                "options": {**settings, "materials_path": str(args.materials) if args.materials else None},
                 "warmup": args.warmup,
                 "repeat": args.repeat,
                 "runs": [],
             }
             for index in range(args.warmup + args.repeat):
-                run = measure(args.input, args.output, grid, materials)
+                run = (measure_native(args.input, args.output, settings, args.materials)
+                       if args.backend == "rust" else measure(args.input, args.output, grid, materials))
                 warmup = index < args.warmup
                 if not warmup:
                     report["runs"].append(run)
@@ -146,7 +156,7 @@ def main(argv=None) -> int:
         print(f"median: {report['summary_s']['total']['median']:.6f} s; "
               f"report: {args.output / 'benchmark.json'}")
         return 0
-    except (OSError, ValueError, ImportError, EquivalenceError) as exc:
+    except (OSError, ValueError, ImportError, RuntimeError, EquivalenceError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

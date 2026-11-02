@@ -12,27 +12,35 @@ pub fn integrate(
     materials: [f64; 6],
     minimum: usize,
 ) -> PyResult<Vec<Option<[f64; 6]>>> {
+    py.detach(|| integrate_pixels(pixels, px, py_count, windows, materials, minimum))
+        .map_err(PyValueError::new_err)
+}
+
+pub fn integrate_pixels(
+    pixels: &[u8],
+    px: usize,
+    py_count: usize,
+    windows: Vec<Window>,
+    materials: [f64; 6],
+    minimum: usize,
+) -> Result<Vec<Option<[f64; 6]>>, String> {
     if px.checked_mul(py_count) != Some(pixels.len())
         || px == 0
         || py_count == 0
         || pixels.len() > crate::raster::MAX_RASTER_PIXELS
     {
-        return Err(PyValueError::new_err(
-            "mask dimensions do not match pixels or exceed resource limit",
-        ));
+        return Err("mask dimensions do not match pixels or exceed resource limit".into());
     }
     if minimum == 0 || materials.iter().any(|v| !v.is_finite() || *v <= 0.) {
-        return Err(PyValueError::new_err(
-            "materials and sampling minimum must be finite and positive",
-        ));
+        return Err("materials and sampling minimum must be finite and positive".into());
     }
     if windows
         .iter()
         .any(|&(a, b, c, d)| a > b || b > px || c > d || d > py_count)
     {
-        return Err(PyValueError::new_err("sampling window outside raster"));
+        return Err("sampling window outside raster".into());
     }
-    Ok(py.detach(|| {
+    Ok({
         let [k1, k2, d1, d2, c1, c2] = materials;
         let mut out = vec![None; windows.len()];
         let mut start = 0;
@@ -95,5 +103,5 @@ pub fn integrate(
             start = end;
         }
         out
-    }))
+    })
 }

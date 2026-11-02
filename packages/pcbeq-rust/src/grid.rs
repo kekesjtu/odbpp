@@ -62,7 +62,7 @@ pub fn build_grid(rectangles: Vec<Rect>, maximum: (f64, f64)) -> PyResult<Layout
     Ok((axes, cells))
 }
 
-fn axis(left: f64, right: f64, maximum: f64) -> Result<Vec<f64>, String> {
+pub fn axis(left: f64, right: f64, maximum: f64) -> Result<Vec<f64>, String> {
     let ratio = (right - left) / maximum;
     if !left.is_finite()
         || !right.is_finite()
