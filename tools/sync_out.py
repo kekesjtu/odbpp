@@ -63,13 +63,12 @@ def existing_preview(directory, source):
         return None
 
 def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5,
-                         grid_level=None, draw_grid=False, max_boundary_retreat_mm=3.0,
+                         grid_level=None, draw_grid=False,
                          max_area_loss_ratio=.05):
     try:
         cache = json.loads((directory / "pipeline/cache.json").read_text(encoding="utf-8"))
         requested = {"px": px, "py": py, "max": sizes(max_cell_mm, 5),
                      "grid_level": grid_level, "draw_grid": draw_grid,
-                     "max_boundary_retreat_mm":max_boundary_retreat_mm,
                      "max_area_loss_ratio":max_area_loss_ratio}
         if cache["equivalent"] != fingerprint("pcbeq") or cache["requested"] != requested:
             return None
@@ -136,7 +135,6 @@ def main():
     parser.add_argument("--py", type=int)
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     parser.add_argument("--max-cell-mm", nargs="+", type=float)
-    parser.add_argument("--max-boundary-retreat-mm", type=float, default=3.0)
     parser.add_argument("--max-area-loss-ratio", type=float, default=.05)
     args = parser.parse_args()
     if (args.px is None) != (args.py is None) or (args.px is not None and min(args.px, args.py) <= 0):
@@ -157,7 +155,6 @@ def main():
         equivalent = None if valid is None or args.force_equivalent else existing_equivalence(
             output, valid[0], px=args.px, py=args.py, max_cell_mm=upper,
             grid_level=args.grid_level, draw_grid=args.heatmap_grid,
-            max_boundary_retreat_mm=args.max_boundary_retreat_mm,
             max_area_loss_ratio=args.max_area_loss_ratio)
         result = execute(source, output, equivalent_args=options, reuse_parser=valid is not None,
                          reuse_equivalent=equivalent is not None)
@@ -168,7 +165,6 @@ def main():
                  "source_mtime_ns": source_mtime(source), "json_sha256": hashlib.sha256(preview.read_bytes()).hexdigest(),
                  "requested": {"px": args.px, "py": args.py, "max": upper,
                                "grid_level": args.grid_level, "draw_grid": args.heatmap_grid,
-                               "max_boundary_retreat_mm":args.max_boundary_retreat_mm,
                                "max_area_loss_ratio":args.max_area_loss_ratio}}
         (output / "pipeline/cache.json").write_text(json.dumps(cache, indent=2), encoding="utf-8")
     OUT.mkdir(parents=True, exist_ok=True)

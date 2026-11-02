@@ -28,7 +28,7 @@ from .materials import MaterialBook, ResolvedMaterials
 from .raster import LayerMask, RasterAxis, region_edges
 from . import numerical
 from .rectify import (Rect, RectifyOptions, RectifyResult, rectify_region,
-                      profile_shape, profile_region, _topology, boundary_retreat)
+                      profile_shape, profile_region, _topology)
 
 __all__ = [
     "EquivalenceOptions",
@@ -69,7 +69,7 @@ def pipeline_fingerprint() -> str:
     digest = hashlib.sha256()
     for name in ("equiv.py", "geometry.py", "rectify.py", "grid.py", "raster.py",
                  "materials.py", "visualize.py", "mesh.py", "intermediate.py", "materialmap.py",
-                 "numerical.py", "rust_sampling.py"):
+                 "numerical.py", "rust_sampling.py", "region_profile.py", "region_topology.py", "region_coarsen.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
     if (native := numerical.current()) is not None:
         digest.update(Path(native.__file__).read_bytes())
@@ -541,17 +541,16 @@ def _sampling_plan(grid, x_axis, y_axis):
 
 
 def plan_geometry(step, options, diagnostics):
-    """Retry shared-domain failures with less coarsening, never relaxed budgets."""
+    """Retry shared-domain conflicts with tighter independent area budgets."""
     attempts = []
-    for divisor in (1,2,4,8,16):
-        cap = min(options.rectify.max_boundary_retreat_mm,
-                  options.rectify.coarsening_retreat_mm or options.rectify.max_boundary_retreat_mm)/divisor
-        attempt = replace(options,rectify=replace(options.rectify,coarsening_retreat_mm=cap))
+    ratio = options.rectify.max_relative_area_error
+    for divisor in ((1,) if ratio == 0 else (1,2,4,8,16)):
+        cap = ratio/divisor
+        attempt = replace(options,rectify=replace(options.rectify,planning_area_ratio=cap))
         local = Diagnostics()
         geometry,membership = _plan_geometry_once(step,attempt,local)
-        attempts.append({"coarsening_retreat_limit_mm":cap,"ok":geometry.ok,
-            "failed_domains":[key for key,audit in geometry.audit.get("domains",{}).items()
-                              if not audit["ok"]]})
+        attempts.append({"planning_area_loss_ratio":cap,"ok":geometry.ok,
+            "failed_domains":[key for key,audit in geometry.audit.get("domains",{}).items() if not audit["ok"]]})
         if (geometry.ok or not local.errors
                 or any(d.code != "equiv.domain_geometry" for d in local.errors)):
             break
@@ -644,7 +643,7 @@ def _coarsen_shared_partition(rectangles, membership, originals, options):
                     continue
                 affected=set(li+ri)
                 # Sharing one limiting edge can simplify a boundary coordinate even
-                # when sharing both edges would exceed the contour budget.
+                # when sharing both edges would exceed the area budget or break topology.
                 for merge_low,merge_high in ((True,True),(True,False),(False,True)):
                     replacements={i:Rect(rectangles[i].x0,
                         max(low,rectangles[i].y0) if merge_low else rectangles[i].y0,
@@ -677,7 +676,6 @@ def _coarsen_shared_partition(rectangles, membership, originals, options):
                     checked.add(identity)
                     if (source.difference(model).area>source.area*options.max_relative_area_error+1e-8
                             or model.difference(source).area>1e-8
-                            or not boundary_retreat(source,model,options.max_boundary_retreat_mm,measure=False)["within_limit"]
                             or not _topology(source,model)["preserved"]):
                         break
                 updates[key]=model
@@ -737,13 +735,12 @@ def _plan_geometry_once(step, options, diagnostics):
         model=unary_union([box(*r.bounds) for r in plan.rectangles]).intersection(step_model)
         topology=_topology(original,model)
         loss=original.area-model.area
-        allowed=plan.audit.get("area_budget_mm2",0)
-        contour=boundary_retreat(original,model,options.rectify.max_boundary_retreat_mm)
-        good=plan.ok and topology["preserved"] and loss <= allowed+1e-8 and contour["within_limit"]
+        allowed=original.area*options.rectify.max_relative_area_error
+        good=plan.ok and topology["preserved"] and loss <= allowed+1e-8
         if not good:
             diagnostics.error("equiv.domain_geometry",f"domain {domain_id!r}: shared step/layer "
                 f"model failed; loss={loss:g} budget={allowed:g}; "
-                f"boundary_retreat={contour}; topology={topology}")
+                f"topology={topology}")
             rectification.ok=False
         authored=profile_shape(_region_from_polygons(domains[domain_id].get("polygons")))
         audit[domain_id]={**deepcopy(plan.as_dict()),"authored_area_mm2":authored.area,
@@ -751,7 +748,7 @@ def _plan_geometry_once(step, options, diagnostics):
                           "effective_domain":"layer profile AND original step profile",
                           "shared_model_area_mm2":model.area,
                           "shared_loss_area_mm2":loss,"shared_topology":topology,
-                          "shared_boundary_retreat":contour,"ok":good}
+                          "ok":good}
         models[domain_id]=model
         if model.wkb==step_model.wkb or model.wkb in processed: continue
         processed.add(model.wkb)
@@ -788,13 +785,12 @@ def _plan_geometry_once(step, options, diagnostics):
         rectangles,membership,final_cleanup=_merge_active_partition(rectangles,membership,physical_domains)
         active=unary_union([box(*r.bounds) for r in rectangles])
         topology=_topology(supported,active)
-        contour=boundary_retreat(supported,active,options.rectify.max_boundary_retreat_mm)
         loss=supported.difference(active).area
         gained=active.difference(supported).area
         budget=supported.area*options.rectify.max_relative_area_error
-        good=topology["preserved"] and contour["within_limit"] and loss<=budget+1e-8 and gained<=1e-8
+        good=topology["preserved"] and loss<=budget+1e-8 and gained<=1e-8
         if not good:
-            diagnostics.error("equiv.domain_geometry",f"supported physical-domain union: loss={loss:g} budget={budget:g}; boundary={contour}; topology={topology}")
+            diagnostics.error("equiv.domain_geometry",f"supported physical-domain union: loss={loss:g} budget={budget:g}; topology={topology}")
             rectification.ok=False
         # All active-domain geometry is unchanged by cleanup. The root model
         # measures actual supported entities; full step bounds still size raster.
@@ -808,23 +804,22 @@ def _plan_geometry_once(step, options, diagnostics):
         rectification.audit.update({"modeling_source":"supported_physical_domain_union",
             "active_physical_domain_ids":sorted(physical_domains),
             "reference_step_model_area_mm2":reference_area,"reference_step_loss_mm2":reference_loss,
-            "area_budget_mm2":budget,"topology":topology,"boundary_retreat":contour,
+            "area_budget_mm2":budget,"topology":topology,
             "active_partition_cleanup":cleanup,"shared_interval_merging":shared_merging,
             "final_exact_cleanup":final_cleanup})
         audit[profile_id].update({"effective_domain":"supported physical-domain union within original step profile",
             "shared_membership_source":"supported_physical_domain_union",
             "shared_original_area_mm2":supported.area,"shared_model_area_mm2":active.area,
             "shared_loss_area_mm2":loss,"shared_topology":topology,
-            "shared_boundary_retreat":contour,"ok":good})
+            "ok":good})
         for key in physical_domains-{profile_id}:
             model=unary_union([box(*rectangles[i].bounds) for i in membership[key]])
             source=originals[key]
-            contour=boundary_retreat(source,model,options.rectify.max_boundary_retreat_mm)
             topology=_topology(source,model)
             loss=source.difference(model).area
-            good=topology["preserved"] and contour["within_limit"] and loss<=source.area*options.rectify.max_relative_area_error+1e-8
+            good=topology["preserved"] and loss<=source.area*options.rectify.max_relative_area_error+1e-8
             audit[key].update({"shared_model_area_mm2":model.area,"shared_loss_area_mm2":loss,
-                "shared_boundary_retreat":contour,"shared_topology":topology,"ok":good})
+                "shared_topology":topology,"ok":good})
             if not good:
                 diagnostics.error("equiv.domain_geometry",f"domain {key!r}: final shared merge failed validation")
                 rectification.ok=False

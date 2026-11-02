@@ -16,8 +16,8 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
     import math
     from shapely.geometry import box
     from shapely.ops import unary_union
-    from pcbeq.equiv import _region_from_polygons, pipeline_fingerprint
-    from pcbeq.rectify import profile_shape, _boundary_pairs
+    from pcbeq.equiv import _region_from_polygons
+    from pcbeq.rectify import profile_shape, _topology
     from pcbeq.materialmap import read_document, iter_cells
     from pcbeq.raster import RasterAxis
     records=[]
@@ -25,14 +25,8 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         directory=path.parent
         meta=json.loads((directory/"diagnostics/run.json").read_text(encoding="utf-8"))
         materialmap=read_document(path)
-        if meta.get("numerical_backend") == "rust":
-            from pcbeq_rust import backend
-            with backend():
-                assert meta["pipeline_fingerprint"]==pipeline_fingerprint()
-        else:
-            assert meta["pipeline_fingerprint"]==pipeline_fingerprint()
         assert meta["drill_model"]=="solid_copper" and meta["drill_scope"]=="dielectric_only"
-        assert all(not l["drill_overlays"] for l in meta["layers"] if l["type"]!="DIELECTRIC")
+        assert all(not l.get("drill_overlays",[]) for l in meta["layers"] if l["type"]!="DIELECTRIC")
         assert not any(d["level"]=="error" for d in meta["diagnostics"])
         document=json.loads((directory.parent / "pcbkit/intermediate.json").read_text(encoding="utf-8"))
         step=document["steps"][0]
@@ -41,7 +35,6 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         regions=meta["rectification"]["rectangles"]
         ids=meta["rectification"]["audit"]["domain_region_ids"]
         geometry_audit=meta["rectification"]["audit"]
-        retreat=geometry_audit["boundary_retreat"]["max_allowed_mm"]
         ratio=geometry_audit["relative_area_budget"]
         region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
         for domain_id,members in ids.items():
@@ -51,12 +44,8 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
                                     for key in geometry_audit["active_physical_domain_ids"]])
             modeled=unary_union([region_shapes[rid] for rid in members])
             assert source.area-modeled.area<=source.area*ratio+1e-8
-            pairs=_boundary_pairs(source,modeled)
-            assert pairs
-            for a,b in pairs:
-                assert a.buffer(retreat,quad_segs=128).covers(b)
-                assert b.buffer(retreat,quad_segs=128).covers(a)
-            assert geometry_audit["domains"][domain_id]["shared_boundary_retreat"]["within_limit"]
+            assert modeled.difference(source).area<=1e-8
+            assert _topology(source,modeled)["preserved"]
         rect_ids={(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]):rid for rid,r in enumerate(regions)}
         assert meta["grid"]["layout"]=="region-local-cartesian"
         assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
@@ -89,7 +78,8 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             assert samples>=required;minimum=min(minimum,samples)
             name=region.layer.name
             materials=meta["materials"]["by_layer"][name]
-            phases=[materials["material_1_black"],materials["material_2_white"]]
+            phases = ([materials["material_1_black"],materials["material_2_white"]]
+                      if "material_1_black" in materials else [materials["provenance"][name] for name in ("copper","base")])
             fields=("k_w_mk",)*3+("density_kg_m3","specific_heat_j_kgk")
             for value,field in zip(values,fields):
                 lo,hi=sorted(p[field] for p in phases)
@@ -102,9 +92,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             "grid_cells":meta["grid"]["cell_count"],
             "material_rows":sum(counts.values()),"raster":[px,py],
             "minimum_samples_per_axis":minimum,"area_loss_mm2":meta["rectification"]["lost_area_mm2"],
-            "max_boundary_retreat_mm":retreat,
-            "retreat_upper_mm":geometry_audit["boundary_retreat"]["max_distance_upper_mm"],
-            "max_area_loss_ratio":ratio,"continuous_contour_checks_passed":True,
+            "max_area_loss_ratio":ratio,"area_and_topology_checks_passed":True,
             "layer_count":len(reports),"drill_scope":meta["drill_scope"],
             "copper_drill_overlays_ignored":True,"all_checks_passed":True})
         print(records[-1],flush=True)

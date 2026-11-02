@@ -501,7 +501,7 @@ class TestAutoTolerance:
                               polygons=[rect(0, 0, 40, 20)])
         result = equivalence_from_document(
             document, EquivalenceOptions(grid=GridOptions(px=40, py=40)))
-        # The physical seed is bounded by half the contour-retreat budget;
+        # The physical seed is independent of the area-loss budget;
         # sampling pixel pitch still has no influence on geometry.
         assert result.rectification.tolerance_mm == pytest.approx(.25)
         assert not result.fatal
@@ -653,7 +653,6 @@ class TestCommandLine:
         from pcbeq.cli import build_parser
 
         args=build_parser().parse_args(["run", "some/path"])
-        assert args.max_boundary_retreat_mm == 3.0
         assert args.max_area_error_ratio == .05
         assert args.px is None and args.py is None
         assert not hasattr(args,"min_cell_mm") and args.max_cell_mm is None

@@ -4,7 +4,7 @@
 
 ```powershell
 pcbeq run intermediate.json -o result --grid-level standard
-pcbeq run intermediate.json -o result --max-boundary-retreat-mm 0.2 --max-area-loss-ratio 0.01
+pcbeq run intermediate.json -o result --max-area-loss-ratio 0.01
 pcbeq run intermediate.json -o result --px 4096 --py 4096 --max-cell-mm 2 3
 ```
 
@@ -12,7 +12,7 @@ pcbeq run intermediate.json -o result --px 4096 --py 4096 --max-cell-mm 2 3
 
 region 采用真实 Y 区间竖条阶梯划分，通过受约束的相邻区间合并减少几何块。
 
-region 几何同时满足最大轮廓退缩量 `--max-boundary-retreat-mm`（有限正数，默认 3 mm）和最大面积损失比例 `--max-area-loss-ratio`（[0,1)，默认 0.05）。完整外轮廓与孔洞边界采用双向欧氏距离检查，不含内部矩形接缝。程序每次细化最严重超差位置，合并及共享层域后复检；零面积损失只适用于可精确矩形化的板型。运行报告和 region 图记录预算、实际距离上界及损失。
+region 划分只用最大面积损失比例 `--max-area-loss-ratio`（[0,1)，默认 0.05）控制精度，同时必须满足内接、孔洞和连接拓扑约束。程序优先细化面积损失最大的条带，合并及共享层域后复检面积与拓扑；不检查轮廓退缩距离。零面积损失只适用于可精确矩形化的板型。运行报告和 region 图记录面积预算、实际损失与拓扑。
 
 `--materials FILE` 可提供全局、材料层类型和逐层覆盖。缺省时警告并使用铜 k=385 W/(m·K)、密度 8960 kg/m³、比热 385 J/(kg·K)，FR4 k=0.3 W/(m·K)、密度 1850 kg/m³、比热 1100 J/(kg·K)；具体来源与实际采用值写入运行报告。钻孔按实心铜处理且只影响介质层。
 

@@ -41,9 +41,6 @@ impl<'a> Shape<'a> {
     pub fn difference(&self, other: &Self) -> Result<Self> {
         self.binary(other, b"GEOSDifference_r\0")
     }
-    pub fn boundary(&self) -> Result<Self> {
-        self.unary(b"GEOSBoundary_r\0")
-    }
     pub fn point(&self) -> Result<Self> {
         self.unary(b"GEOSPointOnSurface_r\0")
     }
@@ -114,44 +111,6 @@ impl<'a> Shape<'a> {
             return Err("empty/invalid geometry bounds".into());
         }
         Ok(r)
-    }
-    pub fn hausdorff(&self, other: &Self) -> Result<f64> {
-        let mut distance = 0.;
-        if call!(self.engine,"GEOSHausdorffDistance_r",(Ptr,Ptr,Ptr,*mut f64)->c_int,
-            self.engine.context,self.raw,other.raw,&mut distance)
-            == 0
-        {
-            return Err("GEOS distance failed".into());
-        }
-        Ok(distance)
-    }
-    pub fn distance(&self, other: &Self) -> Result<f64> {
-        let mut distance = 0.;
-        if call!(self.engine,"GEOSDistance_r",(Ptr,Ptr,Ptr,*mut f64)->c_int,
-            self.engine.context,self.raw,other.raw,&mut distance)
-            == 0
-        {
-            return Err("GEOS distance failed".into());
-        }
-        Ok(distance)
-    }
-    pub fn parts(&self) -> Result<Vec<Self>> {
-        if self.empty()? {
-            return Ok(vec![]);
-        }
-        if self.kind()? < 4 {
-            return Ok(vec![self.copy()?]);
-        }
-        let count = call!(self.engine,"GEOSGetNumGeometries_r",(Ptr,Ptr)->c_int,self.engine.context,self.raw);
-        let mut out = vec![];
-        for i in 0..count {
-            let raw = call!(self.engine,"GEOSGetGeometryN_r",(Ptr,Ptr,c_int)->Ptr,self.engine.context,self.raw,i);
-            let child = self.engine.own(
-                call!(self.engine,"GEOSGeom_clone_r",(Ptr,Ptr)->Ptr,self.engine.context,raw),
-            )?;
-            out.extend(child.parts()?);
-        }
-        Ok(out)
     }
     pub fn kind(&self) -> Result<i32> {
         Ok(call!(self.engine,"GEOSGeomTypeId_r",(Ptr,Ptr)->c_int,self.engine.context,self.raw))

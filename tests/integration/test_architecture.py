@@ -179,7 +179,6 @@ def test_cli_default_preset_and_invalid_combinations(tmp_path):
     assert meta["grid"]["layout"]=="region-local-cartesian"
     assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
     assert meta["raster"]["px"]>=4096
-    assert meta["rectification"]["audit"]["boundary_retreat"]["max_allowed_mm"] == 3.0
     assert meta["rectification"]["audit"]["relative_area_budget"] == .05
 
 
@@ -192,27 +191,26 @@ def test_cli_accuracy_parameters_validate_and_reach_published_diagnostics(tmp_pa
     output = tmp_path/"result"
     common = ["run",str(source),"-o",str(output),"--no-raster-png","--no-heatmap",
               "--no-gallery","--no-regions","--no-grids"]
-    for extra in (["--max-boundary-retreat-mm","0"], ["--max-boundary-retreat-mm","nan"],
-                  ["--max-area-loss-ratio","1"], ["--max-area-loss-ratio","-0.1"]):
+    for extra in (["--max-area-loss-ratio","1"], ["--max-area-loss-ratio","nan"],
+                  ["--max-area-loss-ratio","-0.1"]):
         assert main(common+extra) == 2
-    assert main(common+["--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"]) == 0
+    assert main(common+["--max-area-loss-ratio","0.01"]) == 0
     report = json.loads((output/"diagnostics/run.json").read_text(encoding="utf-8"))
     audit = report["rectification"]["audit"]
-    assert audit["boundary_retreat"]["max_allowed_mm"] == .15
     assert audit["relative_area_budget"] == .01
-    assert all(d["shared_boundary_retreat"]["within_limit"] for d in audit["domains"].values())
+    assert all(d["shared_topology"]["preserved"] for d in audit["domains"].values())
 
 
-def test_pipeline_forwards_both_region_accuracy_controls():
+def test_pipeline_forwards_the_area_accuracy_control():
     from tools.run_pipeline import build_parser,forwarded
     args = build_parser().parse_args(["board.zip","-o","out/example",
-        "--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"])
+        "--max-area-loss-ratio","0.01"])
     parser_args,equivalent_args = forwarded(args)
     assert not parser_args
-    assert equivalent_args == ["--max-boundary-retreat-mm","0.15","--max-area-loss-ratio","0.01"]
+    assert equivalent_args == ["--max-area-loss-ratio","0.01"]
 
 
-@pytest.mark.parametrize("removed,value",[("--min-cell-mm","0.1"),("--region-algorithm","quadtree")])
+@pytest.mark.parametrize("removed,value",[("--min-cell-mm","0.1"),("--region-algorithm","quadtree"),("--max-boundary-retreat-mm","3")])
 def test_removed_grid_and_algorithm_options_are_rejected(removed,value):
     from pcbeq.cli import build_parser
     with pytest.raises(SystemExit) as error:
@@ -220,7 +218,7 @@ def test_removed_grid_and_algorithm_options_are_rejected(removed,value):
     assert error.value.code==2
 
 
-def test_shared_domain_retry_reduces_coarsening_without_relaxing_user_budgets(monkeypatch):
+def test_shared_domain_retry_tightens_independent_area_budgets(monkeypatch):
     import pcbeq.equiv as module
     document = build_document(layers=[{"name":"CU","type":"SIGNAL","polygons":[]}])
     original = module._plan_geometry_once
@@ -236,8 +234,8 @@ def test_shared_domain_retry_reduces_coarsening_without_relaxing_user_budgets(mo
     diagnostics = Diagnostics()
     geometry,_ = plan_geometry(document["steps"][0],EquivalenceOptions(GridOptions(100,100)),diagnostics)
     assert geometry.ok and not diagnostics.errors
-    assert [o.coarsening_retreat_mm for o in attempts] == [3.0,1.5]
-    assert all(o.max_boundary_retreat_mm == 3.0 and o.max_relative_area_error == .05 for o in attempts)
+    assert [o.planning_area_ratio for o in attempts] == [.05,.025]
+    assert all(o.max_relative_area_error == .05 for o in attempts)
     assert len(geometry.audit["shared_domain_replanning"]) == 2
 
 
@@ -256,10 +254,28 @@ def test_exact_shared_cleanup_preserves_every_physical_domain_union():
     assert [r.bounds for r in result]==[(1,0,3,2),(3,0,4,2)]
 
 
+def test_shared_intersection_uses_full_user_budget_after_tighter_independent_planning():
+    from pcbeq.equiv import _plan_geometry_once
+    from pcbeq.rectify import RectifyOptions
+    domains=[
+        {"id":"step_profile","source":"step_profile","polygons":[
+            {"island":True,"points":[[0,0],[10,0],[10,10],[3,10]]}]},
+        {"id":"layer","source":"layer_profile","polygons":[
+            {"island":True,"points":[[0,0],[10,0],[7,10],[0,10]]}]}]
+    document=build_document(domains=domains,layers=[{"name":"CU","domain_id":"layer"}])
+    diagnostics=Diagnostics()
+    geometry,_=_plan_geometry_once(document["steps"][0],EquivalenceOptions(GridOptions(100,100),
+        rectify=RectifyOptions(max_relative_area_error=.05,planning_area_ratio=.025)),diagnostics)
+    assert geometry.ok and not diagnostics.errors
+    audit=geometry.audit["domains"]["layer"]
+    assert audit["original_area_mm2"]*.025 < audit["shared_loss_area_mm2"] <= audit["original_area_mm2"]*.05
+    assert audit["shared_topology"]["preserved"]
+
+
 def test_shared_common_interval_merge_handles_stacked_layer_memberships():
     from shapely.ops import unary_union
     from pcbeq.equiv import _coarsen_shared_partition
-    from pcbeq.rectify import Rect,RectifyOptions,boundary_retreat
+    from pcbeq.rectify import Rect,RectifyOptions
     rows=[Rect(0,0,1,1.23456),Rect(1,0,2,1.23457),Rect(1,1.23457,2,1.23459)]
     members={"step":[0,1,2],"flex":[0,1],"rigid":[1,2]}
     originals={key:unary_union([box(*rows[i].bounds) for i in ids]) for key,ids in members.items()}
@@ -271,7 +287,6 @@ def test_shared_common_interval_merge_handles_stacked_layer_memberships():
         modeled=unary_union([box(*result[i].bounds) for i in actual[key]])
         assert modeled.difference(source).area==0
         assert source.difference(modeled).area<=source.area*.05
-        assert boundary_retreat(source,modeled,3)["within_limit"]
 
 
 def test_shared_common_interval_merge_cannot_disconnect_a_branch():

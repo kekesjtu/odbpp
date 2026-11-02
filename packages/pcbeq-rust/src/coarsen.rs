@@ -113,9 +113,6 @@ fn acceptable(
     {
         return Ok(false);
     }
-    if !source.contour(model, false)?.within {
-        return Ok(false);
-    }
     Ok(source.topology(model)?["preserved"] == true)
 }
 struct Proposal {

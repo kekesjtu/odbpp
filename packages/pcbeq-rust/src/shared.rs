@@ -83,12 +83,11 @@ struct Proposal {
 pub fn merge<'a>(
     mut rows: Vec<Tagged>,
     originals: &[Shape<'a>],
-    limit: f64,
     ratio: f64,
 ) -> Result<(Vec<Tagged>, Value)> {
     let sources = originals
         .iter()
-        .map(|s| Source::new(s, limit))
+        .map(|s| Source::new(s))
         .collect::<Result<Vec<_>>>()?;
     let mut models = originals
         .iter()
@@ -230,7 +229,6 @@ pub fn merge<'a>(
                 let original = &originals[domain];
                 if original.difference(&model)?.area()? > original.area()? * ratio + 1e-8
                     || model.difference(original)?.area()? > 1e-8
-                    || !sources[domain].contour(&model, false)?.within
                     || sources[domain].topology(&model)?["preserved"] != true
                 {
                     good = false;

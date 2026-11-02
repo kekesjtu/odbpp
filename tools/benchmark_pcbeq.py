@@ -27,7 +27,7 @@ from pcbeq.materials import MaterialBook
 from pcbeq.rectify import RectifyOptions
 
 
-def measure(source: Path, output: Path, grid: GridOptions, materials: dict) -> dict:
+def measure(source: Path, output: Path, grid: GridOptions, materials: dict, *, max_area_loss_ratio=.05) -> dict:
     """Use the production streaming writer; no mask sink or visualization imports.
 
     Reading, validation, geometry, sampling, properties and streamed JSON writing
@@ -36,7 +36,7 @@ def measure(source: Path, output: Path, grid: GridOptions, materials: dict) -> d
     """
     diagnostics = Diagnostics()
     options = EquivalenceOptions(grid=grid, materials=MaterialBook(materials, diagnostics=diagnostics),
-                                 rectify=RectifyOptions())
+                                 rectify=RectifyOptions(max_relative_area_error=max_area_loss_ratio))
     final = output / "materialmap.json"
     temporary = output / "materialmap.json.tmp"
     gc.collect()
@@ -80,6 +80,7 @@ def build_parser():
     parser.add_argument("--warmup", type=int, default=1, help="unmeasured runs (default: 1)")
     parser.add_argument("--px", type=int)
     parser.add_argument("--py", type=int)
+    parser.add_argument("--max-area-loss-ratio", type=float, default=.05)
     mesh = parser.add_mutually_exclusive_group()
     mesh.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     mesh.add_argument("--max-cell-mm", type=float, nargs="+", metavar="MM")
@@ -109,7 +110,8 @@ def main(argv=None) -> int:
     try:
         settings = {"px": args.px, "py": args.py,
                     "grid_level": args.grid_level or ("standard" if args.max_cell_mm is None else None),
-                    "max_cell_mm": args.max_cell_mm if args.max_cell_mm is not None else [5, 5]}
+                    "max_cell_mm": args.max_cell_mm if args.max_cell_mm is not None else [5, 5],
+                    "max_area_loss_ratio": args.max_area_loss_ratio}
         context = nullcontext()
         if args.backend == "python":
             grid = GridOptions(px=4096 if args.px is None else args.px,
@@ -139,7 +141,8 @@ def main(argv=None) -> int:
             }
             for index in range(args.warmup + args.repeat):
                 run = (measure_native(args.input, args.output, settings, args.materials)
-                       if args.backend == "rust" else measure(args.input, args.output, grid, materials))
+                       if args.backend == "rust" else measure(args.input, args.output, grid, materials,
+                                                              max_area_loss_ratio=args.max_area_loss_ratio))
                 warmup = index < args.warmup
                 if not warmup:
                     report["runs"].append(run)

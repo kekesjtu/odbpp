@@ -16,34 +16,32 @@ pub struct Geometry {
     pub bounds: Rect,
 }
 fn check(original: &Shape<'_>, model: &Shape<'_>, options: &Options) -> Result<(bool, Value)> {
-    let source = Source::new(original, options.max_boundary_retreat_mm)?;
+    let source = Source::new(original)?;
     let topology = source.topology(model)?;
-    let contour = source.contour(model, true)?;
     let lost = original.difference(model)?.area()?;
     let gained = model.difference(original)?.area()?;
     let ok = topology["preserved"] == true
-        && contour.within
         && lost <= original.area()? * options.max_area_loss_ratio + 1e-8
         && gained <= 1e-8;
     Ok((
         ok,
         json!({"ok":ok,"shared_model_area_mm2":model.area()?,"shared_loss_area_mm2":lost,
-        "shared_topology":topology,"shared_boundary_retreat":contour.json(options.max_boundary_retreat_mm)}),
+        "shared_topology":topology}),
     ))
 }
 pub fn plan(engine: &Geos, step: &Step, options: &Options) -> Result<Geometry> {
     let mut attempts = vec![];
     let mut last = String::new();
     for divisor in [1., 2., 4., 8., 16.] {
-        let cap = options.max_boundary_retreat_mm / divisor;
+        let cap = options.max_area_loss_ratio / divisor;
         match once(engine, step, options, cap) {
             Ok(mut geometry) => {
-                attempts.push(json!({"coarsening_retreat_limit_mm":cap,"ok":true}));
+                attempts.push(json!({"planning_area_loss_ratio":cap,"ok":true}));
                 geometry.report["audit"]["shared_domain_replanning"] = json!(attempts);
                 return Ok(geometry);
             }
             Err(error) if error.starts_with("shared domain") => {
-                attempts.push(json!({"coarsening_retreat_limit_mm":cap,"ok":false,"error":error}));
+                attempts.push(json!({"planning_area_loss_ratio":cap,"ok":false,"error":error}));
                 last = error;
             }
             Err(error) => return Err(error),
@@ -207,12 +205,7 @@ fn once(engine: &Geos, step: &Step, options: &Options, cap: f64) -> Result<Geome
         .map(Shape::copy)
         .collect::<Result<Vec<_>>>()?;
     shared_originals[0] = supported.copy()?;
-    let (tagged, merging) = shared::merge(
-        tagged,
-        &shared_originals,
-        options.max_boundary_retreat_mm,
-        options.max_area_loss_ratio,
-    )?;
+    let (tagged, merging) = shared::merge(tagged, &shared_originals, options.max_area_loss_ratio)?;
     let tagged = shared::exact_merge(tagged, &physical);
     let rectangles: Vec<_> = tagged.iter().map(|r| r.rect).collect();
     let members: Vec<Vec<usize>> = (0..ids.len())
@@ -252,7 +245,7 @@ fn once(engine: &Geos, step: &Step, options: &Options, cap: f64) -> Result<Geome
     }
     let lost = supported.difference(&active)?.area()?;
     let outside = active.difference(&supported)?.area()?;
-    let source = Source::new(&supported, options.max_boundary_retreat_mm)?;
+    let source = Source::new(&supported)?;
     let mut report = plans[0].audit.clone();
     report["rectangles"] = json!(
         rectangles
@@ -269,6 +262,16 @@ fn once(engine: &Geos, step: &Step, options: &Options, cap: f64) -> Result<Geome
     report["shape_deviation_mm2"] = json!(lost + outside);
     report["rectangle_count"] = json!(rectangles.len());
     report["audit"]["domains"] = json!(final_audits);
+    report["audit"]["domain_region_ids"] = json!(
+        ids.iter()
+            .cloned()
+            .zip(members.iter().cloned())
+            .collect::<std::collections::BTreeMap<_, _>>()
+    );
+    report["audit"]["active_physical_domain_ids"] =
+        json!(physical.iter().map(|&i| &ids[i]).collect::<Vec<_>>());
+    report["audit"]["domains"][profile]["shared_membership_source"] =
+        json!("supported_physical_domain_union");
     report["audit"]["shared_interval_merging"] = merging;
     report["audit"]["partition_non_overlapping"] = json!(true);
     report["audit"]["non_overlapping"] = json!(true);
@@ -277,9 +280,6 @@ fn once(engine: &Geos, step: &Step, options: &Options, cap: f64) -> Result<Geome
     report["audit"]["active_partition_cleanup"] =
         json!({"before":initial,"after":rectangles.len()});
     report["audit"]["topology"] = source.topology(&active)?;
-    report["audit"]["boundary_retreat"] = source
-        .contour(&active, true)?
-        .json(options.max_boundary_retreat_mm);
     report["ok"] = json!(true);
     Ok(Geometry {
         rectangles,

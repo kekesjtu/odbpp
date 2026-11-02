@@ -1,4 +1,4 @@
-"""Validate the two region budgets and raster-independent planning on local real cases."""
+"""Validate area budgets and topology and raster-independent planning on local real cases."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = ("kicad-kitchen-sink", "kicad-video-odb.tgz", "designodb-rigidflex")
 
 
-def publication_metrics(name, coordinates, retreat, ratio):
+def publication_metrics(name, coordinates, ratio):
     path = ROOT/"out"/name/"python/pcbeq/diagnostics/run.json"
     if not path.is_file():
         return None
@@ -22,15 +22,14 @@ def publication_metrics(name, coordinates, retreat, ratio):
     rectangles = [tuple(r[k] for k in ("x0_mm","y0_mm","x1_mm","y1_mm"))
                   for r in meta["rectification"]["rectangles"]]
     published = (rectangles,meta["grid"]["regions"])
-    if (published != coordinates or audit.get("boundary_retreat",{}).get("max_allowed_mm") != retreat
-            or audit.get("relative_area_budget") != ratio):
+    if published != coordinates or audit.get("relative_area_budget") != ratio:
         return None
     return {**meta["runtime"],"measurement":"full pcbeq CLI, including imports, IO, images; native process peak",
             "raster":[meta["raster"]["px"],meta["raster"]["py"]],
             "material_cells":sum(l["cell_count"] for l in meta["layers"] if l["status"]=="equivalent")}
 
 
-def sampling_convergence(name, retreat, ratio, initial_step=None):
+def sampling_convergence(name, ratio, initial_step=None):
     import numpy as np
     from pcbeq.equiv import EquivalenceOptions, equivalence_from_document
     from pcbeq.grid import GridOptions
@@ -38,7 +37,7 @@ def sampling_convergence(name, retreat, ratio, initial_step=None):
     path = ROOT/"out"/name/"python/pcbkit/intermediate.json"
     document = json.loads(path.read_text(encoding="utf-8"))
     options = EquivalenceOptions(GridOptions(4096,4096,mesh_preset="standard",auto_raster=True),
-        rectify=RectifyOptions(max_boundary_retreat_mm=retreat,max_relative_area_error=ratio,
+        rectify=RectifyOptions(max_relative_area_error=ratio,
                                tolerance_mm=initial_step))
     arrays,runs,coordinates = [],[],[]
     for level in range(2):
@@ -70,19 +69,19 @@ def sampling_convergence(name, retreat, ratio, initial_step=None):
             for i,name in enumerate(("kx","ky","kz","density","specific_heat"))}}
 
 
-def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
+def validate_case(name, ratio, baseline=None, initial_step=None):
     from shapely.geometry import box
     from shapely.ops import unary_union
     from pcbeq.diagnostics import Diagnostics
     from pcbeq.equiv import EquivalenceOptions, plan_geometry, _region_from_polygons
     from pcbeq.grid import GridOptions, build_grid
     from pcbeq.mesh import resolve_mesh
-    from pcbeq.rectify import RectifyOptions, profile_shape, _boundary_pairs, boundary_retreat
+    from pcbeq.rectify import RectifyOptions, profile_shape
 
     path = ROOT/"out"/name/"python/pcbkit/intermediate.json"
     step = json.loads(path.read_text(encoding="utf-8"))["steps"][0]
     options = EquivalenceOptions(GridOptions(4096,4096,mesh_preset="standard"),
-        rectify=RectifyOptions(max_boundary_retreat_mm=retreat,max_relative_area_error=ratio,
+        rectify=RectifyOptions(max_relative_area_error=ratio,
                                tolerance_mm=initial_step))
 
     def plan(settings):
@@ -117,17 +116,9 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
         assert modeled.difference(source).area <= 1e-8
         loss = source.area-modeled.area
         assert loss <= source.area*ratio+1e-8
-        pairs = _boundary_pairs(source,modeled)
-        assert pairs
-        # An independently rebuilt, finer vector tube verifies continuous segment
-        # coverage; no raster or sparse point sampling participates in this check.
-        for a,b in pairs:
-            assert a.buffer(retreat,quad_segs=128).covers(b)
-            assert b.buffer(retreat,quad_segs=128).covers(a)
         assert audit["shared_topology"]["preserved"]
         domain_checks.append({"domain":domain_id,"area_loss_ratio":loss/source.area,
-            "retreat_upper_mm":audit["shared_boundary_retreat"]["max_distance_upper_mm"],
-            "topology_preserved":True,"continuous_reference_check":True})
+            "topology_preserved":True,"area_and_topology_checks":True})
 
     before = None
     if baseline:
@@ -135,19 +126,18 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
         old_model = unary_union([box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"])
                                  for r in old["rectangles"]])
         before = {k:v for k,v in baseline.items() if k not in ("geometry","errors")}
-        before["retreat_upper_mm"] = boundary_retreat(board,old_model,retreat)["max_distance_upper_mm"]
+        before["area_loss_ratio"] = board.difference(old_model).area / board.area
     row = {"case":name,
-        "max_boundary_retreat_mm":retreat,"max_area_loss_ratio":ratio,
+        "max_area_loss_ratio":ratio,
         "internal_initial_step_override_mm":initial_step,
         "before":before,"after":{"regions":len(geometry.rectangles),"xy_cells":len(grid.cells),
         "seconds":seconds,"python_peak_mib":peak/1024**2,"area_loss_ratio":geometry.relative_error,
-        "retreat_upper_mm":geometry.audit["boundary_retreat"]["max_distance_upper_mm"],
         "refinement_steps":geometry.audit["refinement_count"]},
         "refinement_trace_sample":geometry.audit["local_refinement"][:6]+geometry.audit["local_refinement"][-6:],
         "shared_domain_replanning":geometry.audit.get("shared_domain_replanning",[]),
         "domains":domain_checks,"raster_dimensions_compared":[[4096,4096],[8192,8192]],
         "region_and_grid_coordinates_identical":True,
-        "published_run":publication_metrics(name,coordinates,retreat,ratio),
+        "published_run":publication_metrics(name,coordinates,ratio),
         "all_checks_passed":True}
     print(json.dumps({"case":name,**row["after"]},ensure_ascii=False),flush=True)
     return row
@@ -156,14 +146,13 @@ def validate_case(name, retreat, ratio, baseline=None, initial_step=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case",action="append",choices=CASES)
-    parser.add_argument("--max-boundary-retreat-mm",type=float,default=3.0)
     parser.add_argument("--max-area-loss-ratio",type=float,default=.05)
     parser.add_argument("--diagnostic-geometry-step-mm",type=float,
-                        help="internal test seed to exercise worst-first refinement; not a third accuracy control")
+                        help="internal test seed to exercise worst-first refinement; not a user accuracy control")
     parser.add_argument("--baseline",type=Path)
     parser.add_argument("--sampling-convergence",action="store_true",
                         help="also compare default material sampling to doubled X/Y pixels")
-    parser.add_argument("--output",type=Path,default=ROOT/"tmp/validation/reports/region-accuracy-default-3mm-validation.json")
+    parser.add_argument("--output",type=Path,default=ROOT/"tmp/validation/reports/region-area-validation.json")
     args = parser.parse_args()
     baseline = {r["case"]:r for r in json.loads(args.baseline.read_text(encoding="utf-8"))} if args.baseline else {}
     report = {"date":datetime.now(timezone(timedelta(hours=8))).date().isoformat(),
@@ -171,11 +160,10 @@ def main():
         "resolution_independence_scope":"complete region and local-grid planning, without material sampling",
         "cases":[]}
     for case in args.case or CASES:
-        report["cases"].append(validate_case(case,args.max_boundary_retreat_mm,
-            args.max_area_loss_ratio,baseline.get(case),args.diagnostic_geometry_step_mm))
+        report["cases"].append(validate_case(case,args.max_area_loss_ratio,baseline.get(case),args.diagnostic_geometry_step_mm))
         if args.sampling_convergence:
             report["cases"][-1]["material_sampling"] = sampling_convergence(case,
-                args.max_boundary_retreat_mm,args.max_area_loss_ratio,args.diagnostic_geometry_step_mm)
+                args.max_area_loss_ratio,args.diagnostic_geometry_step_mm)
         args.output.parent.mkdir(parents=True,exist_ok=True)
         args.output.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     return 0

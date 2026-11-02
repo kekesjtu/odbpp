@@ -15,7 +15,7 @@ uv run --all-extras python tools/<脚本> --help
 | `verify_distributions.py` | 构建 wheel / sdist、独立安装、跨环境交接；`--backend rust` 验证 Rust 版，缓存可用时支持 `--offline` | 两产品与本地样本 → tmp/distribution-check |
 | `benchmark_pcbeq.py` | 仅测中间 JSON 读取/校验至 MaterialMap 写入关闭，支持预热、重复和 Python/Rust 后端 | 中间 JSON → `--output` 下 materialmap.json 与 benchmark.json，不生成图片 |
 | `audit_out.py` | 独立核查完整单元的域、Z、尺寸、几何预算、容量及物性 | out → 默认 tmp/validation/reports/output-validation.json |
-| `validate_region_accuracy.py` | 检查连续轮廓、拓扑、双预算与几何坐标独立性，可比较材料采样 | 中间 JSON → 默认 tmp/validation/reports/region-accuracy-default-3mm-validation.json |
+| `validate_region_accuracy.py` | 检查面积预算、内接、拓扑与几何坐标独立性，可比较材料采样 | 中间 JSON → 默认 tmp/validation/reports/region-area-validation.json |
 | `refresh_viewer_outputs.py` | 仅替换预览内联 CSS/JS 并检查其余载荷一致性 | 预览 HTML → 原位更新及默认 tmp/validation/reports/viewer-output-validation.json |
 
 `cases/` 是本地真实输入目录。合成夹具位于 `tests/fixtures/`，测试和基准过程输出位于 `tmp/`，正式结果位于 `out/`。

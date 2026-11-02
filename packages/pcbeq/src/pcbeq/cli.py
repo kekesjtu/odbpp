@@ -29,10 +29,6 @@ def build_parser(*, prog="pcbeq"):
                       help="adaptive mesh preset (default: standard; expert sizes override)")
     p_eq.add_argument("--max-cell-mm", type=float, nargs="+", default=None, metavar="MM",
                       help="maximum cell edge, one value or X Y (default 5 mm)")
-    p_eq.add_argument("--diagnostic-geometry-step-mm", dest="rectify_tolerance",
-                      type=float, default=None, help=argparse.SUPPRESS)
-    p_eq.add_argument("--max-boundary-retreat-mm", type=float, default=3.0, metavar="MM",
-                      help="maximum full-contour inward approximation distance (default: 3 mm)")
     p_eq.add_argument("--max-area-loss-ratio", dest="max_area_error_ratio",
                       type=float, default=0.05, metavar="RATIO",
                       help="maximum lost area / original effective domain area, in [0,1) (default: 0.05)")

@@ -94,8 +94,6 @@ def plot_regions(document: dict, directory: Path, *, metadata: dict) -> dict:
     information.text(0,1,
         f"{len(rects)} rectangle regions\n"
         f"Physical initial X step: {actual['tolerance_mm']:.4g} mm\n"
-        f"Retreat limit: {actual['audit']['boundary_retreat']['max_allowed_mm']:.4g} mm\n"
-        f"Retreat upper: {actual['audit']['boundary_retreat']['max_distance_upper_mm']:.4g} mm\n"
         f"Area budget: {actual['audit']['relative_area_budget']:.2%}\n"
         f"Boundary levels: X={stats['x_boundary_levels']}, Y={stats['y_boundary_levels']}\n\n"
         f"Area min / median / max:\n{min(areas):.3g} / {statistics.median(areas):.3g} / {max(areas):.3g} mm²\n"
