@@ -6,10 +6,10 @@ pcbkit / pcbeq AI 协作开发指南，说明项目结构、开发规范和文�
 
 本项目提供 ODB++ v8.1 单板解析器 `pcbkit` 和 PCB 物性等效器 `pcbeq`，两者分别安装和分发，通过中间 JSON 交接。
 独立 Rust 数值核心版本为 `pcbkit-rust`、`pcbeq-rust`；保留 Python 版，工程可视化和图表使用 Python。
-解析器交付正向实体多边形、逐层计算域和叠层信息；等效器生成内接三维 region、各 region 独立的局部笛卡尔网格与完整单元物性。
+解析器交付正向实体多边形、整板与各层的实体范围和叠层信息。等效器据此确定各层有效计算域，生成内接三维 region、独立局部笛卡尔网格与完整单元物性。
 SVG/HTML、材料掩膜和热图用于工程核对。
 
-功能范围、物理约束和验收标准以 [docs/requirements.md](docs/requirements.md) 为准；实现前先阅读相关需求及 [README.md](README.md) 中的主题文档。
+功能范围、物理约束和验收标准以 [docs/requirements.md](docs/requirements.md) 为准。数据流与术语见[项目架构](docs/architecture.md)。实现前先阅读相关需求及 [README.md](README.md) 中的主题文档。
 
 ## 2. 文件职责
 
@@ -18,6 +18,7 @@ SVG/HTML、材料掩膜和热图用于工程核对。
 | `AGENTS.md`            | AI 协作规范    | 项目规则、开发流程和文档维护约定                         |
 | `README.md`            | 项目门面       | 简介、快速开始和文档入口                                 |
 | `docs/requirements.md` | 需求定义       | 数据流、功能范围、物理语义、输出约束                     |
+| `docs/architecture.md` | 项目架构       | 产品边界、术语、数据流和语言职责                         |
 | `docs/`                | 项目文档       | 技术决策、接口、开发说明、调研、推导、参考资料与验证方法 |
 | `contracts/`           | 中间 JSON 契约 | 共享 Pydantic 模型权威源和生成的文本 schema              |
 | `packages/pcbkit/`     | 解析器         | 独立包定义、生产代码和包内测试                           |

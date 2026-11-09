@@ -2,48 +2,24 @@
 
 ## 正式产物
 
-```text
-out/<case>/<python|rust>/
-  pcbkit/
-    intermediate.json
-    preview.svg, preview.html
-    diagnostics/run.json, artifacts.json
-  pcbeq/
-    materialmap.json
-    masks/*.png
-    heatmaps/*.png
-    regions/regions.png, regions.svg, regions.csv, regions.stats.json
-    grids/cartesian-grid.png, cartesian-grid.svg, cartesian-grid.stats.json
-    index.html
-    diagnostics/run.json, artifacts.json
-  pipeline/
-    run.json
-    pcbkit.stdout.log, pcbkit.stderr.log
-    pcbeq.stdout.log, pcbeq.stderr.log
-```
+正式案例按 `out/<case>/<python|rust>/` 保存，`out/index.html` 同时索引两种版本。各版本包含以下目录。
 
-`python/` 与 `rust/` 是同一 case 下的并列目录，分别存放对应版本的全部产物与管道报告；`out/index.html` 同时索引两种版本。解析器与等效器各有运行报告和产物清单；诊断独立于两个数值接口。
-region CSV 是几何编号 / 尺寸表，MaterialMap 的正式数值格式为 JSON。
-Rust 等效器的图表仅从 MaterialMap 恢复 region、局部网格和物性；不生成采样掩膜及依赖输入轮廓的对照图。其数值清单为 `diagnostics/artifacts.json`，图片清单为 `diagnostics/image-artifacts.json`。
+| 目录 | 产物 |
+| --- | --- |
+| `pcbkit/` | `intermediate.json`、可选 `preview.svg` 和 `preview.html`、`diagnostics/run.json` 与 `diagnostics/artifacts.json` |
+| `pcbeq/` | `materialmap.json`、所请求的[工程图表](pcbeq/pcbeq-visualization.md)、`diagnostics/run.json` 与 `diagnostics/artifacts.json`。Rust 的图片另由 `diagnostics/image-artifacts.json` 管理 |
+| `pipeline/` | `run.json` 和两个 CLI 的 stdout、stderr 日志 |
 
-## 发布决策
+## 发布与失败
 
-解析器与 Python 参考等效器在同级临时目录完成计算和所请求的图片，再发布正式目录；发布失败执行回滚。
-Rust 等效器在原生事务中完成 MaterialMap、诊断和数值发布；发布失败由 Rust 回滚，成功时使登记的旧图片失效。Python 随后只从正式 MaterialMap 绘图，并独立事务发布图片。绘图失败须报告错误，已经成功发布的 MaterialMap 仍可使用。
-产物清单只管理本软件生成的文件，成功替换时清理登记中失效的产物，保留用户自行放入的文件。
+解析器与 Python 等效器在同级暂存目录完成本轮输出，再发布正式产物。发布失败执行回滚。Python 等效器请求的绘图失败时，本轮失败，保留上一轮正式产物。
 
-`pcbkit` 返回 0 表示成功，1 表示带显式失败层的部分预览，2 表示直接失败。
-管道遇上游非零即停止；`pcbeq` 请求的绘图失败也视为整轮失败，保留上一轮正式产物。`pcbeq-rust` 的绘图失败返回非零，但不回滚已经验收成功的数值结果。
-失败状态和本轮日志明确显示在管道报告中。
+Rust 等效器先在原生事务中发布 MaterialMap 和数值诊断，同时清理登记的旧图片。随后 Python 从正式 MaterialMap 渲染并独立发布图片。图片失败返回非零，本轮已成功发布的数值结果仍可使用。各产物清单仅管理本软件登记的文件，保留用户自行放入的文件。
+
+解析器返回 0 表示成功，1 表示已发布带显式层失败状态的部分结果，2 表示直接失败。管道遇到上游非零即停止，失败阶段和日志可从管道报告定位。
 
 ## 来源与复用
 
-`pipeline/run.json` 记录子进程返回码、耗时、日志及交接 JSON 的 SHA-256；各产品运行报告记录实际精度、物理约定和进程内峰值内存。
-批量复用检查输入来源、内容哈希、当前字段结构、实现指纹、光栅、网格、几何精度及图片配置和产物完整性。
-缓存命中只决定是否重算，几何分支的输入始终是物理坐标与几何配置。
+管道报告记录子进程状态、耗时、日志和已交付 JSON 的摘要。各产品的运行报告按本阶段记录诊断，Python 等效器和解析器还记录进程峰值内存，Rust 等效器记录原生阶段耗时和光栅像素规模。
 
-## 依据
-
-数值、图片和本轮状态共同发布，便于工程核对同一次计算。
-热图读取正式 MaterialMap，region 图使用实际规划矩形，网格图从各 region 的边界与 XYZ 网格数还原最终局部网格。
-图像语义见 [pcbeq 可视化](pcbeq/pcbeq-visualization.md)，字段见 [中间 JSON](../interfaces/intermediate-json.md)与 [MaterialMap](../interfaces/materialmap.md)。
+批量工具根据输入来源、实现、配置和登记产物判断是否复用。缓存命中只决定是否重算。调用方法见[维护工具](../../tools/README.md)。

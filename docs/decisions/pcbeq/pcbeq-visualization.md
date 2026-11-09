@@ -1,45 +1,29 @@
-# pcbeq 可视化决策
+# pcbeq 工程图表
 
-`pcbeq-rust` 的 Python 绘图只读取正式 MaterialMap：从 region 范围与网格数恢复模型几何、局部网格和物性热图，不读取中间 JSON，也不依赖计算诊断。材料预览、原始 profile 叠加及几何损失对照只适用于 Python 参考等效器；不能从 MaterialMap 推断并绘制这些输入信息。
+两版热图都读取正式 MaterialMap。Python 参考版还可利用输入轮廓和计算诊断做几何对照，并单独采样整板材料预览。Rust 版的所有图表均由 MaterialMap 恢复。
 
-## 输出含义
-
-| 产物 | 数据来源 | 用途 |
+| 产物 | Python 版 | Rust 版 |
 | --- | --- | --- |
-| `pcbeq/masks/*.png` | 独立显示光栅的整板材料预览 | 铜 / 基底 / 域外及钻孔覆盖核对 |
-| `pcbeq/heatmaps/*.png` | 正式 MaterialMap JSON | 每层 kx / ky / kz 的实际单元热图 |
-| `pcbeq/regions/*` | 实际内接矩形集合 | region 边界、面积、编号、尺寸和几何损失 |
-| `pcbeq/grids/*` | 各 region 的范围、网格数与实体单元 | 局部均匀划分、不共形接缝与尺寸检查 |
+| `masks/*.png` | 独立的整板材料预览，可核对铜、基底、域外和钻孔覆盖 | 无 |
+| `heatmaps/*.png` | 每层 kx、ky、kz 单元热图 | 同左 |
+| `regions/regions.png`、`.svg` | 对照原始轮廓，显示 region 边界、面积色标和编号 | 显示 MaterialMap 中的实际 region 边界 |
+| `regions/regions.csv`、`regions.stats.json` | 编号、尺寸及面积和拓扑等诊断 | 无 |
+| `grids/cartesian-grid.png`、`.svg` | 显示局部单元、region 边界与原始整板轮廓 | 显示局部单元和 region 边界 |
+| `grids/cartesian-grid.stats.json` | 网格诊断 | 无 |
+| `index.html` | 图表索引 | 图表索引 |
 
-各图分别服务于不同检查；几何误差使用矢量域验证，材料误差使用实际数值采样收敛验证。
+局部网格图只在各 region 内画网格线，可核对不共形接缝。几何误差按矢量域核对，材料采样误差按实际数值分辨率核对。
 
 ## 材料掩膜
 
-黑色 0 表示材料 1，白色 255 表示域内材料 2，灰色 160 表示该层域外。
-DRILL 只在相交介质层内为黑色，铜层掩膜完全由自身图案形成。
-像素行方向与 Y 向上的板坐标一致：图像上方对应 Y 最大处。
+黑色 0 表示材料 1，白色 255 表示域内材料 2，灰色 160 表示该层有效计算域之外。图像上方对应板坐标 Y 的最大值。铜与钻孔覆盖的判定见[材料采样](material-sampling.md)。
 
-自动显示按两轴物理间距保持板的长宽比，最近邻重采样，目标长边约 1400 像素，受 4,000,000 显示像素预算约束。
-显示图可压缩小特征，不参与数值计算。局部数值采样分辨率以运行诊断各 region 的像素尺寸与物理间距为准；基础 Px/Py 只表示整板参考密度。
-`--raster-scale N` 强制各向同性整数缩放，非等物理像素时可能改变显示比例。
-预览掩膜逐层生成和释放，与数值 region 掩膜独立。
+自动显示采用最近邻重采样保持毫米比例，目标长边约 1400 像素，受 4,000,000 显示像素预算约束。`--raster-scale N` 使用整数缩放，像素物理间距不等时可能改变显示比例。预览分辨率和各 region 的数值光栅独立。
 
 ## 物性热图
 
-每层一张 PNG，三面板横向排列 kx、ky、kz，共用线性 viridis 色标、毫米轴和等比例显示。
-默认色域为该层三方向联合范围；`--heatmap-shared-scale` 使用层间共同范围，`--heatmap-grid` 绘制实际单元边界。
-均匀层显示唯一值，无单元区域显示灰色与图例，Z 为 null 时标记未知。
-面板宽默认 1440 像素，由 `--heatmap-panel-width` 控制。
-绘图以实际毫米矩形构成 PolyCollection，显示像素尺寸不改变材料数据或网格坐标。
+每层 PNG 横向排列 kx、ky、kz，使用毫米轴、等比例和线性 viridis 色标。默认使用该层三方向联合色域，`--heatmap-shared-scale` 改用层间共同范围，`--heatmap-grid` 叠加实际单元边界。面板宽默认 1440 像素，可用 `--heatmap-panel-width` 调整。无单元处显示灰色，未知 Z 明确标识。
 
-## region 与局部网格
+## 图表开关
 
-region 图对照原始轮廓，逐矩形显示边界、面积对数色标、编号与尺寸表，并统计短边、损失、孔洞和连接保护结果。
-局部网格图显示每个 region 内的实际单元、region 边界与原始 step profile；网格线仅绘于所属 region 内，允许接缝不共形，不绘制板外轴线延伸。
-逐层实体存在性和五项物性以 MaterialMap 中的完整三维 region 为准。
-
-## 选项、文件名与失败
-
-默认生成掩膜、热图、region、grid 和图例页，可分别用 `--no-raster-png`、`--no-heatmap`、`--no-regions`、`--no-grids`、`--no-gallery` 控制。
-层名转为文件系统安全名称，大小写冲突和后缀冲突分配空闲名称，图例保留原层名。
-所请求的图片与数值结果按 [发布决策](../output-publication.md) 一起完成后发布。
+两版均可用 `--no-heatmap`、`--no-regions`、`--no-grids`、`--no-gallery` 关闭相应输出。Python 版另支持 `--no-raster-png`。图表失败时的产物状态见[输出与发布](../output-publication.md)。
