@@ -45,4 +45,4 @@ ODB++ 单板目录或压缩包
 
 Rust 等效器直接调用 GEOS C API 做连续几何检查。GEOS 可从 Shapely wheel 的原生库目录定位，或通过 `PCBEQ_GEOS_LIBRARY` 指定。Rust 扩展缺失时明确报错。两版均遵守相同的物理约束，允许环排序和离散细节有差异，验收比较物理区域、拓扑、误差预算及物性容差。
 
-`main` 同时保留两条产品线。`dev/py` 与 `dev/rust` 分别保留各自的产品和开发入口，并共享适用的契约与领域文档。独立安装和跨环境交接由 [分发验证工具](../tools/README.md) 检查。数值、图表和诊断的发布边界见 [输出与发布](decisions/output-publication.md)。
+`reference` 同时保留 Python 和 Rust 两条产品线，便于对照。`main` 维护 Rust 产品线及其随包 Python 适配。独立安装和跨环境交接由[分发验证工具](../tools/README.md)检查。数值、图表和诊断的发布边界见[输出与发布](decisions/output-publication.md)。
