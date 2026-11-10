@@ -26,8 +26,9 @@
 ## 对解析与建模有用的观察
 
 - minimal 的一条负极性弧提供最小保序差集样例，双铜层用于基础导出。
-- kitchen-sink 的介质为 `F 0`，没有层轮廓，使用整板轮廓围成的范围作为基底。matrix 的大写名称与小写目录测试实体名匹配。
-- KiCad 过孔盖帽、填充、塞孔等辅助目录可能未登记于 matrix，层清单以 matrix 为依据。
+- kitchen-sink 的介质为 `F 0`，没有层轮廓，使用整板轮廓围成的范围作为基底。
+- kitchen-sink 的 37 条 matrix 层记录与 37 个层目录按名称忽略大小写后逐一匹配。过孔盖帽、填充、塞孔和阻焊盖孔等辅助层登记为 `DOCUMENT`，其中的图元可正常解析。
+- 未登记的层目录由[手写夹具 `fx_negative_layer`](../../tests/fixtures/README.md#fx_negative_layer--polarity-and-matrix-authority)覆盖。该夹具的 `tenting_front` 目录触发 `matrix.orphan_layer_dir`，解析器以 matrix 为层清单并跳过该目录。
 - video 的通孔从 TOP_COPPER 到 B.CU，四铜 / 三介质结构适合检查跨度和缺厚度状态。
 - 刚挠板有 23 份层轮廓，覆盖全部九个介质层。部分层轮廓围成的范围超出整板轮廓。
 - 刚挠板的通孔、盲孔、埋孔及 FLEX_5 → FLEX_6 钻孔验证跨层映射；同一 DRILL 层可混合 PLATED / NON_PLATED 工具。
