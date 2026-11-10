@@ -1,19 +1,17 @@
 # Synthetic test fixtures
 
-Hand-authored ODB++ v8.1 jobs. They exist because `cases/` is real-world data
-that happens to miss the corners this parser must get right: there is no sample
-in `cases/` with a negative-polarity layer, a nested user-defined symbol, a
-resize factor, or a broken layer profile.
+These hand-authored ODB++ v8.1 jobs reproduce specific parser scenarios,
+including negative polarity, nested user-defined symbols, resize, and invalid
+layer profiles. The automated suite on `main` does not reference these jobs.
+See the [case inventory](../../docs/research/case-inventory.md#手写夹具与自动测试)
+for the reference samples used by automated tests.
 
 Everything here is written by us, is tiny, and is deliberately *legal* ODB++
 except where a fixture is documenting a failure mode.
 
 ## Byte stability
 
-`tests/fixtures/** -text -diff` in `.gitattributes` keeps git from normalising
-these files. That matters for two reasons: several fixtures exist to pin
-behaviour around line endings and BOMs, and a fixture that git silently rewrote
-would let a CRLF-tolerance test pass by accident.
+`.gitattributes` disables line-ending normalization for the ODB++ fixture files.
 
 ## The fixtures
 
@@ -27,16 +25,16 @@ MM, one step `BOARD`, six matrix layers plus one unregistered directory.
 | Record-level `N` inside a positive layer | `f.cu` pad |
 | Matrix is authoritative, orphans are ignored | `layers/tenting_front/` (present on disk, absent from the matrix) |
 | Case-insensitive entity lookup | matrix `BOARD`/`F.CU` vs directories `board`/`f.cu` |
-| Layer profile beats step profile (constraint 3) | `layers/dielectric_1/profile` (9x9) vs `steps/board/profile` (20x10) |
+| Layer profile takes precedence over the step profile | `layers/dielectric_1/profile` (8 × 8 mm) and `steps/board/profile` (20 × 10 mm) |
 | Step profile is the fallback | every layer without its own profile |
 | Drill sizes use the size semantic, plating comes from the tool | `drill_1_2/tools` (300 µm PLATED, 1000 µm NON_PLATED) |
 
-### `fx_bad_layer_profile/` — constraint 3 failure mode
+### `fx_bad_layer_profile/` — invalid layer profile
 
-Identical in shape to the above, except `layers/dielectric_1/profile` declares a
-surface that contains **no polygon**. A parser that fell back to the step profile
-would silently produce a dielectric 20x10 mm larger than it is, so the required
-behaviour is a hard error:
+MM, one step `BOARD`, with two matrix layers (`F.CU` and `DIELECTRIC_1`) and a
+20 × 20 mm step profile. `layers/dielectric_1/profile` declares a surface with
+no polygons. The parser reports the dielectric layer as failed and the geometry
+lookup raises an error.
 
 ```
 step.base_geometry(layer)  ->  LayerProfileError
@@ -88,9 +86,8 @@ p.66 makes the field expected on dielectric layers) and `matrix.form_conflict`
 for `SIG_CONFLICT` (a declared `RIGID` against a subtype whose default is
 `FLEX`).
 
-`POLYIMIDE_1` additionally carries `.layer_dielectric`, `.dielectric_constant`
-and `.layer_hdi_type`, since a flex core is where those attributes actually
-matter (AGENTS note 4).
+`POLYIMIDE_1` also carries `.layer_dielectric`, `.dielectric_constant` and
+`.layer_hdi_type`.
 
 ## Adding a fixture
 

@@ -6,7 +6,7 @@
 源板均为 20×10 mm，源设计参数和几何公式提供独立预期。
 工具链证据记录 KiCad 10.0.6 及其配套 pcbnew Python ABI；项目解析与测试使用自身 uv 环境。
 
-| 导出 | 主要内容 | 独立断言 |
+| 导出 | 主要内容 | 按源设计核对的预期 |
 | --- | --- | --- |
 | outline-only-mm | 空铜层与矩形 profile | 面积 200 mm²、两铜一介质 |
 | pad-shapes-mm | 圆 / 矩形 / 长圆焊盘 | 位置、符号尺寸、方向 |
@@ -16,7 +16,7 @@
 | four-layer-drills-mm | 四铜三介质，三种钻孔跨度 | 通孔、盲孔与埋孔仅覆盖对应介质 |
 
 原生填充区以往返零宽裂缝连接内孔和外边界，Parser 规整后恢复孔环。
-JSON 介质保留完整基底，预览副本扣孔，材料采样中孔投影为铜；分别断言这些阶段的不同语义。
+中间 JSON 的介质保留完整基底，SVG/HTML 预览在绘图副本中扣除相交钻孔，等效材料采样将相交的钻孔投影视为实心铜。核对面积和孔环数时应注明产物阶段。
 
 ## 原生与整理版
 
@@ -26,9 +26,10 @@ JSON 介质保留完整基底，预览副本扣孔，材料采样中孔投影为
 
 KiCad 两种单位导出均可能写 `.copper_weight=1.0`；按规范 MM 表示 1 µm，而 INCH 表示 1 oz/ft²。
 因此可要求 XY / 孔径归一化一致，绝对 Z 应按各自物理量与记录来源核对。
-厚度断言只使用导出文件实际提供的数据，缺失时验证 best-effort 与 false 标记。
+核对厚度时使用导出文件实际提供的数据。缺少可信厚度时，核对估算值及其 `false` 可信状态。
 
 ## 维护入口与覆盖边界
 
 本地案例目录中的 README 和脚本维护指定工具链的再导出流程；CLI 使用 `pcb export odb --precision 6 --compression zip`，生成后核对 misc/info 的 v8.1 声明。
-KiCad 输入覆盖 EDA 正常路径。端到端 KiCad 正向案例测试位于 `reference` 分支，负极性、递归、异常域等精细语义由[手写夹具](../../tests/fixtures/README.md)覆盖。
+这组 ZIP 用于在 `main` 上核对 KiCad 输入的正常解析和等效路径，当前默认 pytest 不读取这组 ZIP。`reference` 分支的 `tests/integration/test_kicad_positive_cases.py` 使用本地 ZIP 核对 Python 解析器，无需安装 KiCad。
+负极性、递归和无效层轮廓等场景可通过[手写夹具](../../tests/fixtures/README.md)独立复现。`main` 的样本自动测试范围见[参考案例清单](case-inventory.md#手写夹具与自动测试)。

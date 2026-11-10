@@ -25,10 +25,9 @@
 
 ## 对解析与建模有用的观察
 
-- minimal 的一条负极性弧提供最小保序差集样例，双铜层用于基础导出。
+- minimal 的双铜层用于基础导出。两条圆弧的极性均为 `P`，末尾的 `N` 和 `Y` 分别表示逆时针和顺时针。
 - kitchen-sink 的介质为 `F 0`，没有层轮廓，使用整板轮廓围成的范围作为基底。
 - kitchen-sink 的 37 条 matrix 层记录与 37 个层目录按名称忽略大小写后逐一匹配。过孔盖帽、填充、塞孔和阻焊盖孔等辅助层登记为 `DOCUMENT`，其中的图元可正常解析。
-- 未登记的层目录由[手写夹具 `fx_negative_layer`](../../tests/fixtures/README.md#fx_negative_layer--polarity-and-matrix-authority)覆盖。该夹具的 `tenting_front` 目录触发 `matrix.orphan_layer_dir`，解析器以 matrix 为层清单并跳过该目录。
 - video 的通孔从 TOP_COPPER 到 B.CU，四铜 / 三介质结构适合检查跨度和缺厚度状态。
 - 刚挠板有 23 份层轮廓，覆盖全部九个介质层。部分层轮廓围成的范围超出整板轮廓。
 - 刚挠板的通孔、盲孔、埋孔及 FLEX_5 → FLEX_6 钻孔验证跨层映射；同一 DRILL 层可混合 PLATED / NON_PLATED 工具。
@@ -40,5 +39,11 @@
 刚挠板有 499 条符号声明，其中 490 个标准符号引用、9 个自定义符号引用；123 个自定义目录中有 114 个未被层文件引用。
 被引用定义包含 `sc_join0201_hd`、`special_0.670x0.950_nt2520` 等，内部仅用标准符号，适合验证严格命名和惰性读取。
 
-四例中有负极性记录、真实孔洞及自定义圆弧，matrix 层极性均为 POSITIVE。
-负片层、递归嵌套、循环引用、resize、无效层轮廓及显式 FORM 由最小合成夹具和包内测试补充。
+四例的 matrix 层极性均为 `POSITIVE`，普查中的 `P`、`L`、`A`、`S` 记录也均为正极性。kitchen-sink 和刚挠板含 `OB ... H` 孔环，刚挠板的自定义符号中还包含圆弧。
+
+## 手写夹具与自动测试
+
+[手写夹具](../../tests/fixtures/README.md)提供负片层、负极性记录、未登记层目录、递归嵌套、循环引用、resize、无效层轮廓及显式 `FORM` 的独立复现输入。
+其中 [`fx_negative_layer`](../../tests/fixtures/README.md#fx_negative_layer--polarity-and-matrix-authority) 的 `tenting_front` 目录未在 matrix 登记，解析器报告 `matrix.orphan_layer_dir` 并跳过该目录。
+
+`main` 的 [Rust CLI 测试](../../tests/rust/test_rust_cli.py)使用本地 `minimal-test-odb` 检查管道产物和同步工具的缓存复用。样本缺失时跳过这两项。当前 `main` 的测试未引用上述手写 ODB++ 夹具，其余三份参考输入供本地核对。
