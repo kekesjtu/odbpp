@@ -2,7 +2,7 @@
 
 本文说明解析器交付的字段和物理语义。
 
-解析器导出与等效器导入共用 `contracts/intermediate.py` 中的 Pydantic 模型。
+解析器使用从 `contracts/intermediate.py` 同步到包内的 Pydantic 模型。Rust 等效器使用 Serde 和原生校验读取同一契约。
 项目始终只有一套当前格式；不保存或比较 schema/generator 版本，不维护旧结构兼容分支。
 格式变化时同步调整全部调用方并重新导出案例。结构不完整、类型错误和必要语义错误仍明确报错。
 
@@ -10,22 +10,13 @@
 声明 JSON Schema 标准语法，不是业务版本。重新生成：
 
 ```powershell
-uv run --all-extras python tools/sync_contract.py
-uv run --all-extras python tools/sync_contract.py --check
+uv run python tools/sync_contract.py
+uv run python tools/sync_contract.py --check
 ```
 
 ## 数据流与职责
 
-ODB++ 文本解析、符号展开、极性与拓扑规整使用 dataclass。
-导出边界 `step_to_document()` 构造 Pydantic 模型，`write_document()` 直接序列化；
-保留 `step_to_json()` 作为返回普通 JSON 字典的便利 API。
-文件导入 `read_document()` 使用 `model_validate_json()`；等效器也验证直接传入的字典。
-验证后的接口容器转换为普通映射，复用坐标列表，随后构造原有 Ring/Region dataclass。
-像素、扫描线、region、网格单元和物性循环不构造 Pydantic 对象。
-
-单位解释、极性规整属于解析器；几何有效性、内接性、连通性和孔洞保留属于几何算法。
-Pydantic 不代替这些算法，也不自动修复物理数据。入口验证包括有限数值、点维度、
-显式岛/孔、Z 起止、唯一标识、域引用、铜层跨度以及英制铜重换算来源。
+单位解释和极性规整由解析器负责。入口验证有限数值、点维度、显式岛孔、Z 起止、唯一标识、域引用、铜层跨度及必要的厚度来源。内接性、连通性和孔洞保留在等效器的矢量几何验收中检查。
 
 ## 唯一数据与字段
 
@@ -35,10 +26,10 @@ Pydantic 不代替这些算法，也不自动修复物理数据。入口验证�
 | 根 `resolution_mm` | 输出坐标规整网格，默认 0.0001 mm；与材料光栅无关 |
 | 根 `source` | 输入路径、job root、输入单位、产品名称及 ODB++ 版本；手工合成数据可省略 |
 | 根 `steps` | 恰好一个单板 step，不支持矩阵拼板和嵌套引用 |
-| step `profile_domain_id` | 整板轮廓在 `domains` 中的引用；轮廓只存一次 |
-| step `domains` | `{id, source, polygons}`；层级域与整板域均可被多层引用 |
+| step `profile_domain_id` | `domains` 中整板实体范围的引用 |
+| step `domains` | `{id, source, polygons}`。保存整板或层轮廓围成的实体范围，可被多层引用 |
 | step `layers` | 按 matrix row 排列的完整层目录；唯一存储层类型、上下文、Z、跨度、厚度来源与图案 |
-| layer `domain_id` | 已按 layer profile 优先规则确定的计算域；与铜图案不同 |
+| layer `domain_id` | 层实体范围的引用。等效器再与整板实体范围求交得到层有效计算域 |
 | layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
 | layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
@@ -48,7 +39,7 @@ Pydantic 不代替这些算法，也不自动修复物理数据。入口验证�
 | layer `copper_span` | 介质或钻孔跨越的两个铜层索引；不重复保存端点名称 |
 | layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
 
-接口只存储一份计算所需数据；模型与生成文本由契约同步工具保持一致。
+轮廓、实体范围与有效计算域的区别见[项目架构](../architecture.md#从轮廓到有效计算域)。
 
 所有坐标使用输入 step 原点，不重新居中；XY 中 Y 向上；Z 从叠层顶面向下。
 `polygons[].points` 为二维数组，末尾不重复首点；岛顺时针，孔逆时针，嵌套岛保持独立正向环。
@@ -56,12 +47,7 @@ Pydantic 不代替这些算法，也不自动修复物理数据。入口验证�
 
 ## 未扣钻孔的介质几何
 
-`layer.polygons` 只规整本层图元极性及自身 profile 基底，不扣除跨层 DRILL 投影。
-profile 的真实空洞仍保留；DRILL 投影多边形和铜层跨度独立存于层目录，不重复保存 Z。
-铜层自身的铜岛与避空区在 JSON、预览和等效采样中都不被 DRILL 改写。
-SVG/HTML 在局部绘图副本中对介质做 difference；该副本不能导出为中间 JSON。
-等效器按计算域规划 region/网格，以扫描线 OR 合并相交钻孔，介质黑色为
-`计算域 AND 钻孔`，铜层黑色为 `计算域 AND 铜图案`。不对介质图案再次布尔扣孔。
+`layer.polygons` 保存按本层图元极性和基底规整后的图案，保留轮廓定义的真实空洞。跨层 DRILL 作为独立图案交付，不从介质基底扣除，也不改写铜图案。预览中的扣孔仅作用于绘图副本，等效时的钻孔覆盖见[材料采样](../decisions/pcbeq/material-sampling.md)。
 
 ## 厚度与钻孔
 
@@ -83,7 +69,7 @@ SVG/HTML 在局部绘图副本中对介质做 difference；该副本不能导出
 跨度端点须引用层目录中的实际铜层索引；需要介质采样时，无拓扑跨度或端点铜层缺少 Z 均明确报错。
 无有效域、失败/未导出的待等效层、介质采样所需钻孔跨度未知仍阻止生成正式结果。
 铜层忽略 DRILL，仅铜层输入不要求钻孔跨度。
-原始层极性、profile 基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，
+原始层极性、轮廓基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，
 不写入中间 JSON。根节点也不导出 `diagnostics`，
-解析诊断保留在内部模型和命令行；逐层 `geometry_status/geometry_error` 保留。
+解析诊断通过命令行和独立的 `diagnostics/run.json` 交付；中间 JSON 保留逐层 `geometry_status/geometry_error`。
 消费者直接使用规整后的实体几何。

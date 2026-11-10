@@ -1,14 +1,12 @@
-# 逐层计算域与绝对叠层
+# 逐层轮廓与绝对叠层
 
-## 计算域决策
+## 轮廓选择
 
-每个物理层的计算域优先使用有效层级 profile；缺失时使用 step profile；存在但无法解析时报告该层失败。
-step profile 定义整板范围。等效器使用 layer profile 与 step profile 的交集作为该层有效实体域。
-审计分别记录 authored area、越出 step 的面积及有效域内的模型损失。
+解析器优先使用有效的层轮廓（layer profile），缺失时用整板轮廓（step profile）。层轮廓存在但无法解析时，报告该层失败。解析器将轮廓围成的实体范围存入中间 JSON。
 
-刚挠板各层的实体域可以不同。几何规划阶段将域差异切分为共享 region，每层明确登记整块存在性。
-铜图案描述材料分布，逐层域描述物理层在哪里存在；域内白色基底也属于完整实体。
-介质 JSON 保留未扣 DRILL 的基底几何；预览在绘图副本中扣除相交钻孔。
+等效器取层实体范围与整板实体范围的交集作为层有效计算域，并报告有效域内的模型损失。术语和分工见[项目架构](../../architecture.md)，共享分区见[几何规划](../pcbeq/geometry-planning.md)。
+
+介质 JSON 保留未扣 DRILL 的基底几何，预览在绘图副本中扣除相交钻孔。
 
 ## 叠层与厚度决策
 
@@ -28,11 +26,4 @@ Z 使用毫米，自叠层顶面向下。matrix 行序给出层次，铜层具�
 结构层厚度未知时，后续位置携带未知状态；装饰层厚度未知时标记自身未知，铜面位置的累计可信性独立维护。
 MaterialMap 对联合可信状态为 false 的两个 Z 端点使用 null；中间 JSON 与运行诊断保留估算值。
 
-DRILL 保存投影和 `copper_span`，绝对跨度由起点铜层的 Z 起始和终点铜层的 Z 终止推导。
-它是跨层图案，材料采样仅覆盖相交介质层。
-
-## 依据与实现对照
-
-真实刚挠案例的局部层级 profile、INCH 铜重和盲埋孔提供输入依据。
-`pcbkit_rust.model.Step.base_geometry` 选择基底，`pcbkit_rust.stackup` 解释层次和厚度，`pcbkit_rust.export` 输出域引用与层目录。
-等效器规划和采样分别消费域与跨度，接口形状见 [中间 JSON](../../interfaces/intermediate-json.md)。
+DRILL 作为跨层图案交付投影和 `copper_span`。字段定义见[中间 JSON](../../interfaces/intermediate-json.md)，覆盖规则见[材料采样](../pcbeq/material-sampling.md)。

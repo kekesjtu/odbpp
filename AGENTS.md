@@ -4,12 +4,10 @@ pcbkit / pcbeq AI 协作开发指南，说明项目结构、开发规范和文�
 
 ## 1. 项目概述
 
-本项目提供 ODB++ v8.1 单板解析器 `pcbkit` 和 PCB 物性等效器 `pcbeq`，两者分别安装和分发，通过中间 JSON 交接。
-本分支仅维护 `pcbkit-rust`、`pcbeq-rust` 及包内 Python 适配与可视化；不得依赖 Python 产品源码。
-解析器交付正向实体多边形、逐层计算域和叠层信息；等效器生成内接三维 region、各 region 独立的局部笛卡尔网格与完整单元物性。
-SVG/HTML、材料掩膜和热图用于工程核对。
+本项目提供 ODB++ v8.1 单板解析器 `pcbkit-rust` 和 PCB 物性等效器 `pcbeq-rust`，两者独立分发，通过中间 JSON 交接。包内 Python 模块承担输入适配、命令启动和工程图表。
+解析器交付正向实体多边形、整板与各层的实体范围及叠层信息。等效器据此确定层有效计算域，生成内接三维 region、局部网格与完整单元物性。
 
-功能范围、物理约束和验收标准以 [docs/requirements.md](docs/requirements.md) 为准；实现前先阅读相关需求及 [README.md](README.md) 中的主题文档。
+功能范围、物理约束和验收标准以[需求](docs/requirements.md)为准。数据流与术语见[项目架构](docs/architecture.md)。实现前先阅读相关需求及 [README.md](README.md) 中的主题文档。
 
 ## 2. 文件职责
 
@@ -18,6 +16,7 @@ SVG/HTML、材料掩膜和热图用于工程核对。
 | `AGENTS.md`            | AI 协作规范    | 项目规则、开发流程和文档维护约定                         |
 | `README.md`            | 项目门面       | 简介、快速开始和文档入口                                 |
 | `docs/requirements.md` | 需求定义       | 数据流、功能范围、物理语义、输出约束                     |
+| `docs/architecture.md` | 项目架构       | 产品边界、术语、数据流和语言职责                         |
 | `docs/`                | 项目文档       | 技术决策、接口、开发说明、调研、推导、参考资料与验证方法 |
 | `contracts/`           | 中间 JSON 契约 | 共享 Pydantic 模型权威源和生成的文本 schema              |
 | `packages/pcbkit-rust/`、`packages/pcbeq-rust/` | Rust 核心版 | Rust 扩展、Python 入口及独立分发定义 |
@@ -39,7 +38,7 @@ SVG/HTML、材料掩膜和热图用于工程核对。
 
 ### 3.2 Git 规范
 
-- **分支策略**：在当前 `dev/rust` 分支维护本产品线
+- **分支策略**：在 `main` 维护 Rust 产品线，`reference` 保留 Python 与 Rust 对照版本
 - **敏捷开发**：一次完整的变更一次提交
 - **提交信息**：使用中文，格式 `类型: 简述`（如 `feat: 添加XXX`）
 

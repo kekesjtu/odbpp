@@ -3,7 +3,7 @@
 ## 输入与独立预期
 
 本地 `cases/kicad-positive/` 保留源板、原生导出 `native/`、整理版 `clean/` 以及生成 / 导出 / 整理脚本。
-源板均为 20×10 mm；源设计参数和几何公式提供独立预期，普通 pytest 读取审定输入，不在运行期间调用 EDA 软件。
+源板均为 20×10 mm，源设计参数和几何公式提供独立预期。
 工具链证据记录 KiCad 10.0.6 及其配套 pcbnew Python ABI；项目解析与测试使用自身 uv 环境。
 
 | 导出 | 主要内容 | 独立断言 |
@@ -20,9 +20,7 @@ JSON 介质保留完整基底，预览副本扣孔，材料采样中孔投影为
 
 ## 原生与整理版
 
-原生 ZIP 完整保留 KiCad 产物。整理脚本只移除明确的重复 / 空辅助层和无关文件并重排 ROW。
-物理层 features、attrlist、tools 和 step profile 保持字节一致，额外数据触发检查失败。
-重新生成时比较结构和物理语义，UUID、时间戳和记录顺序不作为整包相等要求。
+原生 ZIP 保留 KiCad 导出的输入。整理版移除重复或空辅助层及无关文件并重排 ROW，保留板轮廓、物理层图案、厚度属性和钻孔工具语义。重新生成时按源设计核对结构、单位、几何和层跨度。
 
 ## 单位与厚度
 
@@ -32,9 +30,5 @@ KiCad 两种单位导出均可能写 `.copper_weight=1.0`；按规范 MM 表示 
 
 ## 维护入口与覆盖边界
 
-```powershell
-uv run --all-extras pytest tests/integration/test_kicad_positive_cases.py
-```
-
 本地案例目录中的 README 和脚本维护指定工具链的再导出流程；CLI 使用 `pcb export odb --precision 6 --compression zip`，生成后核对 misc/info 的 v8.1 声明。
-KiCad 输入覆盖 EDA 正常路径，负极性、递归、异常域等精细语义仍由 [手写夹具](../../tests/fixtures/README.md) 验证。
+KiCad 输入覆盖 EDA 正常路径。端到端 KiCad 正向案例测试位于 `reference` 分支，负极性、递归、异常域等精细语义由[手写夹具](../../tests/fixtures/README.md)覆盖。

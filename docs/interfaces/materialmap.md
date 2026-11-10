@@ -35,10 +35,10 @@
 ## 范围与网格数
 
 `bounds_mm.x/y/z` 各有两个值，表示最小/最大坐标。XY 必须有限且有正长度，Z 为自叠层顶面向下的绝对 mm。
-`grid_counts.x/y/z` 必须为正整数，不接受布尔、字符串或小数。X/Y 分格数由本 region 的完整边长 L 与最大边长上限取 `max(1,ceil(L/max))`。相邻 region 的分格数与单元边长可以不同，无须共形。
+`grid_counts.x/y/z` 必须为正整数，不接受布尔、字符串或小数。分格数的选择见[几何规划](../decisions/pcbeq/geometry-planning.md#局部均匀网格)。
 
 每个条目完整属于一个物理层；当前每层不沿 Z 切分，`grid_counts.z=1`。同一 XY region 出现在多个物理层时，各层分别记录自己的三维 region。
-region 必须完整位于所属层计算域及 step profile 内，不能跨 profile 孔洞。本文件不表达部分覆盖单元，不用采样覆盖率折减体积或质量。
+region 必须完整位于所属层的有效计算域内，不能跨轮廓定义的孔洞。本文件表达完整单元，采样覆盖率不折减体积或质量。
 
 ### 未知 Z
 
@@ -67,7 +67,4 @@ PCB 坐标 Y 向上，从左下角向右遍历一行再向上。PNG 上到下的
 
 [Flotherm CSV 参考](../reference/Flotherm_reference_MaterialMap.csv) 的 region 范围与 resolution 展示了均匀分格的紧凑表达。本项目采用自定义 XYZ 网格数与五物性元组，不要求该 JSON 可被 Flotherm 直接导入。
 
-热图只读取 MaterialMap，自范围与网格数恢复实际矩形，不把局部网格解释为共同全局轴线。region 图显示实际建模块，网格图显示局部单元和不共形接缝。
-
-`diagnostics/run.json` 独立记录材料来源、光栅、尺寸策略、逐 region 网格数、几何预算、跳过原因和实现指纹；不参与热图恢复，也不保存逐单元索引或采样统计。
-验收工具独立重建局部单元并核对域归属、尺寸、采样容量、Z 与物性范围。格式保持唯一当前结构，不提供旧网格线格式兼容迁移。
+图表的输入与用途见[可视化](../decisions/pcbeq/pcbeq-visualization.md)。材料来源、几何验收和采样配置由独立的 `diagnostics/run.json` 记录。格式采用唯一的当前结构。
