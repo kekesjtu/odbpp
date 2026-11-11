@@ -19,7 +19,7 @@ def build_parser():
     mesh = command.add_mutually_exclusive_group()
     mesh.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     mesh.add_argument("--max-cell-mm", type=float, nargs="+")
-    command.add_argument("--max-area-loss-ratio", type=float, default=.05)
+    command.add_argument("--max-area-error-ratio", type=float, default=.05)
     command.add_argument("--materials")
     for phase in ("copper", "base"):
         for key in ("k", "density", "cp"):
@@ -46,7 +46,7 @@ def main(argv=None):
         result = run(args.path, output, px=args.px, py=args.py,
                      grid_level=args.grid_level or ("standard" if args.max_cell_mm is None else None),
                      max_cell_mm=args.max_cell_mm or [5, 5],
-                     max_area_loss_ratio=args.max_area_loss_ratio,
+                     max_area_error_ratio=args.max_area_error_ratio,
                      materials={"global": overrides} if overrides else {}, materials_path=args.materials)
         print(f"wrote {output / 'materialmap.json'}: {result['cells']} cells, "
               f"{result['regions']} regions; native {result['durations_s']['total']:.6f} s")

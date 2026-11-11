@@ -45,26 +45,15 @@ def _topology_source(original):
     return sources, holes, cores
 
 
-def _covers_with_roundoff(outer, inner):
-    """Containment predicate only: allow coordinate roundoff, never move geometry.
-
-    Raw line intersections can land a few binary ULPs from a shared boundary.
-    This slack scales with floating-point precision, not a physical Y grid.
-    """
-    if outer.covers(inner):
-        return True
-    slack = 32 * max(math.ulp(v) for v in (*outer.bounds,*inner.bounds))
-    return outer.buffer(slack,quad_segs=32).covers(inner)
-
-
 def _topology(original, model, source=None):
     from shapely.geometry import Polygon
     sources, holes, eroded = source if source is not None else _topology_source(original)
     targets = _components(model)
-    points = [t.representative_point() for t in targets]
-    matches = [sum(s.covers(point) for point in points) for s in sources]
+    matches = [sum(s.intersection(t).area > 1e-10 for t in targets) for s in sources]
+    reverse_matches = [sum(s.intersection(t).area > 1e-10 for s in sources) for t in targets]
     model_holes = [Polygon(h) for t in targets for h in t.interiors]
-    hole_matches = [sum(_covers_with_roundoff(m,h) for m in model_holes) for h in holes]
+    hole_matches = [sum(m.intersection(h).area > 1e-10 for m in model_holes) for h in holes]
+    reverse_hole_matches = [sum(m.intersection(h).area > 1e-10 for h in holes) for m in model_holes]
     positive = all(len(_components(t.buffer(-1e-7))) == 1 for t in targets)
     # Erosion splits lobes separated by a narrow neck. Preserve every such
     # geometric core, including terminal branches within a single source island.
@@ -79,9 +68,9 @@ def _topology(original, model, source=None):
             "component_correspondence": matches,
             "original_holes": len(holes), "model_holes": len(model_holes),
             "hole_correspondence": hole_matches, "positive_width_connections": positive,
-            "hole_containment_roundoff_ulps":32,
+            "correspondence":"positive-area overlap",
             "protected_core_checks":core_checks,
-            "preserved": all(n == 1 for n in matches + hole_matches)
+            "preserved": all(n == 1 for n in matches + hole_matches + reverse_matches + reverse_hole_matches)
                          and len(targets) == len(sources) and len(model_holes) == len(holes)
                          and positive and core_preserved}
 
@@ -111,14 +100,13 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
         for domain_id,members in ids.items():
             source=domains[domain_id].intersection(domains[step["profile_domain_id"]])
-            if geometry_audit["domains"][domain_id].get("shared_membership_source") == "supported_physical_domain_union":
-                source=unary_union([domains[key].intersection(domains[step["profile_domain_id"]])
-                                    for key in geometry_audit["active_physical_domain_ids"]])
             modeled=unary_union([region_shapes[rid] for rid in members])
-            assert source.area-modeled.area<=source.area*ratio+1e-8
-            assert modeled.difference(source).area<=1e-8
+            assert source.symmetric_difference(modeled).area<=source.area*ratio+1e-8
+            assert abs(sum(region_shapes[rid].area for rid in members)-modeled.area)<1e-7
             assert _topology(source,modeled)["preserved"]
-        rect_ids={(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]):rid for rid,r in enumerate(regions)}
+        rect_ids={domain_id:{(regions[rid]["x0_mm"],regions[rid]["y0_mm"],
+                               regions[rid]["x1_mm"],regions[rid]["y1_mm"]):rid for rid in members}
+                  for domain_id,members in ids.items()}
         assert meta["grid"]["layout"]=="region-local-cartesian"
         assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
         local_grids={r["region_id"]:r for r in meta["grid"]["regions"]}
@@ -131,13 +119,11 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         for region in materialmap.regions:
             name=region.layer.name; layer=reports[name]
             a,c=region.bounds_mm.x; b,d=region.bounds_mm.y
-            rid=rect_ids[(a,b,c,d)]
+            rid=rect_ids[layer["domain_id"]][(a,b,c,d)]
             assert region.grid_counts.model_dump()==local_grids[rid]["grid_counts"]
             assert local_grids[rid]["bounds_mm"]=={"x":[a,c],"y":[b,d]}
             assert rid in ids[layer["domain_id"]]
-            shape=box(a,b,c,d)
-            assert shape.difference(domains[layer["domain_id"]]).area<1e-8
-            assert shape.difference(domains[step["profile_domain_id"]]).area<1e-8
+            assert layer["outside_material"] == "base"
             expected_z=(layer["z_mm"]["start_mm"],layer["z_mm"]["end_mm"]) if layer["z_mm"]["thickness_known"] else (None,None)
             assert region.bounds_mm.z==expected_z
         for region,bounds5,values in iter_cells(materialmap):
@@ -145,7 +131,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             for axis,length in enumerate((c-a,d-b)):
                 assert 0<length<=limits["max"][axis]+1e-8
             x0,x1=region.bounds_mm.x; y0,y1=region.bounds_mm.y
-            tile=tiles[rect_ids[(x0,y0,x1,y1)]]
+            tile=tiles[rect_ids[reports[region.layer.name]["domain_id"]][(x0,y0,x1,y1)]]
             ax=RasterAxis(tile["origin_mm"][0],tile["pixel_step_mm"][0],tile["px"])
             ay=RasterAxis(tile["origin_mm"][1],tile["pixel_step_mm"][1],tile["py"])
             columns=ax.range_for(a,c);rows=ay.range_for(b,d)
@@ -167,8 +153,9 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             "grid_cells":meta["grid"]["cell_count"],
             "material_rows":sum(counts.values()),"raster_base":[px,py],
             "total_region_pixels":raster["total_pixels"],"peak_region_pixels":raster["peak_region_pixels"],
-            "minimum_samples_per_axis":minimum,"area_loss_mm2":meta["rectification"]["lost_area_mm2"],
-            "max_area_loss_ratio":ratio,"area_and_topology_checks_passed":True,
+            "minimum_samples_per_axis":minimum,
+            "max_profile_area_error_ratio":max(r["relative_area_error"] for r in geometry_audit["domains"].values()),
+            "max_area_error_ratio":ratio,"area_and_topology_checks_passed":True,
             "layer_count":len(reports),"drill_scope":meta["drill_scope"],
             "copper_drill_overlays_ignored":True,"all_checks_passed":True})
         print(records[-1],flush=True)

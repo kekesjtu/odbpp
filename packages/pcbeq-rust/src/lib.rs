@@ -2,8 +2,8 @@ use pcb_geometry::{Ring, boolean};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-mod coarsen;
 mod document;
+mod fast;
 mod geos;
 mod grid;
 mod native_materials;
@@ -14,13 +14,11 @@ mod native_sampling;
 mod options;
 mod pipeline;
 mod planning;
-mod profile;
 mod raster;
 mod raster_index;
-mod rectification;
+mod rectangles;
 mod region_raster;
 mod sampling;
-mod shared;
 mod topology;
 
 #[pyfunction]
@@ -63,7 +61,6 @@ fn _pcbeq_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(boolean_op, m)?)?;
     m.add_function(wrap_pyfunction!(grid::allocate, m)?)?;
     m.add_function(wrap_pyfunction!(grid::build_grid, m)?)?;
-    m.add_function(wrap_pyfunction!(profile::envelope, m)?)?;
     m.add_function(wrap_pyfunction!(raster::rasterize, m)?)?;
     m.add_function(wrap_pyfunction!(sampling::integrate, m)?)?;
     m.add_function(wrap_pyfunction!(run_materialmap, m)?)?;

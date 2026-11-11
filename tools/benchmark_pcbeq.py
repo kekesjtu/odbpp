@@ -23,7 +23,7 @@ def build_parser():
     parser.add_argument('--warmup', type=int, default=1, help='unmeasured runs (default: 1)')
     parser.add_argument('--px', type=int)
     parser.add_argument('--py', type=int)
-    parser.add_argument('--max-area-loss-ratio', type=float, default=0.05)
+    parser.add_argument('--max-area-error-ratio', type=float, default=0.05)
     mesh = parser.add_mutually_exclusive_group()
     mesh.add_argument('--grid-level', choices=('coarse', 'standard', 'fine'))
     mesh.add_argument('--max-cell-mm', type=float, nargs='+', metavar='MM')
@@ -49,7 +49,7 @@ def main(argv=None) -> int:
         parser.error('input must not be overwritten by benchmark outputs')
     errors = (OSError, ValueError, ImportError, RuntimeError)
     try:
-        settings = {'px': args.px, 'py': args.py, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'max_cell_mm': args.max_cell_mm if args.max_cell_mm is not None else [5, 5], 'max_area_loss_ratio': args.max_area_loss_ratio}
+        settings = {'px': args.px, 'py': args.py, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'max_cell_mm': args.max_cell_mm if args.max_cell_mm is not None else [5, 5], 'max_area_error_ratio': args.max_area_error_ratio}
         args.output.mkdir(parents=True, exist_ok=True)
         report = {'measurement': 'intermediate JSON read/validation through MaterialMap close and rename', 'excluded': ['ODB++ parsing', 'process startup/imports', 'images/HTML', 'benchmark metadata', 'fsync to physical storage'], 'cache_policy': 'same process; normal OS file cache; fresh document/options per run', 'environment': {'python': sys.version, 'platform': platform.platform(), 'processor': platform.processor(), 'cpu_count': os.cpu_count()}, 'backend': args.backend, 'input': {'path': str(args.input.resolve()), 'bytes': args.input.stat().st_size}, 'options': {**settings, 'materials_path': str(args.materials) if args.materials else None}, 'warmup': args.warmup, 'repeat': args.repeat, 'runs': []}
         for index in range(args.warmup + args.repeat):

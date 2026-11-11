@@ -129,9 +129,12 @@ pub fn evaluate(
     );
     let mut regions = vec![vec![]; geometry.rectangles.len()];
     let mut cells = 0;
+    let mut base_pixels = 0;
     for &rid in &geometry.members[domain] {
         let tile = &mesh.rasters[rid];
-        let pixels = source.render(tile.x, tile.y)?;
+        // The renderer initializes domain-exterior pixels as the base phase.
+        let (pixels, outside) = source.render(tile.x, tile.y)?;
+        base_pixels += outside;
         let values = sampling::integrate_pixels(
             &pixels,
             tile.x.2,
@@ -159,7 +162,8 @@ pub fn evaluate(
     }
     let z = layer.z_mm.as_ref().ok_or("missing layer Z")?;
     let report = json!({"name":layer.name,"type":layer.kind,"status":"equivalent","domain_id":layer.domain_id,
-        "domain_source":domain_doc.source,"cell_count":cells,"partial_domain_cells":0,
+        "domain_source":domain_doc.source,"cell_count":cells,
+        "outside_material":"base","outside_base_pixels":base_pixels,
         "z_mm":{"start_mm":z.start_mm,"end_mm":z.end_mm,"thickness_known":z.thickness_known,"source":z.source},
         "drill_overlays":covering.iter().map(|d|&d.layer.name).collect::<Vec<_>>()});
     Ok((regions, report))

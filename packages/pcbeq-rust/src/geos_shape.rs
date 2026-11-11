@@ -41,8 +41,8 @@ impl<'a> Shape<'a> {
     pub fn difference(&self, other: &Self) -> Result<Self> {
         self.binary(other, b"GEOSDifference_r\0")
     }
-    pub fn point(&self) -> Result<Self> {
-        self.unary(b"GEOSPointOnSurface_r\0")
+    pub fn interior_point(&self) -> Result<Point> {
+        Ok(self.unary(b"GEOSPointOnSurface_r\0")?.points()?[0])
     }
     pub fn buffer(&self, distance: f64) -> Result<Self> {
         self.engine
