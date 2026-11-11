@@ -3,22 +3,26 @@ use crate::geos::{Result, Shape};
 use serde_json::{Value, json};
 
 pub struct Source<'a> {
-    pub components: Vec<Shape<'a>>,
+    components: Vec<Shape<'a>>,
     holes: Vec<Shape<'a>>,
     cores: Vec<(f64, Vec<Shape<'a>>)>,
 }
-pub fn covers_roundoff(outer: &Shape<'_>, inner: &Shape<'_>) -> Result<bool> {
-    if outer.covers(inner)? {
-        return Ok(true);
+
+fn correspondence(
+    sources: &[Shape<'_>],
+    targets: &[Shape<'_>],
+) -> Result<(Vec<usize>, Vec<usize>)> {
+    let mut forward = vec![0; sources.len()];
+    let mut reverse = vec![0; targets.len()];
+    for (i, source) in sources.iter().enumerate() {
+        for (j, target) in targets.iter().enumerate() {
+            if source.intersection(target)?.area()? > 1e-10 {
+                forward[i] += 1;
+                reverse[j] += 1;
+            }
+        }
     }
-    let slack = outer
-        .bounds()?
-        .into_iter()
-        .chain(inner.bounds()?)
-        .map(|v| (v.next_up() - v).abs())
-        .fold(0., f64::max)
-        * 32.;
-    outer.buffer(slack)?.covers(inner)
+    Ok((forward, reverse))
 }
 impl<'a> Source<'a> {
     pub fn new(original: &Shape<'a>) -> Result<Self> {
@@ -45,18 +49,7 @@ impl<'a> Source<'a> {
     }
     pub fn topology(&self, model: &Shape<'a>) -> Result<Value> {
         let targets = model.components()?;
-        let points = targets
-            .iter()
-            .map(Shape::point)
-            .collect::<Result<Vec<_>>>()?;
-        let mut matches = vec![];
-        for s in &self.components {
-            let mut n = 0;
-            for p in &points {
-                n += usize::from(s.covers(p)?);
-            }
-            matches.push(n);
-        }
+        let (matches, reverse_matches) = correspondence(&self.components, &targets)?;
         let mut holes = vec![];
         let mut positive = true;
         for target in &targets {
@@ -65,14 +58,7 @@ impl<'a> Source<'a> {
                 holes.push(model.engine.polygon(&h.points()?, &[])?);
             }
         }
-        let mut hole_matches = vec![];
-        for h in &self.holes {
-            let mut n = 0;
-            for m in &holes {
-                n += usize::from(covers_roundoff(m, h)?);
-            }
-            hole_matches.push(n);
-        }
+        let (hole_matches, reverse_hole_matches) = correspondence(&self.holes, &holes)?;
         let mut checks = vec![];
         let mut cores_kept = true;
         for (radius, cores) in &self.cores {
@@ -84,16 +70,23 @@ impl<'a> Source<'a> {
             cores_kept &= kept == cores.len();
             checks.push(json!({"erosion_mm":radius,"cores":cores.len(),"retained":kept}));
         }
-        let preserved = matches.iter().chain(&hole_matches).all(|&n| n == 1)
+        let preserved = matches
+            .iter()
+            .chain(&hole_matches)
+            .chain(&reverse_matches)
+            .chain(&reverse_hole_matches)
+            .all(|&n| n == 1)
             && targets.len() == self.components.len()
             && holes.len() == self.holes.len()
             && positive
             && cores_kept;
         Ok(
             json!({"original_components":self.components.len(),"model_components":targets.len(),
-            "component_correspondence":matches,"original_holes":self.holes.len(),"model_holes":holes.len(),
+            "component_correspondence":matches,"reverse_component_correspondence":reverse_matches,
+            "original_holes":self.holes.len(),"model_holes":holes.len(),
             "hole_correspondence":hole_matches,"positive_width_connections":positive,
-            "hole_containment_roundoff_ulps":32,"protected_core_checks":checks,"preserved":preserved}),
+            "reverse_hole_correspondence":reverse_hole_matches,
+            "correspondence":"positive-area overlap","protected_core_checks":checks,"preserved":preserved}),
         )
     }
 }

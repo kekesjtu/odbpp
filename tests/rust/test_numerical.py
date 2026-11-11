@@ -62,7 +62,7 @@ def test_native_boundaries_validate_resources_and_finite_inputs():
     with pytest.raises(ValueError):
         native.allocate(0.,10.,math.nan)
     with pytest.raises(ValueError):
-        native.envelope([[(math.nan,0.),(1.,0.),(0.,1.)]],0.,1.)
+        native.rasterize([(math.nan,0.,1.,1.)],None,[],(0.,1.,1),(0.,1.,1))
     with pytest.raises(ValueError):
         native.integrate(b"",1,1,[],[1.]*6,1)
     with pytest.raises(ValueError):

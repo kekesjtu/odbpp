@@ -2,7 +2,7 @@
 
 ## 假设与几何
 
-单元尺寸为 $L_x\times L_y\times L_z$，完整位于一个内接 region 和一个物理层内，Z 覆盖该层完整厚度。
+单元尺寸为 $L_x\times L_y\times L_z$，完整位于一个近似 region 和一个物理层内，Z 覆盖该层完整厚度。
 两相材料沿整个层厚贯通，热导率只随 XY 变化：黑色为 $k_1$，白色为 $k_2$，均为有限正数。
 输出采用正交各向异性张量 $\mathbf K=\operatorname{diag}(k_x,k_y,k_z)$。
 

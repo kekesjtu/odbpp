@@ -8,7 +8,7 @@ ODB++ 单板目录或压缩包
         └─ SVG / HTML 预览             └─ 工程图表与运行诊断
 ```
 
-`pcbkit-rust` 解释 ODB++ 的单位、图元、极性和叠层，输出毫米坐标下的正向实体多边形及逐层几何。`pcbeq-rust` 规划内接 region 与局部网格，采样材料图案，为每个完整单元计算物性。
+`pcbkit-rust` 解释 ODB++ 的单位、图元、极性和叠层，输出毫米坐标下的正向实体多边形及逐层几何。`pcbeq-rust` 规划近似 region 与局部网格，采样材料图案，为每个完整单元计算物性。
 
 [中间 JSON](interfaces/intermediate-json.md) 是两者交接板数据的唯一接口。两个包分别安装和分发，来源路径用于追溯。软件分发有各自版本，板数据使用同一当前契约。等效结果定义见 [MaterialMap](interfaces/materialmap.md)。
 
@@ -27,11 +27,11 @@ ODB++ 单板目录或压缩包
 
 ```text
 中间 JSON
-  ├─ 整板与层实体范围 ──> 共享二维分区、层归属、局部网格
+  ├─ 整板与层实体范围 ──> 有效域去重、独立分区、局部网格
   └─ 材料图案与钻孔跨度 ──> 按 region 采样 ──> 单元物性 ──> MaterialMap
 ```
 
-共享二维矩形与所属物理层的 Z 区间共同定义三维 region。几何规划使用矢量范围、拓扑和物理尺寸。网格确定后，材料分支为各 region 生成光栅，再按网格统计样本。调整采样密度不会移动 region 或网格。具体约束见[几何规划](decisions/pcbeq/geometry-planning.md)和[材料采样](decisions/pcbeq/material-sampling.md)。
+各有效 profile 独立规划二维矩形，与引用物理层的 Z 区间共同定义三维 region。相同有效几何复用同一分区，不同几何不要求跨层对齐。几何规划使用矢量范围、拓扑和物理尺寸。网格确定后，材料分支为各 region 生成光栅，再按网格统计样本。调整采样密度不会移动 region 或网格。具体约束见[几何规划](decisions/pcbeq/geometry-planning.md)和[材料采样](decisions/pcbeq/material-sampling.md)。
 
 ## 分发与语言职责
 

@@ -12,31 +12,45 @@ def _geometry_images(document, directory, *, grids):
     from matplotlib.patches import Rectangle
 
     directory.mkdir(parents=True, exist_ok=True)
-    unique = {}
+    layers = {}
     for region in document.regions:
-        key = (*region.bounds_mm.x, *region.bounds_mm.y)
-        unique.setdefault(key, []).append(region)
-    fig, axis = plt.subplots(figsize=(12, 9), constrained_layout=True)
-    segments = []
-    for index, (key, regions) in enumerate(unique.items()):
-        x0, x1, y0, y1 = key
-        axis.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, facecolor="none" if grids else "#c5dbed",
-                                 edgecolor="#264a6c", linewidth=.6))
-        if grids:
-            # Different layers may have distinct grids on the same XY bounds.
-            for region in regions:
+        layers.setdefault(region.layer.name, []).append(region)
+    profiles = {}
+    for name, regions in layers.items():
+        key = tuple(sorted((*r.bounds_mm.x, *r.bounds_mm.y,
+                            r.grid_counts.x, r.grid_counts.y) for r in regions))
+        profiles.setdefault(key, {"names": [], "regions": regions})["names"].append(name)
+    columns = min(2, len(profiles))
+    rows = (len(profiles) + columns - 1) // columns
+    fig, axes = plt.subplots(rows, columns, figsize=(12, 7 * rows),
+                             constrained_layout=True, squeeze=False)
+    for axis, profile in zip(axes.flat, profiles.values()):
+        segments = []
+        for index, region in enumerate(profile["regions"]):
+            x0, x1 = region.bounds_mm.x
+            y0, y1 = region.bounds_mm.y
+            axis.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0,
+                                     facecolor="none" if grids else "#c5dbed",
+                                     edgecolor="#264a6c", linewidth=.6))
+            if grids:
                 xs, ys = region.axis_lines("x"), region.axis_lines("y")
                 segments.extend([[(x, y0), (x, y1)] for x in xs])
                 segments.extend([[(x0, y), (x1, y)] for y in ys])
-        elif len(unique) <= 200:
-            axis.text((x0 + x1) / 2, (y0 + y1) / 2, str(index), ha="center", va="center", fontsize=6)
-    if segments:
-        axis.add_collection(LineCollection(segments, colors="#476783", linewidths=.3))
-    axis.autoscale_view()
-    axis.set_aspect("equal")
-    axis.set_xlabel("X / mm")
-    axis.set_ylabel("Y / mm")
-    axis.set_title(f"{document.step or 'PCB'} · {'Region-local grids' if grids else 'MaterialMap regions'}")
+            elif len(profile["regions"]) <= 200:
+                axis.text((x0 + x1) / 2, (y0 + y1) / 2, str(index),
+                          ha="center", va="center", fontsize=6)
+        if segments:
+            axis.add_collection(LineCollection(segments, colors="#476783", linewidths=.3))
+        axis.autoscale_view()
+        axis.set_aspect("equal")
+        axis.set_xlabel("X / mm")
+        axis.set_ylabel("Y / mm")
+        names = profile["names"]
+        label = ", ".join(names[:3]) + (f" (+{len(names)-3} layers)" if len(names) > 3 else "")
+        axis.set_title(label, fontsize=10)
+    for axis in list(axes.flat)[len(profiles):]:
+        axis.set_visible(False)
+    fig.suptitle(f"{document.step or 'PCB'} · {'Region-local grids' if grids else 'MaterialMap regions'}")
     stem = "cartesian-grid" if grids else "regions"
     try:
         for suffix in ("png", "svg"):

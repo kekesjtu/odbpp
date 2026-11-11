@@ -131,6 +131,12 @@ impl PreparedRaster {
         })
     }
     pub fn render(&self, x: Axis, y: Axis) -> Result<Vec<u8>, String> {
+        self.render_pixels(x, y, 160).map(|(pixels, _)| pixels)
+    }
+    pub fn render_base(&self, x: Axis, y: Axis) -> Result<(Vec<u8>, usize), String> {
+        self.render_pixels(x, y, 255)
+    }
+    fn render_pixels(&self, x: Axis, y: Axis, exterior: u8) -> Result<(Vec<u8>, usize), String> {
         for a in [x, y] {
             if !a.0.is_finite() || !a.1.is_finite() || a.1 <= 0. || a.2 == 0 {
                 return Err("invalid raster axis".into());
@@ -144,8 +150,9 @@ impl PreparedRaster {
         let mut domain = self.domain.window(low, high);
         let mut step = self.step.as_ref().map(|s| s.window(low, high));
         let mut black: Vec<_> = self.black.iter().map(|s| s.window(low, high)).collect();
+        let mut outside = count;
         let pixels = {
-            let mut pixels = vec![160u8; count];
+            let mut pixels = vec![exterior; count];
             for row in 0..y.2 {
                 let yy = y.0 + (row as f64 + 0.5) * y.1;
                 let mut dom = domain.spans(yy);
@@ -168,6 +175,12 @@ impl PreparedRaster {
                     for (lo, hi) in spans {
                         let (a, b) = (pixel_index(lo, x), pixel_index(hi, x));
                         if b > a {
+                            if value == 255 {
+                                outside -= b - a;
+                                if exterior == 255 {
+                                    continue;
+                                }
+                            }
                             pixels[row * x.2 + a..row * x.2 + b].fill(value);
                         }
                     }
@@ -175,6 +188,6 @@ impl PreparedRaster {
             }
             pixels
         };
-        Ok(pixels)
+        Ok((pixels, outside))
     }
 }

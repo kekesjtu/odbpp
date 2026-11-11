@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 fn maximum() -> Vec<f64> {
     vec![5., 5.]
 }
-fn loss() -> f64 {
-    0.05
+fn error() -> f64 {
+    0.01
 }
 fn materials() -> Value {
     json!({})
@@ -17,8 +17,7 @@ pub struct Options {
     pub py: Option<usize>,
     pub grid_level: Option<String>,
     pub max_cell_mm: Vec<f64>,
-    pub max_area_loss_ratio: f64,
-    pub tolerance_mm: Option<f64>,
+    pub max_area_error_ratio: f64,
     pub materials: Value,
     pub materials_path: Option<String>,
     pub geos_library: String,
@@ -30,8 +29,7 @@ impl Default for Options {
             py: None,
             grid_level: None,
             max_cell_mm: maximum(),
-            max_area_loss_ratio: loss(),
-            tolerance_mm: None,
+            max_area_error_ratio: error(),
             materials: materials(),
             materials_path: None,
             geos_library: String::new(),
@@ -56,9 +54,8 @@ impl Options {
         {
             return Err("maximum cell sizes require one or two finite positive numbers".into());
         }
-        if !self.max_area_loss_ratio.is_finite()
-            || !(0.0..1.0).contains(&self.max_area_loss_ratio)
-            || self.tolerance_mm.is_some_and(|v| !v.is_finite() || v <= 0.)
+        if !self.max_area_error_ratio.is_finite()
+            || !(0.0..1.0).contains(&self.max_area_error_ratio)
         {
             return Err("invalid geometry accuracy budget".into());
         }
