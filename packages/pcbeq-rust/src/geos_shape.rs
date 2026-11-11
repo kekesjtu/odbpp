@@ -5,6 +5,21 @@ impl<'a> Shape<'a> {
         self.engine
             .own(call!(self.engine,"GEOSGeom_clone_r",(Ptr,Ptr)->Ptr,self.engine.context,self.raw))
     }
+    fn unary(&self, name: &'static [u8]) -> Result<Self> {
+        let f = unsafe {
+            self.engine
+                .library
+                .get::<unsafe extern "C" fn(Ptr, Ptr) -> Ptr>(name)
+        }
+        .map_err(|e| e.to_string())?;
+        let started = Instant::now();
+        let raw = unsafe { f(self.engine.context, self.raw) };
+        self.engine.record(
+            std::str::from_utf8(&name[..name.len() - 1]).unwrap(),
+            started.elapsed(),
+        );
+        self.engine.own(raw)
+    }
     fn binary(&self, other: &Self, name: &'static [u8]) -> Result<Self> {
         let f = unsafe {
             self.engine
@@ -25,6 +40,9 @@ impl<'a> Shape<'a> {
     }
     pub fn difference(&self, other: &Self) -> Result<Self> {
         self.binary(other, b"GEOSDifference_r\0")
+    }
+    pub fn interior_point(&self) -> Result<Point> {
+        Ok(self.unary(b"GEOSPointOnSurface_r\0")?.points()?[0])
     }
     pub fn buffer(&self, distance: f64) -> Result<Self> {
         self.engine

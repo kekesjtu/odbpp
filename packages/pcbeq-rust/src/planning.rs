@@ -87,7 +87,7 @@ pub fn plan(engine: &Geos, step: &Step, options: &Options) -> Result<Geometry> {
         reports.insert(id.clone(), report);
     }
     let domain_regions: BTreeMap<_, _> = ids.iter().zip(&members).collect();
-    let report = json!({"ok":true,"strategy":"fast-paper-independent-profiles",
+    let report = json!({"ok":true,"strategy":"fast-greedy-independent-profiles",
         "rectangle_count":rectangles.len(),"profile_count":ids.len(),"unique_profile_count":plans.len(),
         "reused_profile_count":reused,"relative_area_budget":options.max_area_error_ratio,
         "rectangles":rectangles.iter().map(|r|json!({"x0_mm":r[0],"y0_mm":r[1],"x1_mm":r[2],"y1_mm":r[3]})).collect::<Vec<_>>(),

@@ -5,7 +5,7 @@ fn maximum() -> Vec<f64> {
     vec![5., 5.]
 }
 fn error() -> f64 {
-    0.05
+    0.01
 }
 fn materials() -> Value {
     json!({})

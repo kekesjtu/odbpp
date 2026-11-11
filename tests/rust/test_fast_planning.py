@@ -1,4 +1,4 @@
-"""Original FAST geometry acceptance and independent effective-profile planning."""
+"""Feature-preserving FAST geometry and independent effective-profile planning."""
 import json
 import pytest
 from shapely.geometry import box
@@ -22,7 +22,7 @@ def execute(document, tmp_path, **options):
       (8, 4), (8, 2.1), (4, 2.1), (4, 4), (0, 4)], .05),
     ([(0, 0), (20, 0), (20, 20), (10.2, 20), (10, 23), (9.8, 20), (0, 20)], .05),
 ])
-def test_paper_fast_raster_budget_and_vector_diagnostics(tmp_path, points, ratio):
+def test_native_area_budget_preserves_slopes_and_connections(tmp_path, points, ratio):
     from shapely.geometry import Polygon
     source = tmp_path / "input.json"
     source.write_text(json.dumps(build_document(profile={"island": True, "points": points},
@@ -32,10 +32,8 @@ def test_paper_fast_raster_budget_and_vector_diagnostics(tmp_path, points, ratio
     delivered = read_document(output / "materialmap.json")
     modeled = unary_union([box(*bounds) for _, bounds, _ in iter_cells(delivered)])
     original = Polygon(points)
-    report = json.loads((output / "diagnostics/run.json").read_text())["rectification"]["audit"]["domains"]["step_profile"]
-    assert report["audit"]["search"]["relative_area_error"] <= ratio
-    assert report["relative_area_error"] == pytest.approx(original.symmetric_difference(modeled).area / original.area)
-    assert report["audit"]["topology_is_constraint"] is False
+    assert original.symmetric_difference(modeled).area <= original.area * ratio + 1e-8
+    assert modeled.geom_type == "Polygon"
 
 
 def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent(tmp_path):
@@ -51,6 +49,7 @@ def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent
     report = json.loads((output / "diagnostics/run.json").read_text())["rectification"]
     assert report["unique_profile_count"] == 1
     assert report["reused_profile_count"] == 1
+    assert report["rectangle_count"] == 2
     ids = report["audit"]["domain_region_ids"]
     assert ids["step_profile"] == ids["duplicate"]
     by_layer = {name: [(r.bounds_mm, r.grid_counts) for r in delivered.regions if r.layer.name == name]
@@ -98,17 +97,16 @@ def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
     assert geometry["relative_area_error"] == pytest.approx(.02 / 99.98)
 
 
-def test_paper_fast_reports_nested_profile_topology_without_modifying_selection(tmp_path):
+def test_profile_hole_witness_does_not_remove_its_nested_island(tmp_path):
     document = build_document(domains=[{
         "id": "step_profile", "source": "step_profile",
         "polygons": [rect(0, 0, 10, 10), hole(2, 2, 8, 8), rect(4, 4, 6, 6)],
     }], layers=[{"name": "CU", "polygons": []}])
-    _, delivered, output = execute(document, tmp_path)
+    _, delivered, _ = execute(document, tmp_path)
     model = unary_union([box(*bounds) for _, bounds, _ in iter_cells(delivered)])
-    report=json.loads((output / "diagnostics/run.json").read_text())["rectification"]["audit"]["domains"]["step_profile"]
-    parts=[model] if model.geom_type=="Polygon" else list(model.geoms)
-    assert report["audit"]["topology"]["model_components"]==len(parts)
-    assert report["audit"]["topology"]["model_holes"]==sum(len(p.interiors) for p in parts)
+    assert len(model.geoms) == 2
+    assert model.covers(box(4, 4, 6, 6))
+    assert sum(len(p.interiors) for p in model.geoms) == 1
 
 
 def test_fast_planning_is_independent_of_material_sampling_density(tmp_path):

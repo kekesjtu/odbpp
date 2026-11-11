@@ -19,7 +19,7 @@ def build_parser():
     mesh = command.add_mutually_exclusive_group()
     mesh.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
     mesh.add_argument("--max-cell-mm", type=float, nargs="+")
-    command.add_argument("--max-area-error-ratio", type=float, default=.05)
+    command.add_argument("--max-area-error-ratio", type=float, default=.01)
     command.add_argument("--materials")
     for phase in ("copper", "base"):
         for key in ("k", "density", "cp"):

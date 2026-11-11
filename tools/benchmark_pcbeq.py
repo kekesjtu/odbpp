@@ -23,7 +23,7 @@ def build_parser():
     parser.add_argument('--warmup', type=int, default=1, help='unmeasured runs (default: 1)')
     parser.add_argument('--px', type=int)
     parser.add_argument('--py', type=int)
-    parser.add_argument('--max-area-error-ratio', type=float, default=0.05)
+    parser.add_argument('--max-area-error-ratio', type=float, default=0.01)
     mesh = parser.add_mutually_exclusive_group()
     mesh.add_argument('--grid-level', choices=('coarse', 'standard', 'fine'))
     mesh.add_argument('--max-cell-mm', type=float, nargs='+', metavar='MM')

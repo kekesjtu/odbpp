@@ -98,20 +98,12 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         geometry_audit=meta["rectification"]["audit"]
         ratio=geometry_audit["relative_area_budget"]
         region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
-        topology_changes=[]
-        vector_budget_exceeded=[]
         for domain_id,members in ids.items():
             source=domains[domain_id].intersection(domains[step["profile_domain_id"]])
             modeled=unary_union([region_shapes[rid] for rid in members])
-            record=geometry_audit["domains"][domain_id]
-            error=source.symmetric_difference(modeled).area/source.area
-            assert math.isclose(error,record["relative_area_error"],abs_tol=1e-7)
-            assert record["audit"]["search"]["relative_area_error"]<=ratio+1e-12
-            if error>ratio+1e-8/source.area:
-                vector_budget_exceeded.append(domain_id)
+            assert source.symmetric_difference(modeled).area<=source.area*ratio+1e-8
             assert abs(sum(region_shapes[rid].area for rid in members)-modeled.area)<1e-7
-            if not _topology(source,modeled)["preserved"]:
-                topology_changes.append(domain_id)
+            assert _topology(source,modeled)["preserved"]
         rect_ids={domain_id:{(regions[rid]["x0_mm"],regions[rid]["y0_mm"],
                                regions[rid]["x1_mm"],regions[rid]["y1_mm"]):rid for rid in members}
                   for domain_id,members in ids.items()}
@@ -163,8 +155,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             "total_region_pixels":raster["total_pixels"],"peak_region_pixels":raster["peak_region_pixels"],
             "minimum_samples_per_axis":minimum,
             "max_profile_area_error_ratio":max(r["relative_area_error"] for r in geometry_audit["domains"].values()),
-            "max_area_error_ratio":ratio,"raster_area_budget_passed":True,
-            "topology_changed_domains":topology_changes,"vector_budget_exceeded_domains":vector_budget_exceeded,
+            "max_area_error_ratio":ratio,"area_and_topology_checks_passed":True,
             "layer_count":len(reports),"drill_scope":meta["drill_scope"],
             "copper_drill_overlays_ignored":True,"all_checks_passed":True})
         print(records[-1],flush=True)

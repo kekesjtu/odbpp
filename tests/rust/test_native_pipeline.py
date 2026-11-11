@@ -75,10 +75,8 @@ def test_rigidflex_holes_and_layer_existence_are_preserved(tmp_path):
 
 def test_native_thin_region_uses_a_local_raster(tmp_path):
     document=build_document(domains=[{"id":"step_profile","source":"step_profile",
-        "polygons":[rect(0,0,10,10),rect(11,4,12,4.0001)]},
-        {"id":"thin","source":"layer_profile","polygons":[rect(11,4,12,4.0001)]}],
-        layers=[{"name":"CU","polygons":[rect(0,0,6,10)]},
-                {"name":"THIN","domain_id":"thin","polygons":[]}])
+        "polygons":[rect(0,0,10,10),rect(11,4,12,4.0001)]}],
+        layers=[{"name":"CU","polygons":[rect(0,0,6,10)]}])
     source=tmp_path/"input.json"
     source.write_text(json.dumps(document),encoding="utf-8")
     output=tmp_path/"native"

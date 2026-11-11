@@ -63,7 +63,7 @@ def existing_preview(directory, source, *, backend='rust'):
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
-def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5, grid_level=None, draw_grid=False, max_area_error_ratio=0.05, backend='rust'):
+def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5, grid_level=None, draw_grid=False, max_area_error_ratio=0.01, backend='rust'):
     try:
         cache = json.loads((directory / 'pipeline/cache.json').read_text(encoding='utf-8'))
         requested = {'px': px, 'py': py, 'max': sizes(max_cell_mm, 5), 'grid_level': grid_level, 'draw_grid': draw_grid, 'max_area_error_ratio': max_area_error_ratio}
@@ -130,7 +130,7 @@ def main():
     parser.add_argument('--py', type=int)
     parser.add_argument('--grid-level', choices=('coarse', 'standard', 'fine'))
     parser.add_argument('--max-cell-mm', nargs='+', type=float)
-    parser.add_argument('--max-area-error-ratio', type=float, default=0.05)
+    parser.add_argument('--max-area-error-ratio', type=float, default=0.01)
     args = parser.parse_args()
     if (args.px is None) != (args.py is None) or (args.px is not None and min(args.px, args.py) <= 0):
         parser.error('provide positive px/py together')
