@@ -39,7 +39,7 @@ impl Writer {
             committed: false,
         };
         let mut header=serde_json::to_string(&json!({"units":{"length":"mm","thermal_conductivity":"W/(m*K)","density":"kg/m3","specific_heat":"J/(kg*K)"},
-            "properties":["kx","ky","kz","density","specific_heat"],"drill_model":"solid_copper","drill_scope":"dielectric_only","step":step})).map_err(|e|e.to_string())?;
+            "properties":["kx","ky","kz","density","specific_heat"],"step":step})).map_err(|e|e.to_string())?;
         header.pop();
         writer.write(&format!("{header},\"regions\":[\n"))?;
         Ok(writer)

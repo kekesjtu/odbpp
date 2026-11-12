@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 def uniform_lines(low, high, count):
@@ -69,8 +69,6 @@ class MaterialRegion(_Model):
 class MaterialMapDocument(_Model):
     units: dict[str, str]
     properties: list[str]
-    drill_model: Literal["solid_copper"]
-    drill_scope: Literal["dielectric_only"]
     step: str | None = None
     regions: list[MaterialRegion] = Field(min_length=1)
 

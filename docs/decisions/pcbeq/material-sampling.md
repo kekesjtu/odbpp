@@ -11,7 +11,7 @@ dielectric_black = domain AND overlapping_drills
 white = region AND NOT black
 ```
 
-介质起始铜图案为空。所有介质内 DRILL 投影统一作为材料 1 实心铜，记录 `drill_model=solid_copper`、`drill_scope=dielectric_only`。
+介质起始铜图案为空。所有介质内 DRILL 投影统一作为材料 1 实心铜。
 铜层只使用自身图案。铜图案和钻孔投影均受原始有效计算域限制。近似 region 中超出原域的部分，包括近似孔边界内的越界像素，统一归为本层基底材料；完整模型单元不按覆盖率缩减体积。
 DOCUMENT、COMPONENT 等非物理层以及尚无适用材料模型的层明确记录跳过原因。
 

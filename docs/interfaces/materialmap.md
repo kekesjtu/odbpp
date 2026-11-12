@@ -13,8 +13,6 @@
     "density": "kg/m3", "specific_heat": "J/(kg*K)"
   },
   "properties": ["kx", "ky", "kz", "density", "specific_heat"],
-  "drill_model": "solid_copper",
-  "drill_scope": "dielectric_only",
   "step": "pcb",
   "regions": [{
     "layer": {"name": "C0", "type": "SIGNAL"},

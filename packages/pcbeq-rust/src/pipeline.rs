@@ -138,7 +138,7 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
     let grid_regions:Vec<_>=geometry.rectangles.iter().zip(&mesh.axes).enumerate().map(|(i,(r,(x,y)))|
         json!({"region_id":i,"bounds_mm":{"x":[r[0],r[2]],"y":[r[1],r[3]]},"grid_counts":{"x":x.len()-1,"y":y.len()-1,"z":1}})).collect();
     let mut audit = json!({"numerical_backend":"rust","execution":"native-json-to-materialmap","step":step.name,
-        "drill_model":"solid_copper","drill_scope":"dielectric_only","cell_count":writer.cells,
+        "cell_count":writer.cells,
         "raster":{"board_bounds_mm":geometry.bounds,
             "pixel_step_mm":[(geometry.bounds[2]-geometry.bounds[0])/mesh.pixels[0]as f64,(geometry.bounds[3]-geometry.bounds[1])/mesh.pixels[1]as f64]},
         "grid":{"layout":"region-local-cartesian","conformity_required":false,

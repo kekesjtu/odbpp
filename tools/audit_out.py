@@ -86,7 +86,6 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         directory=path.parent
         meta=json.loads((directory/"diagnostics/run.json").read_text(encoding="utf-8"))
         materialmap=read_document(path)
-        assert meta["drill_model"]=="solid_copper" and meta["drill_scope"]=="dielectric_only"
         assert all(not l.get("drill_overlays",[]) for l in meta["layers"] if l["type"]!="DIELECTRIC")
         assert not any(d["level"]=="error" for d in meta["diagnostics"])
         document=json.loads((directory.parent / "pcbkit/intermediate.json").read_text(encoding="utf-8"))
@@ -156,7 +155,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             "minimum_samples_per_axis":minimum,
             "max_profile_area_error_ratio":max(r["relative_area_error"] for r in geometry_audit["domains"].values()),
             "max_area_error_ratio":ratio,"area_and_topology_checks_passed":True,
-            "layer_count":len(reports),"drill_scope":meta["drill_scope"],
+            "layer_count":len(reports),
             "copper_drill_overlays_ignored":True,"all_checks_passed":True})
         print(records[-1],flush=True)
     assert records,"no MaterialMap JSON outputs to audit"
