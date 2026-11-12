@@ -1,8 +1,8 @@
 //! Independent effective profiles; geometrically equal inputs share one plan.
 use crate::{
+    Result,
     document::{self, Step},
     fast,
-    geos::{Geos, Result},
     options::Options,
     rectangles::Rect,
 };
@@ -17,7 +17,7 @@ pub struct Geometry {
     pub bounds: Rect,
 }
 
-pub fn plan(engine: &Geos, step: &Step, options: &Options) -> Result<Geometry> {
+pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
     let profile = step
         .profile_domain_id
         .as_ref()
@@ -27,7 +27,7 @@ pub fn plan(engine: &Geos, step: &Step, options: &Options) -> Result<Geometry> {
         .iter()
         .find(|d| &d.id == profile)
         .ok_or("missing step profile")?;
-    let board = document::shape(engine, &board.polygons)?;
+    let board = document::shape(&board.polygons)?;
     let bounds = board.bounds()?;
     let mut ids: Vec<_> = step
         .layers
@@ -52,15 +52,15 @@ pub fn plan(engine: &Geos, step: &Step, options: &Options) -> Result<Geometry> {
             .iter()
             .find(|d| &d.id == id)
             .ok_or("missing physical domain")?;
-        let original = document::shape(engine, &authored.polygons)?.intersection(&board)?;
-        if original.empty()? || original.area()? <= 0. {
+        let original = document::shape(&authored.polygons)?.intersection(&board);
+        if original.empty() || original.area() <= 0. {
             return Err(format!(
                 "domain {id:?} has no physical area within the step profile"
             ));
         }
         let mut existing = None;
         for (i, prior) in originals.iter().enumerate() {
-            if original.equals(prior)? {
+            if original.equals(prior) {
                 existing = Some(i);
                 break;
             }
@@ -94,7 +94,7 @@ pub fn plan(engine: &Geos, step: &Step, options: &Options) -> Result<Geometry> {
         "audit":{"domains":reports,"domain_region_ids":domain_regions,
             "relative_area_budget":options.max_area_error_ratio,
             "cross_layer_alignment_required":false,"per_profile_non_overlapping":true,
-            "effective_profile_identity":"GEOS topological equality after board intersection"}});
+            "effective_profile_identity":"geo topological equality after board intersection"}});
     Ok(Geometry {
         rectangles,
         domain_ids: ids,

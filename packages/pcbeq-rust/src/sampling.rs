@@ -1,20 +1,5 @@
 //! Band prefix sums preserve row/column series-parallel conductivity.
-use pyo3::{exceptions::PyValueError, prelude::*};
 type Window = (usize, usize, usize, usize);
-
-#[pyfunction]
-pub fn integrate(
-    py: Python<'_>,
-    pixels: &[u8],
-    px: usize,
-    py_count: usize,
-    windows: Vec<Window>,
-    materials: [f64; 6],
-    minimum: usize,
-) -> PyResult<Vec<Option<[f64; 6]>>> {
-    py.detach(|| integrate_pixels(pixels, px, py_count, windows, materials, minimum))
-        .map_err(PyValueError::new_err)
-}
 
 pub fn integrate_pixels(
     pixels: &[u8],
@@ -104,4 +89,96 @@ pub fn integrate_pixels(
         }
         out
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn series_parallel_anisotropy_and_mass_weighting() {
+        let materials = [400., 1., 8000., 2000., 400., 1000.];
+        let horizontal: Vec<_> = [vec![0; 8], vec![255; 8]].concat();
+        let values = integrate_pixels(&horizontal, 4, 4, vec![(0, 4, 0, 4)], materials, 1).unwrap()
+            [0]
+        .unwrap();
+        let expected = [0.5, 200.5, 2. / (1. / 400. + 1.), 200.5, 5000., 520.];
+        for (actual, expected) in values.into_iter().zip(expected) {
+            assert!((actual - expected).abs() < 1e-10);
+        }
+        let vertical = [0, 0, 255, 255].repeat(4);
+        let rotated = integrate_pixels(&vertical, 4, 4, vec![(0, 4, 0, 4)], materials, 1).unwrap()
+            [0]
+        .unwrap();
+        assert!((rotated[1] - values[2]).abs() < 1e-10);
+        assert!((rotated[2] - values[1]).abs() < 1e-10);
+    }
+
+    #[test]
+    fn band_prefix_matches_direct_pixel_reference() {
+        let (width, height) = (31, 23);
+        let pixels: Vec<_> = (0..width * height)
+            .map(|i| {
+                if (i * 37 + i * i * 13) % 101 < 37 {
+                    0
+                } else {
+                    255
+                }
+            })
+            .collect();
+        let windows = vec![(0, 9, 0, 7), (9, 31, 0, 7), (1, 28, 7, 23)];
+        let results = integrate_pixels(
+            &pixels,
+            width,
+            height,
+            windows.clone(),
+            [385., 0.3, 8960., 1850., 385., 1100.],
+            1,
+        )
+        .unwrap();
+        for ((a, b, c, d), result) in windows.into_iter().zip(results) {
+            let black = |x: usize, y: usize| f64::from(pixels[y * width + x] == 0);
+            let average = |p: f64| 1. / (p / 385. + (1. - p) / 0.3);
+            let kx = (c..d)
+                .map(|y| average((a..b).map(|x| black(x, y)).sum::<f64>() / (b - a) as f64))
+                .sum::<f64>()
+                / (d - c) as f64;
+            let ky = (a..b)
+                .map(|x| average((c..d).map(|y| black(x, y)).sum::<f64>() / (d - c) as f64))
+                .sum::<f64>()
+                / (b - a) as f64;
+            let phi = (c..d)
+                .flat_map(|y| (a..b).map(move |x| black(x, y)))
+                .sum::<f64>()
+                / ((b - a) * (d - c)) as f64;
+            let density = phi * 8960. + (1. - phi) * 1850.;
+            let cp = (phi * 8960. * 385. + (1. - phi) * 1850. * 1100.) / density;
+            for (actual, expected) in result.unwrap().into_iter().zip([
+                phi,
+                kx,
+                ky,
+                phi * 385. + (1. - phi) * 0.3,
+                density,
+                cp,
+            ]) {
+                assert!((actual - expected).abs() < 1e-9);
+            }
+        }
+    }
+
+    #[test]
+    fn incomplete_samples_and_invalid_windows_are_rejected() {
+        for (pixels, window, minimum) in [
+            (vec![0, 255, 160, 255], (0, 2, 0, 2), 1),
+            (vec![0; 4], (0, 0, 0, 2), 1),
+            (vec![0; 4], (0, 2, 0, 2), 3),
+        ] {
+            assert_eq!(
+                integrate_pixels(&pixels, 2, 2, vec![window], [1.; 6], minimum).unwrap(),
+                vec![None]
+            );
+        }
+        assert!(integrate_pixels(&[], 1, 1, vec![], [1.; 6], 1).is_err());
+        assert!(integrate_pixels(&[0], 1, 1, vec![(0, 2, 0, 1)], [1.; 6], 1).is_err());
+    }
 }

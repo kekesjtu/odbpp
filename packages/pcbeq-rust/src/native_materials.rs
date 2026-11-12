@@ -1,4 +1,4 @@
-use crate::geos::Result;
+use crate::Result;
 use serde_json::{Value, json};
 const FIELDS: [&str; 3] = ["k_w_mk", "density_kg_m3", "specific_heat_j_kgk"];
 const SOURCES: [&str; 2] = [

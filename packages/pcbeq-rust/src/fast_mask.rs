@@ -1,8 +1,8 @@
 //! Feature-aware foreground search and largest-rectangle seeds.
 use super::{MAX_PIXELS, Window};
 use crate::{
-    document,
-    geos::{Result, Shape},
+    Result, document,
+    geometry::Shape,
     rectangles::{Rect, area, unique},
 };
 
@@ -14,8 +14,8 @@ pub(super) struct Mask {
 }
 
 impl Mask {
-    pub(super) fn new(original: &Shape<'_>, resolution: usize) -> Result<Self> {
-        let polygons = document::polygons(original)?;
+    pub(super) fn new(original: &Shape, resolution: usize) -> Result<Self> {
+        let polygons = document::polygons(original);
         let bounds = original.bounds()?;
         let orthogonal = polygons.iter().all(|p| {
             p.points
@@ -97,10 +97,8 @@ impl Mask {
         // Keep one interior witness per true hole unavailable to all rectangles.
         // The final vector audit still checks the full hole correspondence.
         for hole in polygons.iter().filter(|p| !p.island) {
-            let point = original
-                .engine
-                .polygon(&hole.points, &[])?
-                .difference(original)?
+            let point = Shape::polygon(&hole.points, &[])?
+                .difference(original)
                 .interior_point()?;
             let col = x
                 .partition_point(|v| *v <= point.0)

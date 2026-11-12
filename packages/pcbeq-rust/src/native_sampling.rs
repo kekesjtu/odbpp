@@ -1,7 +1,7 @@
 //! Material sampling on independent region rasters in physical coordinates.
 use crate::{
+    Result,
     document::{Layer, Polygon, Step},
-    geos::Result,
     native_mesh::Mesh,
     planning::Geometry,
     raster_index, sampling,

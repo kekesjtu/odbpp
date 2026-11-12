@@ -1,31 +1,26 @@
 [build-system]
-requires = ["maturin>=1.9,<2"]
-build-backend = "maturin"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "pcbeq-rust"
 version = "0.1.0"
-description = "Rust numerical backend and Python charts for pcbeq"
+description = "Process pipeline and MaterialMap charts for the standalone pcbeq executable"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pydantic>=2.12,<3", "shapely>=2.0", "numpy>=1.26", "matplotlib>=3.9"]
+dependencies = ["pydantic>=2.12,<3", "numpy>=1.26", "matplotlib>=3.9"]
 
 [project.scripts]
 pcbeq-rust = "pcbeq_rust.cli:main"
 
-[tool.maturin]
-python-source = "python"
-module-name = "pcbeq_rust._pcbeq_native"
-features = ["pyo3/extension-module"]
+[tool.hatch.build.targets.wheel]
+packages = ["python/pcbeq_rust"]
+
+[tool.hatch.build.targets.sdist]
+include = ["python/pcbeq_rust", "README.md", "pyproject.toml"]
 
 [tool.uv]
 cache-keys = [
     { file = "python/**/*.py" },
     { file = "pyproject.toml" },
-    { file = "Cargo.toml" },
-    { file = "src/**/*.rs" },
-    { file = "../../Cargo.toml" },
-    { file = "../../Cargo.lock" },
-    { file = "../../crates/pcb-geometry/Cargo.toml" },
-    { file = "../../crates/pcb-geometry/src/**/*.rs" },
 ]

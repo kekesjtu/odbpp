@@ -1,5 +1,5 @@
 //! Transactional numerical publication and removal of previously owned pictures.
-use crate::geos::Result;
+use crate::Result;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,

@@ -1,14 +1,62 @@
 """Process-level Rust commands, Python drawings and product boundaries."""
 import json
 import subprocess
+import shutil
 import sys
+import os
+from pathlib import Path
 
 import pytest
 from conftest import case_path, REPO_ROOT
+from board_fixture import build_document, rect
 from tools.run_pipeline import execute
 
 pytest.importorskip("pcbkit_rust")
 pytest.importorskip("pcbeq_rust")
+
+
+def test_standalone_exe_runs_without_python_or_geos(tmp_path):
+    binary = os.environ.get("PCBEQ_EXE")
+    assert binary, "build pcbeq and set PCBEQ_EXE before running integration tests"
+    isolated = tmp_path / "standalone"
+    isolated.mkdir()
+    program = isolated / Path(binary).name
+    shutil.copy2(binary, program)
+    source = isolated / "board.json"
+    source.write_text(json.dumps(build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])), encoding="utf-8")
+    environment = {name: value for name, value in os.environ.items()
+                   if not name.upper().startswith(("PYTHON", "PYO3", "VIRTUAL_ENV", "PCBEQ"))}
+    environment["PATH"] = os.path.join(os.environ.get("SystemRoot", "/"), "System32") if os.name == "nt" else "/usr/bin:/bin"
+    result = subprocess.run([str(program), "run", str(source), "-o", str(isolated / "result"),
+                             "--max-cell-mm", "5", "--summary-json"],
+                            cwd=isolated, env=environment, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["geometry_backend"] == "geo"
+    data = json.loads((isolated / "result/materialmap.json").read_text())
+    assert data["regions"][0]["values"][0] == [385, 385, 385, 8960, 385]
+
+
+def test_plot_does_not_require_compute_executable(tmp_path, monkeypatch):
+    from pcbeq_rust.cli import main
+    from pcbeq_rust.runner import run
+    source = tmp_path / "board.json"
+    source.write_text(json.dumps(build_document(layers=[{"name": "CU", "polygons": []}])), encoding="utf-8")
+    run(source, tmp_path / "numeric", max_cell_mm=[5])
+    source.unlink()
+    monkeypatch.setenv("PCBEQ_EXE", str(tmp_path / "missing-executable"))
+    assert main(["plot", str(tmp_path / "numeric/materialmap.json"), "-o", str(tmp_path / "plots"),
+                 "--no-heatmap", "--no-grids"]) == 0
+    assert (tmp_path / "plots/regions/regions.png").is_file()
+
+
+def test_compute_options_are_validated_by_rust(tmp_path):
+    from pcbeq_rust.runner import run
+    source = tmp_path / "board.json"
+    source.write_text(json.dumps(build_document(layers=[{"name": "CU", "polygons": []}])), encoding="utf-8")
+    with pytest.raises(ValueError, match="cannot be used with"):
+        run(source, tmp_path / "numeric", grid_level="standard", max_cell_mm=[5])
+    with pytest.raises(ValueError, match="invalid geometry accuracy"):
+        run(source, tmp_path / "numeric", max_area_error_ratio=float("nan"))
 
 
 @pytest.mark.parametrize("package", ["pcbkit", "pcbeq"])
@@ -36,7 +84,6 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
     assert list((tmp_path/"pcbeq/heatmaps").glob("*.png"))
 
 
-import shutil
 from tools import sync_out
 
 def test_sync_out_rust_owns_its_pipeline_and_reuses_numeric_and_image_artifacts(tmp_path,monkeypatch):

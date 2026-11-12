@@ -1,4 +1,4 @@
-use crate::{document::Layer, geos::Result, native_mesh::Mesh, planning::Geometry};
+use crate::{Result, document::Layer, native_mesh::Mesh, planning::Geometry};
 use serde_json::json;
 use std::{
     fs::{File, OpenOptions},

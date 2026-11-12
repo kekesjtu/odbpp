@@ -1,6 +1,5 @@
 //! Active-edge rasterization. Positive nested rings use even/odd per region;
 //! independently supplied drill regions are combined with OR.
-use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes};
 type Edge = (f64, f64, f64, f64);
 type Span = (f64, f64);
 pub type Axis = (f64, f64, usize);
@@ -88,31 +87,6 @@ pub fn pixel_index(value: f64, axis: Axis) -> usize {
     (((value - axis.0) / axis.1 - 0.5 - 1e-9).ceil().max(0.) as usize).min(axis.2)
 }
 
-#[pyfunction]
-pub fn rasterize<'py>(
-    py: Python<'py>,
-    domain: Vec<Edge>,
-    step: Option<Vec<Edge>>,
-    black: Vec<Vec<Edge>>,
-    x: Axis,
-    y: Axis,
-) -> PyResult<Bound<'py, PyBytes>> {
-    let pixels = py
-        .detach(|| rasterize_pixels(domain, step, black, x, y))
-        .map_err(PyValueError::new_err)?;
-    Ok(PyBytes::new(py, &pixels))
-}
-
-pub fn rasterize_pixels(
-    domain: Vec<Edge>,
-    step: Option<Vec<Edge>>,
-    black: Vec<Vec<Edge>>,
-    x: Axis,
-    y: Axis,
-) -> Result<Vec<u8>, String> {
-    PreparedRaster::new(domain, step, black)?.render(x, y)
-}
-
 pub struct PreparedRaster {
     domain: Scan,
     step: Option<Scan>,
@@ -129,9 +103,6 @@ impl PreparedRaster {
             step: step.map(Scan::new).transpose()?,
             black: black.into_iter().map(Scan::new).collect::<Result<_, _>>()?,
         })
-    }
-    pub fn render(&self, x: Axis, y: Axis) -> Result<Vec<u8>, String> {
-        self.render_pixels(x, y, 160).map(|(pixels, _)| pixels)
     }
     pub fn render_base(&self, x: Axis, y: Axis) -> Result<(Vec<u8>, usize), String> {
         self.render_pixels(x, y, 255)

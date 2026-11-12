@@ -7,7 +7,7 @@ from shapely.geometry import box
 from shapely.ops import unary_union
 
 pytest.importorskip("pcbeq_rust")
-from pcbeq_rust.native import run
+from pcbeq_rust.runner import run
 from pcbeq_rust.materialmap import read_document, iter_cells
 from board_fixture import build_document, drill_document, rect, hole
 

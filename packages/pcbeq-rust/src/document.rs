@@ -1,6 +1,8 @@
 //! Strict native reader for the shared intermediate contract.
-use crate::geos::{Geos, Result, Shape};
-use pcb_geometry::Point;
+use crate::{
+    Result,
+    geometry::{Point, Shape},
+};
 use serde::Deserialize;
 
 fn board() -> String {
@@ -127,19 +129,19 @@ pub struct Board {
 mod validation;
 use validation::require;
 
-pub fn shape<'a>(engine: &'a Geos, polygons: &[Polygon]) -> Result<Shape<'a>> {
+pub fn shape(polygons: &[Polygon]) -> Result<Shape> {
     let islands = polygons.iter().filter(|p| p.island).collect::<Vec<_>>();
     let shells = islands
         .iter()
-        .map(|p| engine.polygon(&p.points, &[]))
+        .map(|p| Shape::polygon(&p.points, &[]))
         .collect::<Result<Vec<_>>>()?;
     let mut holes = vec![vec![]; islands.len()];
     for p in polygons.iter().filter(|p| !p.island) {
-        let hole = engine.polygon(&p.points, &[])?;
+        let hole = Shape::polygon(&p.points, &[])?;
         let mut parent = None;
         for (i, s) in shells.iter().enumerate() {
-            if s.covers(&hole)? {
-                let area = s.area()?;
+            if s.covers(&hole) {
+                let area = s.area();
                 if parent.is_none_or(|(_, a)| area < a) {
                     parent = Some((i, area));
                 }
@@ -147,28 +149,22 @@ pub fn shape<'a>(engine: &'a Geos, polygons: &[Polygon]) -> Result<Shape<'a>> {
         }
         holes[parent.ok_or("profile hole has no containing island")?.0].push(p.points.clone());
     }
-    let geometry = engine.union(
+    let geometry = Shape::union(
         &islands
             .iter()
             .zip(holes)
-            .map(|(p, h)| engine.polygon(&p.points, &h))
+            .map(|(p, h)| Shape::polygon(&p.points, &h))
             .collect::<Result<Vec<_>>>()?,
-    )?;
+    );
     require(
-        geometry.valid()?,
+        geometry.valid(),
         "invalid profile topology; regenerate parser JSON",
     )?;
     Ok(geometry)
 }
-pub fn polygons(shape: &Shape<'_>) -> Result<Vec<Polygon>> {
-    let mut out = vec![];
-    for component in shape.components()? {
-        for (i, ring) in component.rings()?.iter().enumerate() {
-            out.push(Polygon {
-                island: i == 0,
-                points: ring.points()?,
-            });
-        }
-    }
-    Ok(out)
+pub fn polygons(shape: &Shape) -> Vec<Polygon> {
+    shape
+        .polygons()
+        .map(|(island, points)| Polygon { island, points })
+        .collect()
 }

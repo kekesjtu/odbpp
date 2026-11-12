@@ -1,6 +1,6 @@
 //! Independent physical sampling windows; explicit density retains the board lattice.
 use crate::{
-    geos::Result,
+    Result,
     options::Options,
     raster::{self, Axis},
 };
