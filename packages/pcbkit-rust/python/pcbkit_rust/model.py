@@ -2,7 +2,7 @@
 
 Deliberately two-layered:
 
-*Raw* structures (:class:`FeatureFile`, :class:`Profile`, :class:`DrillTools`)
+*Raw* structures (:class:`Features`, :class:`Profile`, :class:`DrillTools`)
 mirror what is literally in the files, including the declared-vs-actual feature
 count and the ``@``/``&`` attribute tables.  Anything a downstream consumer or a
 test might want to attribute back to the source lives here.
@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Iterator, Optional
+from typing import Optional
+from ._pcbkit_native import Features, Profile
 
 from .units import UnitScope
 
@@ -31,7 +32,6 @@ __all__ = [
     "LayerForm",
     "DielectricType",
     "DrillToolType",
-    "Orientation",
     "ProductInfo",
     "StepRef",
     "LayerRef",
@@ -42,10 +42,7 @@ __all__ = [
     "AttributeDefinitions",
     "DrillTool",
     "DrillTools",
-    "ContourPart",
-    "Polygon",
     "Point",
-    "SurfaceGeometry",
     "Layer",
     "Step",
     "Job",
@@ -178,50 +175,7 @@ class DrillToolType(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# orientation
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class Orientation:
-    """Pad/text/barcode orientation.
-
-    ``orient_def`` is either a legacy single digit (``0``-``7``: 90-degree steps
-    with a mirror flag) or a two-part ``8``/``9`` followed by an arbitrary angle
-    (spec p.170-171).  Rotation is always clockwise and mirroring is always
-    about the x axis; when both apply the rotation happens first (spec p.35).
-    """
-
-    rotation_deg: float = 0.0
-    mirrored: bool = False
-    legacy_code: Optional[int] = None
-
-    @property
-    def is_identity(self) -> bool:
-        return self.rotation_deg == 0.0 and not self.mirrored
-
-    @classmethod
-    def from_legacy_code(cls, code: int) -> "Orientation":
-        if not 0 <= code <= 7:
-            raise ValueError(f"legacy orient_def must be 0..7, got {code}")
-        return cls(
-            rotation_deg=float((code % 4) * 90),
-            mirrored=code >= 4,
-            legacy_code=code,
-        )
-
-    @classmethod
-    def from_angle(cls, degrees: float, *, mirrored: bool, code: int) -> "Orientation":
-        from .units import UnitScope
-
-        return cls(
-            rotation_deg=UnitScope.normalize_angle(degrees),
-            mirrored=mirrored,
-            legacy_code=code,
-        )
-
-
-# ---------------------------------------------------------------------------
-# misc/info
+# product info
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -465,74 +419,7 @@ class DrillTools:
 
 
 # ---------------------------------------------------------------------------
-# geometry containers
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class ContourPart:
-    """One ``OS`` (segment) or ``OC`` (arc) step of a polygon boundary.
-
-    Arc semantics are preserved rather than flattened at parse time, so a
-    downstream consumer can choose its own discretisation tolerance.  ``OS``
-    records also carry a ``cw`` field in the spec; it is meaningless for a
-    straight segment and is dropped.
-    """
-
-    kind: str  # "segment" | "arc"
-    end: Point
-    center: Optional[Point] = None
-    clockwise: Optional[bool] = None
-
-    @property
-    def is_arc(self) -> bool:
-        return self.kind == "arc"
-
-
-@dataclass
-class Polygon:
-    """A single closed boundary: an island or a hole (spec p.178-180).
-
-    Orientation follows the spec convention: islands clockwise, holes
-    counter-clockwise (p.39).  That convention is *validated* rather than
-    enforced here, so malformed input can be diagnosed instead of silently
-    repaired.
-    """
-
-    is_island: bool
-    start: Point
-    parts: list[ContourPart] = field(default_factory=list)
-
-    def points(self) -> Iterator[Point]:
-        """Yield the boundary vertices, including the closing point."""
-        yield self.start
-        for part in self.parts:
-            yield part.end
-
-    @property
-    def arc_count(self) -> int:
-        return sum(1 for p in self.parts if p.is_arc)
-
-
-@dataclass
-class SurfaceGeometry:
-    """A surface: one or more islands, each with its holes (spec p.178)."""
-
-    polygons: list[Polygon] = field(default_factory=list)
-
-    @property
-    def islands(self) -> list[Polygon]:
-        return [p for p in self.polygons if p.is_island]
-
-    @property
-    def holes(self) -> list[Polygon]:
-        return [p for p in self.polygons if not p.is_island]
-
-    def __bool__(self) -> bool:
-        return bool(self.polygons)
-
-
-# ---------------------------------------------------------------------------
-# semantic model
+# layer and step metadata
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -549,11 +436,11 @@ class Layer:
     #: the export normalises everything else to millimetres: ``.layer_dielectric``
     #: is 65 um in an INCH job and 0.0026 mm in an MM one.
     attribute_scope: Optional[UnitScope] = None
-    #: Raw ``features`` file contents, or ``None`` when the layer has none.
-    features: Optional[object] = None  # pcbkit.features.FeatureFile
+    #: Parsed records owned by Rust, or None when the layer has no features file.
+    features: Optional[Features] = None
     #: Layer-level profile.  Per requirements.md parser constraint 3 this takes priority over
     #: the step profile as the base polygon.
-    profile: Optional[SurfaceGeometry] = None
+    profile: Optional[Profile] = None
     profile_error: Optional[str] = None
     tools: Optional[DrillTools] = None
 
@@ -576,7 +463,7 @@ class Layer:
 
     @property
     def feature_count(self) -> int:
-        return len(self.features.records) if self.features is not None else 0
+        return self.features.actual_count if self.features is not None else 0
 
     def tool_for(self, dcode: int) -> Optional[DrillTool]:
         if self.tools is None:
@@ -591,7 +478,7 @@ class Step:
     name: str
     dir_name: str = ""
     header: Optional[StepHeader] = None
-    profile: Optional[SurfaceGeometry] = None
+    profile: Optional[Profile] = None
     #: Layers in matrix row order (not directory order).
     layers: list[Layer] = field(default_factory=list)
     attributes: dict[str, str] = field(default_factory=dict)
@@ -618,7 +505,7 @@ class Step:
     def name_to_layer(self) -> dict[str, Layer]:
         return {l.name: l for l in self.layers}
 
-    def base_geometry(self, layer: Layer) -> SurfaceGeometry:
+    def base_geometry(self, layer: Layer) -> Profile:
         """Base polygon for *layer* per requirements.md parser constraint 3.
 
         Priority: the layer's own profile, else the step profile.  A layer

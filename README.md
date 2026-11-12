@@ -8,7 +8,7 @@
 
 ```powershell
 uv sync --extra test
-uv run pcbkit-rust export cases/minimal-test-odb -o out/example/rust/pcbkit
+uv run pcbkit-rust export cases/minimal-test-odb -o out/example/rust/pcbkit --per-layer-png
 cargo build -p pcbeq-rust --release
 target/release/pcbeq.exe run out/example/rust/pcbkit/intermediate.json -o out/example/rust/pcbeq --grid-level standard
 uv run pcbeq-rust plot out/example/rust/pcbeq/materialmap.json

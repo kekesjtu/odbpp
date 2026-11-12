@@ -89,14 +89,28 @@ pub fn snap(rings: &[Ring], scale: f64) -> Result<(Vec<Ring>, usize), String> {
     let mut collapsed = 0;
     let mut kept = vec![];
     for ring in rings {
-        let p = path(&ring.0, scale)?;
-        if p.len() < 3 || resolve(&vec![p], &vec![], ClipType::Union, scale)?.is_empty() {
+        let mut p = path(&ring.0, scale)?;
+        let signed = p
+            .iter()
+            .zip(p.iter().cycle().skip(1))
+            .try_fold(0i128, |sum, (a, b)| {
+                sum.checked_add(a.x as i128 * b.y as i128 - b.x as i128 * a.y as i128)
+            });
+        // Nonzero signed area proves that some nonzero-fill area remains.
+        // Zero-area self crossings still need an actual fill operation.
+        if p.len() < 3
+            || (!signed.is_some_and(|value| value != 0)
+                && resolve(&vec![p.clone()], &vec![], ClipType::Union, scale)?.is_empty())
+        {
             collapsed += 1;
         } else {
-            kept.push(ring.clone());
+            if signed.map_or_else(|| area(&p) < 0., |value| value < 0) != !ring.1 {
+                p.reverse();
+            }
+            kept.push(p);
         }
     }
-    Ok((operate("union", &kept, &[], scale)?, collapsed))
+    Ok((resolve(&kept, &vec![], ClipType::Union, scale)?, collapsed))
 }
 
 pub fn stroke(lines: &[Vec<Point>], radius: f64, sagitta: f64) -> Result<Vec<Ring>, String> {

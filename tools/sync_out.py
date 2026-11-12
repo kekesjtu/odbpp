@@ -48,7 +48,7 @@ def sizes(value, default):
         raise ValueError('provide one or two finite positive cell sizes')
     return result
 
-def existing_preview(directory, source, *, backend='rust'):
+def existing_preview(directory, source, *, backend='rust', per_layer_png=False):
     path = directory / 'pcbkit/intermediate.json'
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
@@ -59,6 +59,13 @@ def existing_preview(directory, source, *, backend='rust'):
             return None
         if not all(((directory / 'pcbkit' / p).is_file() for p in ('preview.svg', 'preview.html', 'diagnostics/run.json'))):
             return None
+        if per_layer_png:
+            base = directory / 'pcbkit'
+            owned = json.loads((base / 'diagnostics/artifacts.json').read_text(encoding='utf-8'))['files']
+            pngs = [name for name in owned if name.startswith('layers/') and name.endswith('.png')]
+            expected = sum(layer['geometry_status'] == 'ready' for layer in data['steps'][0]['layers'])
+            if len(pngs) != expected or any(not (base / name).is_file() for name in pngs):
+                return None
         return (path, data)
     except (OSError, ValueError, KeyError, TypeError):
         return None
@@ -124,7 +131,7 @@ def prune_unmatched(inputs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=('rust',), default='rust')
-    for flag in ('force', 'force-equivalent', 'prune', 'heatmap-grid'):
+    for flag in ('force', 'force-equivalent', 'prune', 'heatmap-grid', 'per-layer-png'):
         parser.add_argument('--' + flag, action='store_true')
     parser.add_argument('--px', type=int)
     parser.add_argument('--py', type=int)
@@ -142,13 +149,14 @@ def main():
     except ValueError as exc:
         parser.error(str(exc))
     args.grid_level = args.grid_level or (None if expert else 'standard')
-    _, options = forwarded(args)
+    parser_options, options = forwarded(args)
     inputs = case_inputs()
     for name, source in inputs:
         output = OUT / name / args.backend
-        valid = None if args.force else existing_preview(output, source, backend=args.backend)
+        valid = None if args.force else existing_preview(output, source, backend=args.backend,
+                                                         per_layer_png=args.per_layer_png)
         equivalent = None if valid is None or args.force_equivalent else existing_equivalence(output, valid[0], px=args.px, py=args.py, max_cell_mm=upper, grid_level=args.grid_level, draw_grid=args.heatmap_grid, max_area_error_ratio=args.max_area_error_ratio, backend=args.backend)
-        result = execute(source, output, equivalent_args=options, reuse_parser=valid is not None, reuse_equivalent=equivalent is not None, pcbkit_exe='pcbkit-rust', pcbeq_exe='pcbeq-rust')
+        result = execute(source, output, parser_args=parser_options, equivalent_args=options, reuse_parser=valid is not None, reuse_equivalent=equivalent is not None, pcbkit_exe='pcbkit-rust', pcbeq_exe='pcbeq-rust')
         if result['status'] != 'success':
             raise RuntimeError(f'pipeline failed for {name}: {result}')
         preview = output / 'pcbkit/intermediate.json'

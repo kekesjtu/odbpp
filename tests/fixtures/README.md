@@ -59,7 +59,8 @@ MM, one step. `symbols/` holds a three-deep chain
 `symbols/alpha` references `beta` and `beta` references `alpha`. Spec p.37
 forbids this; a parser must detect it instead of recursing until the stack
 overflows. Expected result: a `symbol.cycle` **error** diagnostic (so the CLI
-exits non-zero), and `SymbolCycleError` from an explicit `expand_order`.
+exits non-zero), with a reference chain identifying the cycle. Native
+composition must fail on the cycle rather than fabricate partial symbol geometry.
 
 ### `fx_flex_form/` — the three ways `FORM` gets its value
 

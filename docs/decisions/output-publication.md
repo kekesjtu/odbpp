@@ -6,7 +6,7 @@
 
 | 目录 | 产物 |
 | --- | --- |
-| `pcbkit/` | `intermediate.json`、可选 `preview.svg` 和 `preview.html`、`diagnostics/run.json` 与 `diagnostics/artifacts.json` |
+| `pcbkit/` | `intermediate.json`、可选 `preview.svg`、`preview.html` 与 `layers/<row>-<layer>.png`、`diagnostics/run.json` 与 `diagnostics/artifacts.json` |
 | `pcbeq/` | `materialmap.json`、所请求的[工程图表](pcbeq/pcbeq-visualization.md)、`diagnostics/run.json` 和数值清单 `diagnostics/artifacts.json`。图片另由 `diagnostics/image-artifacts.json` 管理 |
 | `pipeline/` | `run.json` 和两个 CLI 的 stdout、stderr 日志 |
 

@@ -1,9 +1,7 @@
 """Exception hierarchy for the ODB++ parser.
 
-All errors raised by this package derive from :class:`OdbError` so callers can
-catch the whole family with one ``except``.  Errors that can be attributed to a
-specific file/line carry that context, because ODB++ diagnostics are useless
-without knowing which file in the tree was at fault.
+Input-adapter errors derive from :class:`OdbError` and carry source context.
+The native API reports invalid records and geometry through ValueError.
 """
 
 from __future__ import annotations
@@ -60,18 +58,6 @@ class ParseError(OdbError):
         super().__init__(detail)
 
 
-class SymbolCycleError(OdbError):
-    """A user-defined symbol references itself, directly or transitively.
-
-    The spec forbids circular references (p.37) but a parser must detect them
-    rather than recurse until the stack overflows.
-    """
-
-    def __init__(self, chain: "list[str]") -> None:
-        self.chain = list(chain)
-        super().__init__("circular user-defined symbol reference: " + " -> ".join(self.chain))
-
-
 class LayerProfileError(OdbError):
     """A layer profile exists but cannot be used as a base polygon.
 
@@ -84,15 +70,3 @@ class LayerProfileError(OdbError):
         self.layer = layer
         self.reason = reason
         super().__init__(f"layer {layer!r} has an unusable profile: {reason}")
-
-
-class UnsupportedFeatureError(OdbError):
-    """A spec feature that this parser deliberately does not implement yet."""
-
-    def __init__(self, what: str, *, path: Optional[str] = None) -> None:
-        self.what = what
-        self.path = path
-        msg = f"unsupported: {what}"
-        if path is not None:
-            msg += f" [{path}]"
-        super().__init__(msg)

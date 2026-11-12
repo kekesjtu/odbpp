@@ -5,7 +5,7 @@
 ```text
 ODB++ 单板目录或压缩包
   └─ pcbkit-rust ──> 中间 JSON ──> pcbeq-rust ──> MaterialMap JSON
-        └─ SVG / HTML 预览             └─ 工程图表与运行诊断
+        └─ SVG / HTML / PNG 预览       └─ 工程图表与运行诊断
 ```
 
 `pcbkit-rust` 解释 ODB++ 的单位、图元、极性和叠层，输出毫米坐标下的正向实体多边形及逐层几何。`pcbeq-rust` 规划近似 region 与局部网格，采样材料图案，为每个完整单元计算物性。
@@ -37,8 +37,10 @@ ODB++ 单板目录或压缩包
 
 | 分发包 | 职责与语言边界 |
 | --- | --- |
-| `pcbkit-rust` | 包内 Python 负责输入调度、Pydantic 契约校验与预览，Rust 负责几何离散、整数布尔和扫掠 |
+| `pcbkit-rust` | 包内 Python 负责目录与压缩包适配、元数据输入、Pydantic 契约边界与 SVG/HTML/PNG 预览；Rust 负责 features/profile 记录解析、符号展开、图元放置、极性合成与输出几何规整 |
 | `pcbeq-rust` | 独立 Rust CLI 从 JSON 读取校验到 MaterialMap 和数值诊断发布，可单文件分发。可选 Python 工具通过子进程调用 CLI，并从正式 MaterialMap 渲染图表 |
+
+解析器的记录、符号缓存与中间几何保存在 Rust 内部。PyO3 以原生句柄传递已解析文件和最终 Region；整层展开与合成在一次调用内完成，不把逐图元坐标交回 Python。Python 仅在 JSON 契约交付和绘图边界读取最终坐标。
 
 解析器的 wheel / sdist 使用 Maturin 构建 PyO3 扩展。等效器由 Cargo 构建 `pcbeq` 可执行文件，计算不依赖 Python；其 Python 管线和绘图单独构建纯 Python wheel / sdist，通过 `PATH`、`PCBEQ_EXE` 或显式路径定位可执行文件。计算参数及默认值由 Rust CLI 解释，绘图可以独立重跑。uv workspace 锁定 Python 依赖，Cargo workspace 管理 Rust 依赖，两个产品通过文件契约独立运行。
 

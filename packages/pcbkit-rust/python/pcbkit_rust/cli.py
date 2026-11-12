@@ -2,14 +2,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Any, Optional, Sequence
+from typing import Optional, Sequence
 from . import __version__
 from .diagnostics import Diagnostics
 from .errors import OdbError
-from .geometry import DEFAULT_SAGITTA_MM, SUPPORTED_SYMBOL_PREFIXES, TessellationOptions
+from .geometry import DEFAULT_SAGITTA_MM
 from .job import LoadOptions, load_job
-from .model import Job, Layer, Step
-from .symbols import parse_standard_symbol
 
 from .application import (summarize, _run_export, _print_info, _print_layers,
     _print_symbols, _print_diagnostics, _print_summary)
@@ -70,6 +68,8 @@ def build_parser(*, prog="pcbkit-rust") -> argparse.ArgumentParser:
                        help="write only the intermediate JSON")
     p_exp.add_argument("--per-layer-svg", action="store_true",
                        help="also write one SVG per layer under <out>/layers/")
+    p_exp.add_argument("--per-layer-png", action="store_true",
+                       help="write one PNG per layer under <out>/layers/")
     p_exp.add_argument("--no-diagnostics", action="store_true",
                        help="omit the final parser diagnostic listing on stderr; exit status is unchanged")
     p_exp.set_defaults(json_out=None, format=None, max_records=5, no_features=False)

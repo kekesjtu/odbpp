@@ -75,6 +75,7 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
     executable = lambda name: str(REPO_ROOT / ".venv" / ("Scripts" if sys.platform=="win32" else "bin") / (name+".exe" if sys.platform=="win32" else name))
     result = execute(case_path("minimal-test-odb"),tmp_path,
         pcbkit_exe=executable("pcbkit-rust"),pcbeq_exe=executable("pcbeq-rust"),
+        parser_args=["--per-layer-png"],
         equivalent_args=["--px","97","--py","101","--max-cell-mm","10"])
     assert result["status"] == "success"
     for name in ("pcbkit/preview.svg","pcbkit/preview.html","pcbkit/intermediate.json",
@@ -82,6 +83,7 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
                  "pcbeq/grids/cartesian-grid.png"):
         assert (tmp_path/name).stat().st_size>0
     assert list((tmp_path/"pcbeq/heatmaps").glob("*.png"))
+    assert list((tmp_path/"pcbkit/layers").glob("*.png"))
 
 
 from tools import sync_out
@@ -94,11 +96,12 @@ def test_sync_out_rust_owns_its_pipeline_and_reuses_numeric_and_image_artifacts(
     shutil.copytree(case_path("minimal-test-odb"),source)
     monkeypatch.setattr(sync_out,"CASES",source.parent)
     monkeypatch.setattr(sync_out,"OUT",tmp_path/"out")
-    monkeypatch.setattr(sys,"argv",["sync_out.py","--backend","rust","--px","32","--py","32","--max-cell-mm","10"])
+    monkeypatch.setattr(sys,"argv",["sync_out.py","--backend","rust","--px","32","--py","32","--max-cell-mm","10","--per-layer-png"])
     sync_out.main()
     output=tmp_path/"out/minimal-test-odb/rust"
     materialmap=output/"pcbeq/materialmap.json"
     assert materialmap.is_file() and (output/"pcbeq/index.html").is_file()
+    assert list((output/"pcbkit/layers").glob("*.png"))
     assert not (output.parent/"python").exists()
     before=materialmap.stat().st_mtime_ns
     sync_out.main()

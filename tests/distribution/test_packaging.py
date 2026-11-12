@@ -21,7 +21,7 @@ def test_distribution_metadata_and_import_boundaries(package):
     dependencies = {r.split(">=")[0] for r in project["dependencies"]}
     assert "pydantic" in dependencies
     if package != "pcbeq-rust":
-        assert "pyclipper" in dependencies
+        assert "pillow" in dependencies
     forbidden = {"pcbkit", "pcbeq", "pcbkit_rust", "pcbeq_rust", "pcbkit-rust", "pcbeq-rust", "odbpp"}-{module}
     assert not (forbidden & dependencies)
     for name in dependencies:

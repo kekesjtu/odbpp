@@ -19,11 +19,9 @@ polygonal.  ``tessellation.sagitta_mm`` is therefore the last point at which
 curve fidelity is decided, which is why it is an option on the *preview* and not
 buried in the parser.
 
-**Geometry is streamed, not cached.**  Composing ``designodb-rigidflex``
-(520k records) yields 29,235 polygons for a single assembly layer.  Holding every
-layer's polygons while also holding the SVG text hundreds of megabytes.  Callers
-that render layer by layer should use :func:`iter_layer_previews` and drop each
-layer after writing it.
+**Native ownership.** Layer previews hold immutable Rust Region handles. Python
+reads final vertices at the contract and drawing boundaries. Callers that need
+only one layer at a time can consume :func:`iter_step_previews` incrementally.
 """
 
 from __future__ import annotations
@@ -247,7 +245,7 @@ class StepPreview:
     #: Used only when drawing a filtered dielectric with omitted drill geometry.
     #: Retain the library/options, not the expander's large geometry caches.
     source_symbols: Optional[object] = field(default=None, repr=False, compare=False)
-    expansion_options: Optional[ExpandOptions] = field(default=None, repr=False, compare=False)
+    expansion_options: ExpandOptions = field(default_factory=ExpandOptions, repr=False, compare=False)
     drawing_only: bool = field(default=False, repr=False, compare=False)
 
     def z_axis(self) -> str:
@@ -334,7 +332,7 @@ def iter_step_previews(
             continue
         try:
             geometry = expand_layer(layer, step, expander=expander,
-                                    options=opts.expand_options())
+                                    round_digits=opts.round_digits)
         except LayerProfileError as exc:
             # requirements.md parser constraint 3: a layer profile that exists but is unusable is
             # a hard error.  The loader has already reported *why* (as
@@ -356,7 +354,7 @@ def iter_step_previews(
         # Quantise to the output grid and re-validate *before* the geometry is
         # called a result.  Areas and bounds below are recomputed from these
         # coordinates, so what the JSON reports is what the JSON contains.
-        geometry.region, collapsed = snap_to_grid(geometry.region, opts.round_digits)
+        collapsed = geometry.collapsed
         if collapsed:
             diags.warn(
                 EXPORT_DEGENERATE_RING,
@@ -491,10 +489,6 @@ def _round(value: float, digits: int) -> float:
     return 0.0 if out == 0.0 else out
 
 
-def _points_json(ring: Ring, digits: int) -> list[list[float]]:
-    return [[_round(x, digits), _round(y, digits)] for x, y in ring.points]
-
-
 def _preview_digits(preview, round_digits: Optional[int]) -> int:
     """Decimal places to serialise *preview* at.
 
@@ -509,23 +503,6 @@ def _preview_digits(preview, round_digits: Optional[int]) -> int:
     if own is not None:
         return max(0, int(own))
     return 4
-
-
-def _serialised_rings(preview, digits: int) -> tuple[list[Ring], float, Optional[tuple]]:
-    """Rings, area and bounds as they will be written at *digits*.
-
-    When the request disagrees with the resolution the preview was built at, the
-    region is re-regularised onto the requested grid rather than rounded point
-    by point.  Rounding alone can flatten a ring to zero area or cross two edges
-    while ``area_mm2`` still describes the pre-rounding shape; re-quantising and
-    recomputing keeps the reported numbers and the written polygons the same
-    geometry.
-    """
-    own = getattr(preview, "round_digits", None)
-    if own is None or int(own) == digits:
-        return preview.rings, preview.area_mm2, preview.bounds
-    region, _collapsed = snap_to_grid(preview.geometry.region, digits)
-    return region.rings, region.area, region.bounds
 
 
 def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> dict:
@@ -569,12 +546,13 @@ def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> di
 
 
 def _layer_data(preview: LayerPreview, digits: int) -> dict:
-    rings, _area, _bounds = _serialised_rings(preview, digits)
+    region = preview.geometry.region
+    if preview.round_digits != digits:
+        region, _ = snap_to_grid(region, digits)
     return {
         **_layer_metadata(preview.layer, preview.stackup, digits),
         "geometry_status": "ready", "domain_id": None,
-        "polygons": [{"island": not ring.is_hole, "points": _points_json(ring, digits)}
-                     for ring in rings],
+        "polygons": region.polygons(),
     }
 
 
@@ -641,17 +619,6 @@ def step_to_json(job: Job, preview: StepPreview, *,
     return step_to_document(job, preview, round_digits=round_digits).model_dump(mode="json", exclude_none=True)
 
 
-def _region_polygons_json(region, round_digits: int) -> list[dict]:
-    """Serialise a :class:`~pcbkit.clipper.Region` as explicit island/hole rings."""
-    return [
-        {
-            "island": not ring.is_hole,
-            "points": _points_json(ring, round_digits),
-        }
-        for ring in region.rings
-    ]
-
-
 def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], dict]:
     """The computational domains available to this step, and which layer uses which.
 
@@ -684,7 +651,7 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
     if step.profile is not None:
         step_domain_id = "step_profile"
         region, collapsed = snap_to_grid(
-            region_from_geometry(step.profile), round_digits
+            region_from_geometry(step.profile, preview.expansion_options.tessellation), round_digits
         )
         if collapsed:
             preview.diagnostics.warn(
@@ -712,7 +679,7 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
             if domain_id is None:
                 domain_id = f"layer_profile:{layer.name}"
                 region, _collapsed = snap_to_grid(
-                    region_from_geometry(layer.profile), round_digits
+                    region_from_geometry(layer.profile, preview.expansion_options.tessellation), round_digits
                 )
                 domains.append(_domain_json(domain_id, "layer_profile", region, round_digits))
                 seen[key] = domain_id
@@ -734,7 +701,7 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
 
 def _domain_json(domain_id: str, source: str, region, round_digits: int) -> dict:
     return {"id": domain_id, "source": source,
-            "polygons": _region_polygons_json(region, round_digits)}
+            "polygons": region.polygons()}
 
 
 def write_json(document: dict, path: str) -> None:

@@ -2,14 +2,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Any, Optional, Sequence
+from typing import Any
 from . import __version__
 from .diagnostics import Diagnostics
 from .errors import OdbError
-from .geometry import DEFAULT_SAGITTA_MM, SUPPORTED_SYMBOL_PREFIXES, TessellationOptions
-from .job import LoadOptions, load_job
+from .geometry import TessellationOptions
 from .model import Job, Layer, Step
-from .symbols import parse_standard_symbol
+from .symbols import describe_symbol
+from .units import UnitSystem
 
 
 def layer_summary(layer: Layer) -> dict[str, Any]:
@@ -38,7 +38,7 @@ def layer_summary(layer: Layer) -> dict[str, Any]:
         "has_profile": layer.profile is not None,
         "profile_error": layer.profile_error,
         "tool_count": len(layer.tools.tools) if layer.tools else None,
-        "records": ([r.raw.strip() for r in features.records] if features else []),
+        "records": (features.raw_records() if features is not None else []),
     }
 
 
@@ -52,7 +52,7 @@ def step_summary(step: Step) -> dict[str, Any]:
         "y_origin_mm": header.y_origin if header else None,
         "nested_step_repeats": len(header.repeats) if header else 0,
         "has_profile": step.profile is not None,
-        "profile_polygons": len(step.profile.polygons) if step.profile else 0,
+        "profile_polygons": step.profile.polygon_count if step.profile else 0,
         "attributes": dict(step.attributes),
         "layers": [layer_summary(l) for l in step.layers],
     }
@@ -96,20 +96,20 @@ def symbol_summary(job: Job) -> dict[str, Any]:
             features = layer.features
             if features is None:
                 continue
-            for ref in features.symbols:
-                unit = ref.effective_unit(features.units.system)
-                parsed = parse_standard_symbol(ref.name, unit)
+            for _index, name, unit_name in features.symbols:
+                unit = UnitSystem(unit_name)
+                parsed = describe_symbol(name, unit)
                 if parsed is not None:
-                    entry = standard.setdefault(ref.name, {
-                        "prefix": parsed.prefix,
-                        "supported": parsed.prefix in SUPPORTED_SYMBOL_PREFIXES,
-                        "params": parsed.params,
+                    entry = standard.setdefault(name, {
+                        "prefix": parsed["prefix"],
+                        "supported": parsed["supported"],
+                        "params": parsed["params"],
                         "unit": unit.value,
                         "uses": 0,
                     })
                     entry["uses"] += 1
                 else:
-                    entry = custom.setdefault(ref.name, {"uses": 0, "layers": []})
+                    entry = custom.setdefault(name, {"uses": 0, "layers": []})
                     entry["uses"] += 1
                     if layer.name not in entry["layers"]:
                         entry["layers"].append(layer.name)
@@ -271,7 +271,8 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
             want_json=True,
             want_svg=not args.only_json,
             want_html=not args.only_json,
-            per_layer_svg=args.per_layer_svg,
+            per_layer_svg=args.per_layer_svg and not args.only_json,
+            per_layer_png=args.per_layer_png and not args.only_json,
             stem=step.name,
         )
     except (OSError, ValueError) as exc:

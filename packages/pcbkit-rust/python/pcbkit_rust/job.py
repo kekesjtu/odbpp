@@ -148,15 +148,17 @@ def _load(archive: OdbArchive, source: str, opts: LoadOptions, diags: Diagnostic
 
     job.orphan_step_dirs = _orphan_step_dirs(archive, root, job)
 
-    if opts.check_symbols:
-        _validate_symbols(symbols, job, diags)
-
     if opts.load_features:
         # Materialise the user-defined symbols the loaded layers reference, so
         # the returned job can be rendered after this archive is closed.  The
         # library is attached even when nothing needed preloading, because
         # standard symbols are resolved through it too.
         symbols.preload(_referenced_symbols(symbols, job))
+        if opts.check_symbols:
+            from ._pcbkit_native import symbol_cycles
+            for chain in symbol_cycles(symbols.files):
+                diags.error("symbol.cycle", "user-defined symbol reference cycle: " + " -> ".join(chain),
+                            f"{root}/symbols")
         job.symbols = symbols
 
     return job
@@ -169,6 +171,12 @@ def _referenced_symbols(symbols: SymbolLibrary, job: Job) -> list[str]:
         for layer in step.layers:
             if layer.features is None:
                 continue
+            from ._pcbkit_native import describe_symbol
+            for _index, name, unit in layer.features.symbols:
+                if name.casefold() in symbols.directories and describe_symbol(name, unit) is not None:
+                    symbols.diagnostics.warn("symbol.shadows_standard",
+                        f"{name!r} is a standard symbol and takes precedence over its custom definition",
+                        job.root or None)
             for name in symbols.custom_references(layer.features, job.units.system):
                 if name not in out:
                     out.append(name)
@@ -370,36 +378,3 @@ def _load_layer(
             )
 
     return layer
-
-
-# ---------------------------------------------------------------------------
-# symbol validation
-# ---------------------------------------------------------------------------
-
-def _validate_symbols(symbols: SymbolLibrary, job: Job, diags: Diagnostics) -> None:
-    """Verify referenced user-defined symbols resolve, and detect cycles.
-
-    Only symbols actually referenced by a loaded layer are validated, because the
-    library may legitimately contain hundreds of unused definitions (123 shipped
-    vs 9 used in ``cases/designodb-rigidflex``).
-    """
-    from .errors import SymbolCycleError
-
-    referenced: list[str] = []
-    for step in job.steps.values():
-        for layer in step.layers:
-            if layer.features is None:
-                continue
-            for name in symbols.custom_references(layer.features):
-                if name not in referenced:
-                    referenced.append(name)
-
-    for name in referenced:
-        try:
-            symbols.expand_order(name)
-        except SymbolCycleError as exc:
-            diags.error(
-                "symbol.cycle",
-                f"user-defined symbol reference cycle: {' -> '.join(exc.chain)}",
-                f"{job.root}/symbols",
-            )

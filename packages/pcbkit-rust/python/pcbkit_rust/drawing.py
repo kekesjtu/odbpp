@@ -41,8 +41,9 @@ def dielectric_drill_cutouts(preview: StepPreview, layer_names: set[str] | None 
             if drill.name not in projections:
                 # An omitted DRILL layer still affects a selected dielectric SVG.
                 try:
-                    geometry = expand_layer(drill, preview.step, expander=expander)
-                    projections[drill.name], _ = snap_to_grid(geometry.region, digits)
+                    geometry = expand_layer(drill, preview.step, expander=expander,
+                                            round_digits=digits)
+                    projections[drill.name] = geometry.region
                 except Exception as exc:  # same per-layer degradation as the preview builder
                     failed.add(drill.name)
                     preview.diagnostics.error("drawing.drill_failed",

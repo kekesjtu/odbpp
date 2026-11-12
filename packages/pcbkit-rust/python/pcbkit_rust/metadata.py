@@ -456,8 +456,7 @@ def parse_attribute_definitions(
     """Parse every attribute definition file under ``misc/`` (spec p.84-90).
 
     These files are optional and frequently absent, in which case attribute
-    values keep their raw token form (see
-    :func:`pcbkit.features.resolve_attributes`).
+    values keep their raw token form in the native feature parser.
     """
     result = AttributeDefinitions()
 

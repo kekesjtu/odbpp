@@ -81,6 +81,7 @@ def build_parser():
     parser.add_argument("--step")
     parser.add_argument("--sagitta-mm", type=float)
     parser.add_argument("--digits", type=int)
+    parser.add_argument("--per-layer-png", action="store_true")
     parser.add_argument("--px", type=int)
     parser.add_argument("--py", type=int)
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
@@ -93,7 +94,7 @@ def build_parser():
 
 def forwarded(args) -> tuple[list[str], list[str]]:
     groups = []
-    for names in (("step", "sagitta_mm", "digits"),
+    for names in (("step", "sagitta_mm", "digits", "per_layer_png"),
                   ("px", "py", "grid_level", "max_cell_mm", "materials", "heatmap_grid",
                    "max_area_error_ratio")):
         options = []

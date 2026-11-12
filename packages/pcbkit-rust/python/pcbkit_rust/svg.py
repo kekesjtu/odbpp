@@ -35,6 +35,7 @@ whoever needs to check the board.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+import json
 from typing import Mapping, Optional, Sequence
 
 from .clipper import Ring, region_from_geometry, snap_to_grid
@@ -325,7 +326,7 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
         out.append(f'<g {attributes}><path d="{data}"/></g>')
 
     if view.step.profile is not None:
-        profile, _ = snap_to_grid(region_from_geometry(view.step.profile), digits)
+        profile, _ = snap_to_grid(region_from_geometry(view.step.profile, view.expansion_options.tessellation), digits)
         out.append(f'<path id="odb-profile" d="{path_data(profile.rings, digits)}" '
                    'fill="none" stroke="#c9d1d9" stroke-width="1" '
                    'vector-effect="non-scaling-stroke" pointer-events="none"/>')
@@ -334,7 +335,7 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
     for index, layer in enumerate(chosen):
         profile = layer.layer.profile if layer.layer.profile is not None else view.step.profile
         if profile is not None and layer.layer.profile_error is None:
-            domain, _ = snap_to_grid(region_from_geometry(profile), digits)
+            domain, _ = snap_to_grid(region_from_geometry(profile, view.expansion_options.tessellation), digits)
             out.append(f'<path data-name="{_escape(layer.name)}" '
                        f'd="{path_data(domain.rings, digits)}" style="display:none" '
                        'stroke-width="1.5" vector-effect="non-scaling-stroke"/>')
@@ -887,7 +888,7 @@ def _inspection_panels(ordered: Sequence[LayerPreview]) -> str:
                                start_mm=extent.start_mm, end_mm=extent.end_mm,
                                thickness_known=extent.thickness_known, source=extent.source)))
         features = layer.layer.features
-        groups = features.histogram() if features is not None else []
+        groups = json.loads(features.histogram_json()) if features is not None else []
         histogram = ['<p>输入图元统计（规整前；不代表输出材料面积）。'
                      '符号参数：MM 作用域用 µm，INCH 用 mil；输出坐标统一为 mm。</p>',
                      '<table><tr><th>图元</th><th>极性</th><th>符号</th><th>作用域</th><th>数量</th></tr>']
@@ -1051,9 +1052,10 @@ class Outputs:
     svg: Optional[str] = None
     html: Optional[str] = None
     layer_svgs: list[str] = field(default_factory=list)
+    layer_pngs: list[str] = field(default_factory=list)
 
     def all_paths(self) -> list[str]:
-        return [p for p in (self.json, self.svg, self.html) if p] + self.layer_svgs
+        return [p for p in (self.json, self.svg, self.html) if p] + self.layer_svgs + self.layer_pngs
 
 
 def write_outputs(
@@ -1067,6 +1069,7 @@ def write_outputs(
     want_svg: bool = True,
     want_html: bool = True,
     per_layer_svg: bool = False,
+    per_layer_png: bool = False,
     stem: Optional[str] = None,
 ) -> Outputs:
     """Write the preview, returning the paths produced.
@@ -1113,10 +1116,10 @@ def write_outputs(
     # The standalone SVG and the viewer contain exactly the same drawing.
     # Keep reuse local to this write: previews and rendering options can change
     # between calls, so a persistent render cache would be unsafe.
-    if want_svg or want_html or per_layer_svg:
+    if want_svg or want_html or per_layer_svg or per_layer_png:
         draw_view = dielectric_drill_cutouts(draw_view)
     viewport = (_viewbox(draw_view, draw_digits)
-                if want_svg or want_html or per_layer_svg else None)
+                if want_svg or want_html or per_layer_svg or per_layer_png else None)
     drawing = (_render_svg(draw_view, opts, draw_view.layers, viewport)
                if want_svg or want_html else "")
     if want_svg:
@@ -1133,6 +1136,10 @@ def write_outputs(
         outputs.html = path
 
     del drawing
+
+    if per_layer_png:
+        from .png import write_layer_pngs
+        outputs.layer_pngs = write_layer_pngs(draw_view, out_dir, opts)
 
     if per_layer_svg:
         layer_dir = os.path.join(out_dir, "layers")
