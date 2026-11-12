@@ -77,10 +77,10 @@ impl Publication {
             let mut target = self.directory.clone();
             for part in relative.components() {
                 target.push(part);
-                if let Ok(meta) = fs::symlink_metadata(&target) {
-                    if meta.is_symlink() {
-                        return Err(format!("symlink in output path: {}", target.display()));
-                    }
+                if let Ok(meta) = fs::symlink_metadata(&target)
+                    && meta.is_symlink()
+                {
+                    return Err(format!("symlink in output path: {}", target.display()));
                 }
             }
             if target.exists() && !target.is_file() {

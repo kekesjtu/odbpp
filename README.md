@@ -30,7 +30,7 @@ cargo test --workspace
 ## 文档索引
 
 - [需求与验收](docs/requirements.md)；[协作规范](AGENTS.md)。
-- 架构与接口：[项目架构](docs/architecture.md)、[输出与发布](docs/decisions/output-publication.md)、[中间 JSON](docs/interfaces/intermediate-json.md)、[MaterialMap](docs/interfaces/materialmap.md)。
+- 架构与接口：[项目架构](docs/architecture.md)、[输出与发布](docs/decisions/output-publication.md)、[中间 JSON](docs/interfaces/intermediate-json.md)、[MaterialMap](docs/interfaces/materialmap.md)、[pcbeq 诊断格式](docs/interfaces/pcbeq-diagnostics.md)。
 - 解析：[解析语义](docs/decisions/pcbkit/parser-semantics.md)、[逐层轮廓与叠层](docs/decisions/pcbkit/layer-domains-and-stackup.md)、[查看器交互](docs/decisions/pcbkit/viewer-interaction.md)。
 - 等效：[轮廓近似 region 与局部网格](docs/decisions/pcbeq/geometry-planning.md)、[材料采样](docs/decisions/pcbeq/material-sampling.md)、[材料模型](docs/decisions/pcbeq/material-model.md)、[pcbeq 可视化](docs/decisions/pcbeq/pcbeq-visualization.md)。
 - 调研：[格式与单位](docs/research/format-and-units.md)、[几何与符号](docs/research/geometry-and-symbols.md)、[案例清单](docs/research/case-inventory.md)、[KiCad 案例](docs/research/kicad-test-cases.md)、[开源参考](docs/research/open-source-survey.md)、[Viewer 参考](docs/research/viewer-reference.md)。
