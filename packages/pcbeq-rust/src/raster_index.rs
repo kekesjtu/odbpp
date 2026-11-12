@@ -80,7 +80,7 @@ impl Materials {
         ];
         PreparedRaster::new(
             self.domain.clone(),
-            Some(self.profile.clone()),
+            self.profile.clone(),
             self.black.iter().map(|i| i.edges(bounds)).collect(),
         )?
         .render_base(x, y)

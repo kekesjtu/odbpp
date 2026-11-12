@@ -86,9 +86,8 @@ def _render(source, output, *, heatmap=True, regions=True, grids=True, gallery=T
     if grids:
         images.append(_geometry_images(document, output / "grids", grids=True))
     if heatmap:
-        report = render_heatmaps(str(source), str(output / "heatmaps"), options=HeatmapOptions(
-            panel_width_px=panel_width, shared_scale=shared_scale, draw_grid=draw_grid))
-        images.extend(Path(image.path) for image in report.images)
+        images.extend(render_heatmaps(str(source), str(output / "heatmaps"), options=HeatmapOptions(
+            panel_width_px=panel_width, shared_scale=shared_scale, draw_grid=draw_grid)))
     if gallery:
         figures = "\n".join(f'<figure><img loading="lazy" src="{escape(image.relative_to(output).as_posix(), quote=True)}" '
                             f'style="max-width:100%"><figcaption>{escape(image.stem)}</figcaption></figure>' for image in images)

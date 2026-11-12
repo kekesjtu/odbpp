@@ -1,10 +1,9 @@
 """MaterialMap-only charts owned by the Rust distribution."""
 from __future__ import annotations
 import math
-import os
 from array import array
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
+from typing import Optional
 from .errors import EquivalenceErrorBase
 from .png import Rgb
 
@@ -106,8 +105,7 @@ class MaterialMapData:
     x_edges: tuple[float, ...]
     y_edges: tuple[float, ...]
     series: list[LayerSeries]
-    row_count: int = 0
-    skipped_invalid: int = 0
+
     def bounds_mm(self) -> tuple[float, float, float, float]:
         return (self.x_edges[0], self.y_edges[0],
                 self.x_edges[-1], self.y_edges[-1])
@@ -129,7 +127,6 @@ def read_materialmap(path: str) -> MaterialMapData:
     xs = tuple(sorted({x for r in document.regions for x in r.axis_lines("x")}))
     ys = tuple(sorted({y for r in document.regions for y in r.axis_lines("y")}))
     layers = {}
-    count = 0
     for region, bounds, values in iter_cells(document):
         name = region.layer.name
         if name not in layers:
@@ -139,9 +136,7 @@ def read_materialmap(path: str) -> MaterialMapData:
         series = layers[name]
         series.rectangles.append(bounds)
         series.kx.append(values[0]); series.ky.append(values[1]); series.kz.append(values[2])
-        count += 1
-    return MaterialMapData(x_edges=xs, y_edges=ys, series=list(layers.values()),
-        row_count=count, skipped_invalid=0)
+    return MaterialMapData(x_edges=xs, y_edges=ys, series=list(layers.values()))
 
 
 @dataclass(frozen=True)
@@ -161,17 +156,3 @@ class HeatmapOptions:
             raise ValueError("max_panel_px is smaller than panel_width_px")
         if not math.isfinite(self.font_size_pt) or self.font_size_pt <= 0:
             raise ValueError("font_size_pt must be finite and positive")
-
-
-@dataclass
-class HeatmapImage:
-    layer: str
-    path: str
-    index: int
-    count: int
-    vmin: float
-    vmax: float
-    cells: int
-    # Measured artist bounds, in top-down output pixels, for visual QA.
-    panel_boxes: tuple[tuple[int, int, int, int], ...] = ()
-    colourbar_box: tuple[int, int, int, int] = (0, 0, 0, 0)

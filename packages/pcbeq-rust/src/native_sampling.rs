@@ -146,7 +146,7 @@ pub fn evaluate(
         cells += values.len();
         for (q, value) in values.into_iter().enumerate() {
             let value = value.ok_or(format!("layer {:?} region {rid} cell {q}: insufficient raster samples or domain/geometry contradiction; increase px/py",layer.name))?;
-            let mut properties = [value[1], value[2], value[3], value[4], value[5]];
+            let mut properties = value;
             for (i, v) in properties.iter_mut().enumerate() {
                 let factor = if i < 3 { 1e6 } else { 1e4 };
                 let rounded = (*v * factor).round_ties_even() / factor;

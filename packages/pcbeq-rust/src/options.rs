@@ -1,5 +1,5 @@
 use crate::Result;
-use serde_json::{Value, json};
+use serde_json::Value;
 pub struct Options {
     pub px: Option<usize>,
     pub py: Option<usize>,
@@ -8,19 +8,6 @@ pub struct Options {
     pub max_area_error_ratio: f64,
     pub materials: Value,
     pub materials_path: Option<String>,
-}
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            px: None,
-            py: None,
-            grid_level: None,
-            max_cell_mm: vec![5., 5.],
-            max_area_error_ratio: 0.01,
-            materials: json!({}),
-            materials_path: None,
-        }
-    }
 }
 impl Options {
     pub fn validate(&self) -> Result<()> {

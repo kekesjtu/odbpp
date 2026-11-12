@@ -1,11 +1,10 @@
 """Render MaterialMap conductivity without input geometry or Python product imports."""
 from __future__ import annotations
-import os
-from dataclasses import dataclass
-from typing import Optional, Sequence
+from pathlib import Path
+from typing import Optional
 from .png import write_rgb_png
-from .heatmap_data import (VisualizeError, NO_DATA_COLOUR, PANELS, LayerSeries,
-    MaterialMapData, HeatmapOptions, HeatmapImage, read_materialmap, unique_image_stem)
+from .heatmap_data import (NO_DATA_COLOUR, PANELS, LayerSeries,
+    MaterialMapData, HeatmapOptions, read_materialmap, unique_image_stem)
 
 
 def _format(value: float) -> str:
@@ -22,9 +21,9 @@ def format_z(z_start_mm: Optional[float], z_end_mm: Optional[float],
 
 
 def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
-                         bounds: tuple[float, float], path: str, *,
+                         bounds: tuple[float, float], path: Path, *,
                          index: int, count: int,
-                         options: HeatmapOptions) -> HeatmapImage:
+                         options: HeatmapOptions) -> None:
     """Render physical JSON rectangles with Agg, without resampling the values.
 
     Layout is specified in inches, independently of PNG resolution. Axes keep
@@ -83,7 +82,6 @@ def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
     vertices = np.stack((cells[:, [0, 1]], cells[:, [2, 1]],
                          cells[:, [2, 3]], cells[:, [0, 3]]), axis=1)
     absent = tuple(value / 255 for value in NO_DATA_COLOUR)
-    axes = []
     for panel, (name, field) in enumerate(PANELS):
         axis = figure.add_axes([(left + panel * (slot + gap)) / width,
                                 bottom / height, slot / width, body_height / height])
@@ -111,7 +109,6 @@ def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
         for spine in axis.spines.values():
             spine.set_color("#8995a3")
             spine.set_linewidth(0.65)
-        axes.append(axis)
 
     bar_axis = figure.add_axes([0.25, 0.62 / height, 0.5, 0.18 / height])
     colourbar = figure.colorbar(ScalarMappable(norm=norm, cmap=cmap),
@@ -131,61 +128,31 @@ def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
     renderer.draw()
     rgba = np.asarray(renderer.buffer_rgba())
     pixel_h, pixel_w = rgba.shape[:2]
-    def box(axis):
-        a, b, w, h = axis.get_window_extent().bounds
-        return (round(a), round(pixel_h - b - h), round(a + w), round(pixel_h - b))
-    panel_boxes = tuple(box(axis) for axis in axes)
-    bar_box = box(bar_axis)
     write_rgb_png(path, pixel_w, pixel_h,
                   (row[:, :3].tobytes() for row in rgba))
     figure.clear()
-    return HeatmapImage(series.name, path, index, count, *bounds, len(series),
-                        panel_boxes=panel_boxes, colourbar_box=bar_box)
-
-
-@dataclass
-class HeatmapReport:
-    """Everything one heat-map run produced, including the data it read."""
-
-    map_path: str
-    out_dir: str
-    data: MaterialMapData
-    images: list[HeatmapImage]
 
 
 def render_heatmaps(map_path: str, out_dir: str, *,
-                    options: Optional[HeatmapOptions] = None,
-                    layers: Optional[Sequence[str]] = None) -> HeatmapReport:
+                    options: Optional[HeatmapOptions] = None) -> list[Path]:
     """Render one kx/ky/kz heat map per layer of *map_path* into *out_dir*."""
     opts = options or HeatmapOptions()
     data = read_materialmap(map_path)
-    wanted = None if layers is None else list(dict.fromkeys(layers))
-    if wanted is not None:
-        known = {series.name for series in data.series}
-        unknown = [name for name in wanted if name not in known]
-        if unknown:
-            raise VisualizeError(
-                f"{map_path}: no such layer(s): {', '.join(unknown)}")
-        selected = [series for series in data.series if series.name in set(wanted)]
-    else:
-        selected = list(data.series)
-    if not selected:
-        raise VisualizeError(f"{map_path}: no layer to draw")
-
-    bounds = [series.k_bounds() for series in selected]
+    bounds = [series.k_bounds() for series in data.series]
     if opts.shared_scale:
         low = min(item[0] for item in bounds)
         high = max(item[1] for item in bounds)
-        bounds = [(low, high)] * len(selected)
+        bounds = [(low, high)] * len(data.series)
 
-    os.makedirs(out_dir, exist_ok=True)
+    directory = Path(out_dir)
+    directory.mkdir(parents=True, exist_ok=True)
     used: set[str] = set()
-    images: list[HeatmapImage] = []
-    for position, (series, series_bounds) in enumerate(zip(selected, bounds), start=1):
+    images: list[Path] = []
+    for position, (series, series_bounds) in enumerate(zip(data.series, bounds), start=1):
         stem = unique_image_stem(series.name, used)
-        path = os.path.join(out_dir, f"{stem}.png")
-        images.append(render_layer_heatmap(
+        path = directory / f"{stem}.png"
+        render_layer_heatmap(
             series, data, series_bounds, path,
-            index=position, count=len(selected), options=opts))
-    return HeatmapReport(map_path=map_path, out_dir=out_dir, data=data,
-                         images=images)
+            index=position, count=len(data.series), options=opts)
+        images.append(path)
+    return images

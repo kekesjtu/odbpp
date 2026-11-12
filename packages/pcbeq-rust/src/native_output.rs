@@ -7,7 +7,7 @@ use std::{
 };
 pub struct Writer {
     handle: Option<BufWriter<File>>,
-    pub temporary: PathBuf,
+    temporary: PathBuf,
     pub destination: PathBuf,
     pub regions: usize,
     pub cells: usize,

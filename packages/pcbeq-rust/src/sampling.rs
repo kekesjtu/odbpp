@@ -8,7 +8,7 @@ pub fn integrate_pixels(
     windows: Vec<Window>,
     materials: [f64; 6],
     minimum: usize,
-) -> Result<Vec<Option<[f64; 6]>>, String> {
+) -> Result<Vec<Option<[f64; 5]>>, String> {
     if px.checked_mul(py_count) != Some(pixels.len())
         || px == 0
         || py_count == 0
@@ -77,7 +77,6 @@ pub fn integrate_pixels(
                 let density = phi * d1 + (1. - phi) * d2;
                 let cp = (phi * d1 * c1 + (1. - phi) * d2 * c2) / density;
                 out[i] = Some([
-                    phi,
                     kx / rows as f64,
                     ky / cols as f64,
                     phi * k1 + (1. - phi) * k2,
@@ -102,7 +101,7 @@ mod tests {
         let values = integrate_pixels(&horizontal, 4, 4, vec![(0, 4, 0, 4)], materials, 1).unwrap()
             [0]
         .unwrap();
-        let expected = [0.5, 200.5, 2. / (1. / 400. + 1.), 200.5, 5000., 520.];
+        let expected = [200.5, 2. / (1. / 400. + 1.), 200.5, 5000., 520.];
         for (actual, expected) in values.into_iter().zip(expected) {
             assert!((actual - expected).abs() < 1e-10);
         }
@@ -110,8 +109,8 @@ mod tests {
         let rotated = integrate_pixels(&vertical, 4, 4, vec![(0, 4, 0, 4)], materials, 1).unwrap()
             [0]
         .unwrap();
-        assert!((rotated[1] - values[2]).abs() < 1e-10);
-        assert!((rotated[2] - values[1]).abs() < 1e-10);
+        assert!((rotated[0] - values[1]).abs() < 1e-10);
+        assert!((rotated[1] - values[0]).abs() < 1e-10);
     }
 
     #[test]
@@ -154,7 +153,6 @@ mod tests {
             let density = phi * 8960. + (1. - phi) * 1850.;
             let cp = (phi * 8960. * 385. + (1. - phi) * 1850. * 1100.) / density;
             for (actual, expected) in result.unwrap().into_iter().zip([
-                phi,
                 kx,
                 ky,
                 phi * 385. + (1. - phi) * 0.3,
