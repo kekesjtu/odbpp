@@ -990,6 +990,7 @@ dependencies = [
 [package.optional-dependencies]
 test = [
     { name = "pytest" },
+    { name = "shapely" },
 ]
 
 [package.metadata]
@@ -997,6 +998,7 @@ requires-dist = [
     { name = "pcbeq-rust", editable = "packages/pcbeq-rust" },
     { name = "pcbkit-rust", editable = "packages/pcbkit-rust" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
+    { name = "shapely", marker = "extra == 'test'", specifier = ">=2.0" },
 ]
 provides-extras = ["test"]
 
@@ -1011,7 +1013,6 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pydantic" },
-    { name = "shapely" },
 ]
 
 [package.metadata]
@@ -1019,7 +1020,6 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "shapely", specifier = ">=2.0" },
 ]
 
 [[package]]

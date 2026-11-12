@@ -14,4 +14,6 @@
 
 案例管道默认调用 `pcbkit-rust`、`pcbeq-rust`。目录与清单见[输出与发布](../docs/decisions/output-publication.md)。
 
-基准默认预热一次。每轮从 JSON 读取和校验计时，包含几何规划、采样、等效和 MaterialMap 写入关闭及发布操作。导入、预热、诊断报告序列化、图片和物理磁盘落盘不计入 MaterialMap 耗时。基准结果可写到任务专属 `tmp/YYYY-MM-DD-slug/`。
+Python 等效管线从 `PATH` 定位独立的 `pcbeq`，也可设置 `PCBEQ_EXE` 为可执行文件路径。分发验证可用 `--pcbeq-exe` 指定单独交付的二进制文件。
+
+基准默认预热一次，每轮启动独立计算进程。从 Rust 内部 JSON 读取和校验计时，包含几何规划、采样、等效和 MaterialMap 写入关闭及发布操作；子进程墙钟时间另行记录。导入、预热、诊断报告序列化、图片和物理磁盘落盘不计入 MaterialMap 耗时。基准结果可写到任务专属 `tmp/YYYY-MM-DD-slug/`。

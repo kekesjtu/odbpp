@@ -1,7 +1,7 @@
 //! Whole-ring spatial filtering preserves enclosing contours and island/hole parity.
 use crate::{
+    Result,
     document::Polygon,
-    geos::Result,
     raster::{Axis, PreparedRaster},
 };
 type Edge = (f64, f64, f64, f64);

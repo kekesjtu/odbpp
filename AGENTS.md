@@ -86,7 +86,7 @@ pcbkit / pcbeq AI 协作开发指南，说明项目结构、开发规范和文�
 
 使用 uv 管理 Python 解释器、依赖与仓库本地 `.venv`。
 `.python-version` 固定解释器版本，`pyproject.toml` 声明依赖，`uv.lock` 纳入版本控制。
-Rust 使用 Cargo workspace；`Cargo.lock` 纳入版本控制，PyO3 扩展由 Maturin 构建。
+Rust 使用 Cargo workspace；`Cargo.lock` 纳入版本控制。解析器的 PyO3 扩展由 Maturin 构建；等效器由 Cargo 构建独立 CLI，Python 管线与绘图独立打包。
 
 ### 3.6 产物
 

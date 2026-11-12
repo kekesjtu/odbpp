@@ -1,7 +1,7 @@
 //! Complete native JSON -> MaterialMap path. No Python objects cross this boundary.
 use crate::{
+    Result,
     document::{Board, Polygon},
-    geos::{Geos, Result},
     native_materials::Materials,
     native_mesh,
     native_output::Writer,
@@ -48,7 +48,6 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
         config = merge_config(base, config)?;
     }
     let mut materials = Materials::new(config)?;
-    let engine = Geos::open(Path::new(&options.geos_library))?;
     let step = &mut document.steps[0];
     for domain in &mut step.domains {
         normalize(&mut domain.polygons);
@@ -57,9 +56,9 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
         normalize(&mut layer.polygons);
     }
     let geometry_start = Instant::now();
-    let geometry = planning::plan(&engine, step, &options)?;
+    let geometry = planning::plan(step, &options)?;
     let geometry_end = Instant::now();
-    let mesh = native_mesh::build(&engine, step, &geometry, &options)?;
+    let mesh = native_mesh::build(step, &geometry, &options)?;
     let mesh_end = Instant::now();
     let drills = native_sampling::drills(step)?;
     let publication = crate::native_publication::Publication::new(output)?;
@@ -135,7 +134,7 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
         "cells":writer.cells,"regions":writer.regions,"layers":layers,"raster":mesh.pixels,
         "cells_per_s":writer.cells as f64/elapsed,"materialmap_bytes":fs::metadata(&writer.destination).map_err(|e|e.to_string())?.len(),
         "warnings":materials.warnings,"numerical_backend":"rust","execution":"native-json-to-materialmap",
-        "native_geometry_operations":engine.timings(),"raster_sampling":mesh.raster_report});
+        "geometry_backend":"geo","raster_sampling":mesh.raster_report});
     let grid_regions:Vec<_>=geometry.rectangles.iter().zip(&mesh.axes).enumerate().map(|(i,(r,(x,y)))|
         json!({"region_id":i,"bounds_mm":{"x":[r[0],r[2]],"y":[r[1],r[3]]},"grid_counts":{"x":x.len()-1,"y":y.len()-1,"z":1}})).collect();
     let mut audit = json!({"numerical_backend":"rust","execution":"native-json-to-materialmap","step":step.name,

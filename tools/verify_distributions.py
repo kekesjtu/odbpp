@@ -16,9 +16,14 @@ def main():
     parser.add_argument('--offline', action='store_true')
     parser.add_argument('--cache-dir', type=Path, help='reuse an existing uv package cache')
     parser.add_argument('--backend', choices=('rust',), default='rust')
+    parser.add_argument('--pcbeq-exe', help='standalone pcbeq binary; defaults to PCBEQ_EXE or PATH')
     args = parser.parse_args()
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    binary = shutil.which(args.pcbeq_exe or os.environ.get('PCBEQ_EXE') or 'pcbeq')
+    if binary is None:
+        parser.error('build pcbeq and provide --pcbeq-exe or PCBEQ_EXE')
+    os.environ['PCBEQ_EXE'] = str(Path(binary).resolve())
     uv = [shutil.which('uv'), '--cache-dir', str(args.cache_dir or output / 'uv-cache')]
     if args.offline:
         uv.append('--offline')
@@ -61,6 +66,7 @@ def main():
     if not resolved.is_relative_to(output) or resolved == output:
         raise ValueError('unsafe detached fixture cleanup')
     shutil.rmtree(resolved)
+    call([binary, 'run', str(output / 'parser/intermediate.json'), '-o', str(output / 'standalone'), '--px', '64', '--py', '64', '--max-cell-mm', '10'])
     call([executables['pcbeq'], 'run', str(output / 'parser/intermediate.json'), '-o', str(output / 'consumer'), '--px', '64', '--py', '64', '--max-cell-mm', '10'])
     call([sys.executable, str(ROOT / 'tools/run_pipeline.py'), str(ROOT / 'cases/minimal-test-odb'), '-o', str(output / 'pipeline-case'), '--pcbkit-exe', executables['pcbkit'], '--pcbeq-exe', executables['pcbeq'], '--px', '64', '--py', '64', '--max-cell-mm', '10'])
     (output / 'validation.json').write_text(json.dumps({'backend': args.backend, 'separate_installations': True, 'sdist_rebuilt': True, 'source_removed_before_consumer': True, 'pipeline': json.loads((output / 'pipeline-case/pipeline/run.json').read_text(encoding='utf-8'))}, indent=2) + '\n', encoding='utf-8')

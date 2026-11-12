@@ -1,7 +1,8 @@
 //! FAST-style non-overlapping rectangle approximation: largest foreground seed,
 //! area-weighted foreground/background benefit, then coordinate ascent of its edges.
 use crate::{
-    geos::{Result, Shape},
+    Result,
+    geometry::Shape,
     rectangles::{self, Rect},
     topology::Source,
 };
@@ -21,38 +22,31 @@ mod mask;
 use integral::Integral;
 use mask::Mask;
 
-fn audit(
-    original: &Shape<'_>,
-    source: &Source<'_>,
-    rectangles: &[Rect],
-    ratio: f64,
-) -> Result<Value> {
-    let model = original.engine.rectangles(rectangles)?;
-    let original_area = original.area()?;
-    let lost = original.difference(&model)?.area()?;
-    let gained = model.difference(original)?.area()?;
-    let topology = source.topology(&model)?;
-    Ok(
-        json!({"ok":lost+gained<=ratio*original_area+1e-8 && topology["preserved"]==true,
+fn audit(original: &Shape, source: &Source, rectangles: &[Rect], ratio: f64) -> Value {
+    let model = Shape::rectangles(rectangles);
+    let original_area = original.area();
+    let lost = original.difference(&model).area();
+    let gained = model.difference(original).area();
+    let topology = source.topology(&model);
+    json!({"ok":lost+gained<=ratio*original_area+1e-8 && topology["preserved"]==true,
         "strategy":"fast-greedy-rectangles","original_area_mm2":original_area,
-        "rectified_area_mm2":model.area()?,"lost_area_mm2":lost,"gained_area_mm2":gained,
+        "rectified_area_mm2":model.area(),"lost_area_mm2":lost,"gained_area_mm2":gained,
         "shape_deviation_mm2":lost+gained,"relative_area_error":(lost+gained)/original_area,
         "net_area_error_mm2":gained-lost,"iou":(original_area-lost)/(original_area+gained),
         "rectangle_count":rectangles.len(),"audit":{"topology":topology,
-        "non_overlapping":true,"relative_area_budget":ratio,"area_budget_mm2":ratio*original_area}}),
-    )
+        "non_overlapping":true,"relative_area_budget":ratio,"area_budget_mm2":ratio*original_area}})
 }
 
-pub fn approximate(original: &Shape<'_>, ratio: f64) -> Result<Plan> {
-    let source = Source::new(original)?;
+pub fn approximate(original: &Shape, ratio: f64) -> Result<Plan> {
+    let source = Source::new(original);
     let bounds = original.bounds()?;
-    if original.covers(&original.engine.rectangle(bounds)?)? {
+    if original.covers(&Shape::rectangle(bounds)) {
         return Ok(Plan {
             rectangles: vec![bounds],
-            audit: audit(original, &source, &[bounds], ratio)?,
+            audit: audit(original, &source, &[bounds], ratio),
         });
     }
-    let allowed = original.area()? * ratio;
+    let allowed = original.area() * ratio;
     let mut attempts = vec![];
     for resolution in [128, 256, 512, 1024] {
         for tau in [0.5, 0.75, 0.95] {
@@ -82,7 +76,7 @@ pub fn approximate(original: &Shape<'_>, ratio: f64) -> Result<Plan> {
                 }
                 if remaining + gained <= allowed + 1e-8 {
                     let merged = rectangles::merge(rectangles.clone());
-                    last = audit(original, &source, &merged, ratio)?;
+                    last = audit(original, &source, &merged, ratio);
                     if last["ok"] == true {
                         attempts.push(json!({"resolution":resolution,"tau":tau,"ok":true}));
                         last["audit"]["search"] = json!({"pixels":pixels,"resolution":resolution,

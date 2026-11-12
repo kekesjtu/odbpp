@@ -1,17 +1,5 @@
-use crate::geos::Result;
-use serde::Deserialize;
+use crate::Result;
 use serde_json::{Value, json};
-fn maximum() -> Vec<f64> {
-    vec![5., 5.]
-}
-fn error() -> f64 {
-    0.01
-}
-fn materials() -> Value {
-    json!({})
-}
-#[derive(Deserialize)]
-#[serde(default, deny_unknown_fields)]
 pub struct Options {
     pub px: Option<usize>,
     pub py: Option<usize>,
@@ -20,7 +8,6 @@ pub struct Options {
     pub max_area_error_ratio: f64,
     pub materials: Value,
     pub materials_path: Option<String>,
-    pub geos_library: String,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -28,11 +15,10 @@ impl Default for Options {
             px: None,
             py: None,
             grid_level: None,
-            max_cell_mm: maximum(),
-            max_area_error_ratio: error(),
-            materials: materials(),
+            max_cell_mm: vec![5., 5.],
+            max_area_error_ratio: 0.01,
+            materials: json!({}),
             materials_path: None,
-            geos_library: String::new(),
         }
     }
 }

@@ -1,10 +1,4 @@
-use crate::{
-    document::Step,
-    geos::{Geos, Result},
-    grid,
-    options::Options,
-    planning::Geometry,
-};
+use crate::{Result, document::Step, geometry::Shape, grid, options::Options, planning::Geometry};
 use serde_json::{Value, json};
 pub struct Mesh {
     pub axes: Vec<(Vec<f64>, Vec<f64>)>,
@@ -15,7 +9,7 @@ pub struct Mesh {
     pub minimum: usize,
     pub config: Value,
 }
-pub fn build(engine: &Geos, step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh> {
+pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh> {
     let bounds = geometry.bounds;
     let spans = [bounds[2] - bounds[0], bounds[3] - bounds[1]];
     let mut maximum = options.maximum();
@@ -25,9 +19,12 @@ pub fn build(engine: &Geos, step: &Step, geometry: &Geometry, options: &Options)
         let mut estimates = vec![];
         for layer in step.layers.iter().filter(|l| l.copper()) {
             for ring in layer.polygons.iter().filter(|p| p.island) {
-                let polygon = engine.polygon(&ring.points, &[])?;
-                if !polygon.empty()? && polygon.valid()? && polygon.length()? > 0. {
-                    estimates.push(2. * polygon.area()? / polygon.length()?);
+                let polygon = Shape::polygon(&ring.points, &[])?;
+                let area = polygon.area();
+                let perimeter = polygon.length();
+                // This is a sizing heuristic, not a topology acceptance check.
+                if area > 0. && perimeter > 0. {
+                    estimates.push(2. * area / perimeter);
                 }
             }
         }

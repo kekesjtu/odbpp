@@ -3,7 +3,7 @@ import json
 import pytest
 from shapely.geometry import box
 from shapely.ops import unary_union
-from pcbeq_rust.native import run
+from pcbeq_rust.runner import run
 from pcbeq_rust.materialmap import read_document, iter_cells
 from board_fixture import build_document, rect, hole
 

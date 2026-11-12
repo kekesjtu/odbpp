@@ -30,12 +30,12 @@ def build_parser():
     parser.add_argument('--materials', type=Path, help='production material configuration JSON')
     return parser
 
-def measure_native(source: Path, output: Path, settings: dict, materials_path: Path | None) -> dict:
-    from pcbeq_rust.native import run
+def measure_process(source: Path, output: Path, settings: dict, materials_path: Path | None) -> dict:
+    from pcbeq_rust.runner import run
     gc.collect()
-    cpu_start = time.process_time()
+    wall_start = time.perf_counter()
     result = run(source, output, **settings, materials_path=str(materials_path) if materials_path else None)
-    result['cpu_s'] = time.process_time() - cpu_start
+    result['process_wall_s'] = time.perf_counter() - wall_start
     return result
 
 def main(argv=None) -> int:
@@ -49,11 +49,11 @@ def main(argv=None) -> int:
         parser.error('input must not be overwritten by benchmark outputs')
     errors = (OSError, ValueError, ImportError, RuntimeError)
     try:
-        settings = {'px': args.px, 'py': args.py, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'max_cell_mm': args.max_cell_mm if args.max_cell_mm is not None else [5, 5], 'max_area_error_ratio': args.max_area_error_ratio}
+        settings = {'px': args.px, 'py': args.py, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'max_cell_mm': args.max_cell_mm, 'max_area_error_ratio': args.max_area_error_ratio}
         args.output.mkdir(parents=True, exist_ok=True)
-        report = {'measurement': 'intermediate JSON read/validation through MaterialMap close and rename', 'excluded': ['ODB++ parsing', 'process startup/imports', 'images/HTML', 'benchmark metadata', 'fsync to physical storage'], 'cache_policy': 'same process; normal OS file cache; fresh document/options per run', 'environment': {'python': sys.version, 'platform': platform.platform(), 'processor': platform.processor(), 'cpu_count': os.cpu_count()}, 'backend': args.backend, 'input': {'path': str(args.input.resolve()), 'bytes': args.input.stat().st_size}, 'options': {**settings, 'materials_path': str(args.materials) if args.materials else None}, 'warmup': args.warmup, 'repeat': args.repeat, 'runs': []}
+        report = {'measurement': 'intermediate JSON read/validation through MaterialMap close and rename', 'excluded': ['ODB++ parsing', 'process startup/imports (separately reported in process_wall_s)', 'images/HTML', 'benchmark metadata', 'fsync to physical storage'], 'cache_policy': 'fresh pcbeq process per run; normal OS file cache', 'environment': {'python': sys.version, 'platform': platform.platform(), 'processor': platform.processor(), 'cpu_count': os.cpu_count()}, 'backend': args.backend, 'input': {'path': str(args.input.resolve()), 'bytes': args.input.stat().st_size}, 'options': {**settings, 'materials_path': str(args.materials) if args.materials else None}, 'warmup': args.warmup, 'repeat': args.repeat, 'runs': []}
         for index in range(args.warmup + args.repeat):
-            run = measure_native(args.input, args.output, settings, args.materials)
+            run = measure_process(args.input, args.output, settings, args.materials)
             warmup = index < args.warmup
             if not warmup:
                 report['runs'].append(run)

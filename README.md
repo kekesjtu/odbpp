@@ -9,17 +9,20 @@
 ```powershell
 uv sync --extra test
 uv run pcbkit-rust export cases/minimal-test-odb -o out/example/rust/pcbkit
-uv run pcbeq-rust run out/example/rust/pcbkit/intermediate.json -o out/example/rust/pcbeq --grid-level standard
+cargo build -p pcbeq-rust --release
+target/release/pcbeq.exe run out/example/rust/pcbkit/intermediate.json -o out/example/rust/pcbeq --grid-level standard
+uv run pcbeq-rust plot out/example/rust/pcbeq/materialmap.json
+$env:PCBEQ_EXE = (Resolve-Path target/release/pcbeq.exe).Path
 uv run --extra test pytest
 uv run python tools/sync_contract.py --check
 cargo test --workspace
 ```
 
-独立构建使用 `uv build --package pcbkit-rust` 或 `uv build --package pcbeq-rust`。运行选项见各命令的 `--help)，案例管道见[维护工具](tools/README.md)。
+解析器构建使用 `uv build --package pcbkit-rust`；等效器的单文件发布与可选 Python 管线见 [pcbeq 使用入口](packages/pcbeq-rust/README.md)。运行选项见各命令的 `--help`，案例管道见[维护工具](tools/README.md)。
 
 ## 项目结构
 
-- `packages/pcbkit-rust/`、`packages/pcbeq-rust/`：Rust 核心与各自的 Python 适配/可视化；`crates/`：内部 Rust 几何库。
+- `packages/pcbkit-rust/`：解析器与 Python 适配/预览；`packages/pcbeq-rust/`：独立 Rust 计算 CLI 与可选 Python 管线/绘图；`crates/`：解析器内部 Rust 几何库。
 - `contracts/`：中间 JSON 契约；`tests/`：对应测试与手写夹具。
 - `tools/`：维护工具；`docs/`：决策与领域资料。
 - `cases/`、`out/`：本地案例与正式产物；`tmp/`：可再生任务文件。

@@ -38,10 +38,10 @@ ODB++ 单板目录或压缩包
 | 分发包 | 职责与语言边界 |
 | --- | --- |
 | `pcbkit-rust` | 包内 Python 负责输入调度、Pydantic 契约校验与预览，Rust 负责几何离散、整数布尔和扫掠 |
-| `pcbeq-rust` | 从 JSON 读取校验到 MaterialMap 和数值诊断发布由 Rust 完成。Python 启动命令，并从正式 MaterialMap 渲染图表 |
+| `pcbeq-rust` | 独立 Rust CLI 从 JSON 读取校验到 MaterialMap 和数值诊断发布，可单文件分发。可选 Python 工具通过子进程调用 CLI，并从正式 MaterialMap 渲染图表 |
 
-两个包分别构建 wheel / sdist，各自携带运行模块。uv workspace 锁定 Python 依赖，Cargo workspace 管理 Rust 核心，PyO3 扩展由 Maturin 构建。共享 Rust crate 用于内部几何复用，两个产品通过文件契约独立运行。
+解析器的 wheel / sdist 使用 Maturin 构建 PyO3 扩展。等效器由 Cargo 构建 `pcbeq` 可执行文件，计算不依赖 Python；其 Python 管线和绘图单独构建纯 Python wheel / sdist，通过 `PATH`、`PCBEQ_EXE` 或显式路径定位可执行文件。计算参数及默认值由 Rust CLI 解释，绘图可以独立重跑。uv workspace 锁定 Python 依赖，Cargo workspace 管理 Rust 依赖，两个产品通过文件契约独立运行。
 
-等效器直接调用 GEOS C API 做连续几何检查。GEOS 可从 Shapely wheel 的原生库目录定位，或通过 `PCBEQ_GEOS_LIBRARY` 指定。Rust 扩展缺失时明确报错。验收关注物理区域、拓扑、面积预算和物性容差。
+等效器的平面几何统一使用纯 Rust `geo` 库，Windows 发布静态链接 C 运行库，无需额外 Python、GEOS 或 VC 运行库。验收关注物理区域、拓扑、面积预算和物性容差，不以特定几何库的顶点排列或分块结果为标准。Shapely 仅可用于开发侧独立验收。
 
 `main` 维护 Rust 产品线及其随包 Python 适配。`reference` 同时保留 Python 与 Rust 两条产品线，便于对照。独立安装与跨环境交接见[分发验证工具](../tools/README.md)，数值与图表的发布边界见[输出与发布](decisions/output-publication.md)。
