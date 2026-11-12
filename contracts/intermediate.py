@@ -75,7 +75,7 @@ class LayerModel(ContractModel):
     name: str = Field(min_length=1)
     type: str = Field(min_length=1, description="ODB++ 层类型；等效器明确报告不支持的材料类型。")
     context: Literal["BOARD", "MISC"] = "BOARD"
-    row: StrictInt = Field(default=1, ge=1)
+    row: StrictInt = Field(ge=1, description="matrix ROW；同一 step 内唯一，表达层的上下次序。")
     form: Literal["RIGID", "FLEX"] = "RIGID"
     form_source: Literal["DECLARED", "FLEX_SUBTYPE", "DEFAULT"] = "DEFAULT"
     geometry_status: Literal["ready", "failed", "omitted"] = "ready"
@@ -111,10 +111,13 @@ class StepModel(ContractModel):
     def references(self):
         ids = [d.id for d in self.domains]
         names = [l.name for l in self.layers]
+        rows = [l.row for l in self.layers]
         if len(ids) != len(set(ids)):
             raise ValueError("duplicate domain id")
         if len(names) != len(set(names)):
             raise ValueError("duplicate layer name")
+        if len(rows) != len(set(rows)):
+            raise ValueError("duplicate matrix row")
         domains = {d.id: d for d in self.domains}
         indexed = [l for l in self.layers if l.copper_index is not None]
         copper = {l.copper_index for l in indexed}
@@ -122,6 +125,9 @@ class StepModel(ContractModel):
             raise ValueError("duplicate copper_index")
         if any(l.type not in ("SIGNAL", "POWER_GROUND", "MIXED") or l.context != "BOARD" for l in indexed):
             raise ValueError("copper_index must belong to a BOARD copper layer")
+        ordered = sorted(indexed, key=lambda l: l.copper_index)
+        if any(a.row >= b.row for a, b in zip(ordered, ordered[1:])):
+            raise ValueError("copper_index order must follow matrix rows")
         if self.profile_domain_id is not None:
             if self.profile_domain_id not in domains or domains[self.profile_domain_id].source != "step_profile":
                 raise ValueError("profile_domain_id must reference a step_profile domain")

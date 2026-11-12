@@ -98,20 +98,6 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
                 "dielectric"
             },
         )?;
-        if layer.kind == "DIELECTRIC"
-            && !layer.z_mm.as_ref().unwrap().thickness_known
-            && !drills.is_empty()
-        {
-            if layer.copper_span.is_none() {
-                materials.warnings.push(format!("equiv.drill_z_fallback: layer {:?} has unknown thickness and no copper_span; drill coverage uses best-effort Z", layer.name));
-            } else {
-                if drills.iter().any(|d| {
-                    native_sampling::matched(layer, d) != native_sampling::matched_by_z(layer, d)
-                }) {
-                    materials.warnings.push(format!("equiv.drill_z_mismatch: layer {:?} copper_span differs from best-effort Z; copper-plane topology is used", layer.name));
-                }
-            }
-        }
         let before = Instant::now();
         let (values, report) =
             native_sampling::evaluate(step, layer, &drills, &geometry, &mesh, domain, pair)?;

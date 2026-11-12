@@ -20,9 +20,8 @@ pub fn edges(polygons: &[Polygon]) -> Vec<(f64, f64, f64, f64)> {
         .collect()
 }
 pub struct Drill<'a> {
-    pub layer: &'a Layer,
-    pub span: [usize; 2],
-    pub z: [f64; 2],
+    layer: &'a Layer,
+    endpoint_rows: [u64; 2],
 }
 pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
     if !step
@@ -46,18 +45,16 @@ pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
             .layers
             .iter()
             .find(|l| l.copper_index == Some(span[0]))
-            .and_then(|l| l.z_mm.as_ref())
             .ok_or(format!(
-                "drill layer {:?}: endpoint copper layer missing z_mm",
+                "drill layer {:?}: missing start copper layer",
                 layer.name
             ))?;
         let bottom = step
             .layers
             .iter()
             .find(|l| l.copper_index == Some(span[1]))
-            .and_then(|l| l.z_mm.as_ref())
             .ok_or(format!(
-                "drill layer {:?}: endpoint copper layer missing z_mm",
+                "drill layer {:?}: missing end copper layer",
                 layer.name
             ))?;
         if layer.geometry_status != "ready" {
@@ -68,27 +65,13 @@ pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
         }
         drills.push(Drill {
             layer,
-            span,
-            z: [top.start_mm, bottom.end_mm],
+            endpoint_rows: [top.row, bottom.row],
         });
     }
     Ok(drills)
 }
-pub fn matched(layer: &Layer, drill: &Drill<'_>) -> bool {
-    if let Some([a, b]) = layer.copper_span {
-        return a.max(drill.span[0]) < b.min(drill.span[1]);
-    }
-    matched_by_z(layer, drill)
-}
-pub fn matched_by_z(layer: &Layer, drill: &Drill<'_>) -> bool {
-    let Some(z) = &layer.z_mm else {
-        return false;
-    };
-    if z.end_mm - z.start_mm <= 1e-9 {
-        drill.z[0] - 1e-9 <= z.start_mm && z.start_mm <= drill.z[1] + 1e-9
-    } else {
-        drill.z[0] < z.end_mm - 1e-9 && z.start_mm < drill.z[1] - 1e-9
-    }
+fn matched(layer: &Layer, drill: &Drill<'_>) -> bool {
+    drill.endpoint_rows[0] < layer.row && layer.row < drill.endpoint_rows[1]
 }
 pub fn evaluate(
     step: &Step,

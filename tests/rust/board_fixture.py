@@ -15,12 +15,13 @@ def build_document(*, profile=None, layers=(), domains=None, z=0.035) -> dict:
         "id": "step_profile", "source": "step_profile",         "polygons": [profile],
     }]
     layer_docs = []
-    for spec in layers:
+    for position, spec in enumerate(layers, start=1):
         extent = spec.get("z_mm")
         if extent is None:
             extent = {"start_mm": 0.0, "end_mm": z, "thickness_known": True}
         row = {
             "name": spec["name"],
+            "row": spec.get("row", position),
             "type": spec.get("type", "SIGNAL"),
             "polygons": spec.get("polygons", []),
             "domain_id": spec.get("domain_id", "step_profile"),
@@ -42,9 +43,13 @@ def drill_document(**kwargs):
     for layer in layers:
         if layer["type"] in ("DIELECTRIC", "DRILL"):
             layer["copper_span"] = [0, 1]
-    layers[:0] = [
+    endpoints = [
         {"name": name, "type": "SIGNAL", "polygons": [],
          "domain_id": "step_profile", "copper_index": index,
          "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": True}}
         for index, name in enumerate(("ENDPOINT_TOP", "ENDPOINT_BOTTOM"))]
+    layers.insert(0, endpoints[0])
+    layers.append(endpoints[1])
+    for position, layer in enumerate(layers, start=1):
+        layer["row"] = position
     return document

@@ -29,6 +29,7 @@ uv run python tools/sync_contract.py --check
 | step `profile_domain_id` | `domains` 中整板实体范围的引用 |
 | step `domains` | `{id, source, polygons}`。保存整板或层轮廓围成的实体范围，可被多层引用 |
 | step `layers` | 按 matrix row 排列的完整层目录；唯一存储层类型、上下文、Z、跨度、厚度来源与图案 |
+| layer `row` | 必填正整数，同一 step 内唯一；matrix 层序的权威来源，钻孔覆盖按端点铜层和介质的 row 判断 |
 | layer `domain_id` | 层实体范围的引用。等效器再与整板实体范围求交得到层有效计算域 |
 | layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
 | layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
@@ -36,7 +37,7 @@ uv run python tools/sync_contract.py --check
 | layer `z_mm` | `{start_mm, end_mm, thickness_known, source}`；实体物理层自身的位置；DRILL 不导出 |
 | layer `thickness` | 本层厚度可信状态与原始物理量来源；保留原始量追溯；数值厚度由 Z 差得到 |
 | layer `copper_index` | 铜层自顶向下的索引 |
-| layer `copper_span` | 介质或钻孔跨越的两个铜层索引；不重复保存端点名称 |
+| layer `copper_span` | 钻孔起止铜层索引，或介质的相邻铜层索引；外侧介质可为空，介质跨度不参与钻孔覆盖判断 |
 | layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
 
 轮廓、实体范围与有效计算域的区别见[项目架构](../architecture.md#从轮廓到有效计算域)。
@@ -65,8 +66,8 @@ uv run python tools/sync_contract.py --check
 厚度缺失时允许零厚度 best-effort Z，并明确 false；不以严格正厚度约束拒绝这种合法解析状态。
 钻孔仅保存投影多边形和 `copper_span` 来描述几何与深度；层身份和解析状态仍保留。
 需要绝对 Z 时，以起点铜层 `z_mm.start_mm` 和终点铜层 `z_mm.end_mm` 推导，不能生成独立实体厚度层。
-未知厚度下仍以 `copper_span` 确定钻孔拓扑，不能仅凭重合的估算 Z 视为贯穿全板。
-跨度端点须引用层目录中的实际铜层索引；需要介质采样时，无拓扑跨度或端点铜层缺少 Z 均明确报错。
+钻孔的 `copper_span` 端点须引用层目录中的实际铜层索引，铜层索引顺序须与 matrix row 一致。覆盖条件为 `起点铜层.row < 介质层.row < 终点铜层.row`，不依赖层厚、绝对 Z 或介质自身的跨度。最外侧铜层之外的介质不被覆盖。
+需要介质采样时，钻孔缺少拓扑跨度或无法定位端点铜层均明确报错。绝对 Z 仅用于三维尺寸；未知厚度或重合的估算 Z 不改变覆盖关系。
 无有效域、失败/未导出的待等效层、介质采样所需钻孔跨度未知仍阻止生成正式结果。
 铜层忽略 DRILL，仅铜层输入不要求钻孔跨度。
 原始层极性、轮廓基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，

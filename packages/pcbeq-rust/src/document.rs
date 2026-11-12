@@ -20,9 +20,6 @@ fn ready() -> String {
 fn unknown() -> String {
     "unknown".into()
 }
-fn one() -> u64 {
-    1
-}
 fn resolution() -> f64 {
     0.0001
 }
@@ -70,8 +67,7 @@ pub struct Layer {
     pub kind: String,
     #[serde(default = "board")]
     pub context: String,
-    #[serde(default = "one")]
-    row: u64,
+    pub row: u64,
     #[serde(default = "rigid")]
     form: String,
     #[serde(default = "default_form")]

@@ -12,18 +12,15 @@ The model used here is deliberately coarse but honest:
 * Copper layers define **planes**.  Planes are indexed ``0..n-1`` from the top of
   the matrix down.
 * A **dielectric** between the copper at index ``i`` and the copper at index
-  ``j`` occupies the half-open interval ``(i, j)``.  The interval is derived from
-  ``CU_TOP``/``CU_BOTTOM`` when those UIDs resolve (spec p.66-67), and otherwise
-  from the neighbouring copper layers in matrix row order -- which is the only
-  ordering the matrix guarantees, and the one research 03 says to use.
+  ``j`` has the neighbouring copper span ``(i, j)`` in matrix row order.
+  Exterior dielectrics have no such span, but their matrix rows are still known.
 * A **drill** from ``START_NAME`` to ``END_NAME`` occupies ``(a, b)`` where
   ``a``/``b`` are the copper indices those names resolve to.
 
-Half-open intervals are what make the overlap test the ordinary one: a drill
-that ends at plane ``b`` opens no hole in the dielectric *below* ``b``.  A span
-that cannot be resolved is reported and never guessed -- inferring "through the
-whole board" from a missing field would silently punch 9 unnecessary holes in a
-43-layer rigid-flex board.
+Drill coverage uses only matrix rows: a dielectric is crossed exactly when its
+row lies strictly between the endpoint copper rows. Thickness and absolute Z
+do not participate; exterior dielectrics are outside every resolved drill span.
+Unresolved drill endpoints are reported rather than guessed.
 
 Thickness comes from ``.layer_dielectric``, interpreted with the unit scope of
 the file that declared it.  That scope is the part the old export dropped: the
@@ -48,7 +45,6 @@ from typing import Optional
 
 from .diagnostics import (
     ATTR_LAYER_DIELECTRIC_ON_COPPER,
-    STACKUP_DIELECTRIC_SPAN_UNKNOWN,
     STACKUP_DRILL_SPAN_UNKNOWN,
     STACKUP_THICKNESS_UNKNOWN,
     Diagnostics,
@@ -74,9 +70,6 @@ class ZSpan:
     @property
     def is_valid(self) -> bool:
         return self.end > self.start
-
-    def overlaps(self, other: "ZSpan") -> bool:
-        return self.start < other.end and other.start < self.end
 
     def as_dict(self) -> list[int]:
         return [self.start, self.end]
@@ -167,10 +160,6 @@ class Stackup:
         self._copper_by_name: dict[str, int] = {
             l.name.casefold(): index for index, l in enumerate(self.copper_layers)
         }
-        self._copper_by_uid: dict[int, int] = {
-            l.ref.uid: index for index, l in enumerate(self.copper_layers)
-            if l.ref.uid is not None
-        }
         self._position: dict[str, int] = {
             l.name.casefold(): index for index, l in enumerate(self.board_layers)
         }
@@ -218,24 +207,9 @@ class Stackup:
     # ---------------------------------------------------------------- spans
 
     def dielectric_span(self, layer: Layer) -> Optional[ZSpan]:
-        """Copper interval a dielectric layer fills, or ``None`` if unknown."""
-        ref = layer.ref
-        if ref.cu_top is not None and ref.cu_bottom is not None:
-            top = self._copper_by_uid.get(ref.cu_top)
-            bottom = self._copper_by_uid.get(ref.cu_bottom)
-            if top is not None and bottom is not None and bottom > top:
-                return ZSpan(top, bottom)
-
+        """Neighbouring copper indices, or ``None`` for an exterior dielectric."""
         above, below = self._neighbouring_copper(layer)
         if above is None or below is None or below <= above:
-            self._warn_once(
-                f"dielectric-span:{layer.name}",
-                STACKUP_DIELECTRIC_SPAN_UNKNOWN,
-                f"dielectric layer {layer.name!r} is not bracketed by two copper "
-                f"layers in matrix row order, so the drills that pass through it "
-                f"cannot be determined; its material is left unperforated",
-                layer.dir_name or None,
-            )
             return None
         return ZSpan(above, below)
 
@@ -256,7 +230,7 @@ class Stackup:
                 STACKUP_DRILL_SPAN_UNKNOWN,
                 f"drill layer {layer.name!r} declares START_NAME="
                 f"{ref.start_name!r}/END_NAME={ref.end_name!r}, which do not both "
-                f"resolve to copper layers; its Z interval is unknown and it is "
+                f"resolve to copper layers; its matrix coverage is unknown and it is "
                 f"not projected into any dielectric",
                 layer.dir_name or None,
             )
@@ -293,20 +267,15 @@ class Stackup:
         return [l for l in self.board_layers if l.type is LayerType.DRILL]
 
     def drills_through(self, layer: Layer) -> list[Layer]:
-        """Drill layers whose Z interval overlaps *layer*'s.
-
-        Empty when either side's span is unknown -- an unresolved span is a
-        reported data problem, not a licence to guess.
-        """
-        span = self.span_of(layer)
-        if span is None:
+        """Drills whose endpoint copper rows strictly bracket the dielectric."""
+        if layer.type is not LayerType.DIELECTRIC or layer.ref.context is not LayerContext.BOARD:
             return []
         out = []
         for drill in self.drill_layers():
-            if drill is layer:
-                continue
             other = self.drill_span(drill)
-            if other is not None and span.overlaps(other):
+            if (other is not None
+                    and self.copper_layers[other.start].ref.row < layer.ref.row
+                    < self.copper_layers[other.end].ref.row):
                 out.append(drill)
         return out
 

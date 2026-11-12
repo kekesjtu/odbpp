@@ -47,10 +47,8 @@
 | code | 条件与含义 |
 | --- | --- |
 | `materials.default_used` | 至少一个材料字段采用项目默认值。消息列出 `copper` 或 `base` 及其字段；相同消息跨层去重，各层具体来源由 `materials.by_layer` 定位 |
-| `equiv.drill_z_fallback` | 介质层的 Z 不可信、存在 BOARD 钻孔，且介质层无 `copper_span`；钻孔覆盖使用 best-effort Z |
-| `equiv.drill_z_mismatch` | 介质层的 Z 不可信、存在 BOARD 钻孔且有 `copper_span`，但至少一个钻孔的拓扑覆盖结论与 best-effort Z 不一致；采用铜层拓扑跨度 |
 
-Z 不可信本身不单独产生告警。非物理层跳过由 `layers` 记录。输入无效、必要跨度无法解析、几何约束不满足、采样不足或发布失败均作为错误终止。编译器、Clippy 和构建缓存告警不进入本文件。
+Z 不可信本身不单独产生告警。钻孔覆盖仅根据 matrix 层序和起止铜层判断，层厚与绝对 Z 不参与该判断。非物理层跳过由 `layers` 记录。输入无效、必要跨度无法解析、几何约束不满足、采样不足或发布失败均作为错误终止。编译器、Clippy 和构建缓存告警不进入本文件。
 
 ## 层与材料
 
