@@ -27,10 +27,10 @@ uv run python tools/sync_contract.py --check
 | 根 `source` | 输入路径、job root、输入单位、产品名称及 ODB++ 版本；手工合成数据可省略 |
 | 根 `steps` | 恰好一个单板 step，不支持矩阵拼板和嵌套引用 |
 | step `profile_domain_id` | `domains` 中整板实体范围的引用 |
-| step `domains` | `{id, source, polygons}`。保存整板或层轮廓围成的实体范围，可被多层引用 |
+| step `domains` | `{id, source, polygons}`。保存规整后的整板或层实体范围；层域包含继承的 step 孔，可被多层引用 |
 | step `layers` | 按 matrix row 排列的完整层目录；唯一存储层类型、上下文、Z、跨度、厚度来源与图案 |
 | layer `row` | 必填正整数，同一 step 内唯一；matrix 层序的权威来源，钻孔覆盖按端点铜层和介质的 row 判断 |
-| layer `domain_id` | 层实体范围的引用。等效器再与整板实体范围求交得到层有效计算域 |
+| layer `domain_id` | 完整层实体范围的引用，直接作为该层有效计算域，保留伸出整板轮廓的部分 |
 | layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
 | layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
@@ -39,7 +39,7 @@ uv run python tools/sync_contract.py --check
 | layer `start_layer/end_layer` | DRILL 起止铜层名称；引用同一 step 的 BOARD 铜层，按 row 自顶向下排列；其他层不保存端点 |
 | layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
 
-轮廓、实体范围与有效计算域的区别见[项目架构](../architecture.md#从轮廓到有效计算域)。
+有层轮廓时，解析器从层岛中扣除层孔与 step 孔的并集；缺少层轮廓时使用完整 step 实体范围。`domains` 交付最终实体多边形，消费者直接使用层域，不重复叠加 step 孔或按 step 岛裁剪，也不要求层域包含于整板域。轮廓、实体范围与有效计算域的区别见[项目架构](../architecture.md#从轮廓到有效计算域)。
 
 所有坐标使用输入 step 原点，不重新居中；XY 中 Y 向上；Z 从叠层顶面向下。
 `polygons[].points` 为二维数组，末尾不重复首点；岛顺时针，孔逆时针，嵌套岛保持独立正向环。

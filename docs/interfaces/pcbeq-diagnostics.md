@@ -76,7 +76,7 @@ Z 错误记录 `code`、`message`、`layers`、`blocking=false`、`estimated_z_m
 | --- | --- |
 | `read_validate` | 参数检查、JSON 读取与契约校验 |
 | `prepare` | 材料配置、坐标规整、层前置检查、钻孔关系等准备 |
-| `effective_domains` | 层与整板范围求交、有效几何去重 |
+| `effective_domains` | 完整层实体范围准备、有效几何去重 |
 | `rectification` | region 近似搜索、面积与内部几何约束验收 |
 | `mesh` | 局部网格划分与采样窗口准备 |
 | `sampling` | 材料几何索引准备与局部光栅生成 |

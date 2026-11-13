@@ -36,9 +36,9 @@ def test_native_area_budget_preserves_slopes_and_connections(tmp_path, points, r
     assert modeled.geom_type == "Polygon"
 
 
-def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent(tmp_path):
-    duplicate = rect(-1, -1, 11, 11)
-    duplicate["points"].reverse()
+def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_collinear_points(tmp_path):
+    duplicate = {"island": True,
+                 "points": [(6, 10), (6, 5), (10, 5), (10, 0), (5, 0), (0, 0), (0, 10)]}
     document = build_document(domains=[
         {"id": "step_profile", "source": "step_profile", "polygons": [{"island": True,
          "points": [(0, 0), (10, 0), (10, 5), (6, 5), (6, 10), (0, 10)]}]},
@@ -72,6 +72,20 @@ def test_distinct_profiles_do_not_split_each_others_regions(tmp_path):
     assert regions["LEFT"].bounds_mm.x == (0, 3)
     report = json.loads((output / "diagnostics.json").read_text())["geometry"]
     assert len(report["profiles"]) == 2
+
+
+def test_profiles_differing_only_outside_step_are_not_reused(tmp_path):
+    document = build_document(domains=[
+        {"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
+        {"id": "extended", "source": "layer_profile", "polygons": [rect(-1, -1, 11, 11)]},
+    ], layers=[{"name": "BOARD"}, {"name": "EXTENDED", "domain_id": "extended"}])
+    _, delivered, output = execute(document, tmp_path)
+    regions = {r.layer.name: r for r in delivered.regions}
+    assert regions["BOARD"].bounds_mm.x == (0, 10)
+    assert regions["EXTENDED"].bounds_mm.x == (-1, 11)
+    report = json.loads((output / "diagnostics.json").read_text())
+    assert report["geometry"]["profile_count"] == 2
+    assert sorted(p["area"]["original_mm2"] for p in report["accuracy"]["profiles"].values()) == [100, 144]
 
 
 def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):

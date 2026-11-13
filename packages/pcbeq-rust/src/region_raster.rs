@@ -45,16 +45,20 @@ pub fn build(
                 local[i] = (lo, (hi - lo) / count as f64, count);
                 indices[i] = (0..=n).map(|j| j * per_cell).collect();
             } else {
-                let start = raster::pixel_index(lo, reference[i]);
-                let end = raster::pixel_index(hi, reference[i]);
+                // Extend the reference lattice beyond the board bounding box.
+                // Keep signed offsets until shifting to this region's origin.
+                let lattice_index =
+                    |v: f64| ((v - reference[i].0) / reference[i].1 - 0.5 - 1e-9).ceil();
+                let start = lattice_index(lo);
+                let end = lattice_index(hi);
                 local[i] = (
-                    reference[i].0 + start as f64 * reference[i].1,
+                    reference[i].0 + start * reference[i].1,
                     reference[i].1,
-                    end - start,
+                    (end - start) as usize,
                 );
                 indices[i] = lines
                     .iter()
-                    .map(|&v| raster::pixel_index(v, reference[i]) - start)
+                    .map(|&v| (lattice_index(v) - start) as usize)
                     .collect();
             }
         }

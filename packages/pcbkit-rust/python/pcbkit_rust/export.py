@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from typing import Iterator, Optional, Sequence
-from .clipper import Ring, region_from_geometry, snap_to_grid
+from .clipper import Ring, layer_profile_region, region_from_geometry, snap_to_grid
 from .diagnostics import (
     EXPORT_DEGENERATE_RING,
     EXPORT_LAYER_FAILED,
@@ -656,7 +656,8 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
     they say nothing about where the layer exists at all.  This array is that
     domain, resolved with the constraint 3 priority rule:
 
-    * a valid layer profile wins (``source: layer_profile``);
+    * a valid layer profile inherits step holes (``source: layer_profile``),
+      without clipping its islands to step islands;
     * otherwise the step profile applies (``source: step_profile``);
     * a layer profile that exists but cannot be parsed is *not* silently
       replaced by the step profile: it sets ``geometry_error`` and leaves
@@ -668,18 +669,17 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
 
     Returns ``(domains, mapping)`` where *mapping* is keyed by layer name.
     """
-    from .clipper import region_from_geometry
-
     domains: list[dict] = []
     mapping: dict[str, dict] = {}
     seen: dict[int, str] = {}
 
     step = preview.step
+    tessellation = preview.expansion_options.tessellation if preview.expansion_options else None
     step_domain_id: Optional[str] = None
     if step.profile is not None:
         step_domain_id = "step_profile"
         region, collapsed = snap_to_grid(
-            region_from_geometry(step.profile), round_digits
+            region_from_geometry(step.profile, tessellation), round_digits
         )
         if collapsed:
             preview.diagnostics.warn(
@@ -707,7 +707,7 @@ def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], 
             if domain_id is None:
                 domain_id = f"layer_profile:{layer.name}"
                 region, _collapsed = snap_to_grid(
-                    region_from_geometry(layer.profile), round_digits
+                    layer_profile_region(step, layer, tessellation), round_digits
                 )
                 domains.append(_domain_json(domain_id, "layer_profile", region, round_digits))
                 seen[key] = domain_id

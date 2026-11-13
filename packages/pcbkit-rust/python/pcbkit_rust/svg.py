@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Mapping, Optional, Sequence
 
-from .clipper import Ring, region_from_geometry, snap_to_grid
+from .clipper import Ring, layer_profile_region, region_from_geometry, snap_to_grid
 from .drawing import dielectric_drill_cutouts
 from .export import (
     LayerPreview,
@@ -324,8 +324,9 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
             continue
         out.append(f'<g {attributes}><path d="{data}"/></g>')
 
+    tessellation = view.expansion_options.tessellation if view.expansion_options else None
     if view.step.profile is not None:
-        profile, _ = snap_to_grid(region_from_geometry(view.step.profile), digits)
+        profile, _ = snap_to_grid(region_from_geometry(view.step.profile, tessellation), digits)
         out.append(f'<path id="odb-profile" d="{path_data(profile.rings, digits)}" '
                    'fill="none" stroke="#c9d1d9" stroke-width="1" '
                    'vector-effect="non-scaling-stroke" pointer-events="none"/>')
@@ -334,7 +335,7 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
     for index, layer in enumerate(chosen):
         profile = layer.layer.profile if layer.layer.profile is not None else view.step.profile
         if profile is not None and layer.layer.profile_error is None:
-            domain, _ = snap_to_grid(region_from_geometry(profile), digits)
+            domain, _ = snap_to_grid(layer_profile_region(view.step, layer.layer, tessellation), digits)
             out.append(f'<path data-name="{_escape(layer.name)}" '
                        f'd="{path_data(domain.rings, digits)}" style="display:none" '
                        'stroke-width="1.5" vector-effect="non-scaling-stroke"/>')

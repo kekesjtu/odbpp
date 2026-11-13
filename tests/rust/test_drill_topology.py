@@ -129,7 +129,7 @@ def test_diagnostics_group_layers_and_support_independent_audit(tmp_path):
     document = build_document(domains=[
         {"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
         {"id": "left", "source": "layer_profile", "polygons": [rect(0, 0, 3, 10)]},
-        {"id": "duplicate", "source": "layer_profile", "polygons": [rect(-1, -1, 11, 11)]},
+        {"id": "duplicate", "source": "layer_profile", "polygons": [rect(0, 0, 10, 10)]},
     ], layers=[{"name": "ALL"}, {"name": "LEFT", "domain_id": "left"},
                {"name": "COPY", "domain_id": "duplicate",
                 "z_mm": {"start_mm": 1, "end_mm": 2, "thickness_known": False}}])

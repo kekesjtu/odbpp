@@ -729,11 +729,8 @@ def expand_layer(
     worth spelling out because getting it wrong is dramatic rather than subtle:
 
     ``DIELECTRIC``
-        Starts from the base polygon of requirements.md parser constraint 3 -- the layer's own
-        ``profile``, else the step profile.  The constraint is worded for
-        dielectric layers specifically ("the dielectric layer's base polygon
-        inherits the board outline"), and it is right: a dielectric layer
-        physically exists wherever the board does.
+        Starts from the resolved layer extent: its own profile minus inherited
+        step holes, or the complete step profile when no layer profile exists.
 
     copper (``SIGNAL``/``POWER_GROUND``/``MIXED``)
         Starts empty.  Its features *are* the copper; seeding it with the board
@@ -760,8 +757,7 @@ def expand_layer(
     base = Region()
     used_base = False
     if invert or _starts_from_profile(layer):
-        geometry = step.base_geometry(layer)   # raises LayerProfileError
-        base = region_from_geometry(geometry, opts.tessellation)
+        base = clipper.layer_profile_region(step, layer, opts.tessellation)
         used_base = bool(base)
 
     result = LayerGeometry(layer_name=layer.name, region=base, used_base=used_base)

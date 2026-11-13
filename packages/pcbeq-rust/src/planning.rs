@@ -19,7 +19,7 @@ pub struct Geometry {
 }
 
 pub fn plan(step: &Step, options: &Options, diagnostics: &mut Diagnostics) -> Result<Geometry> {
-    let (board, bounds, ids) = diagnostics.measure("effective_domains", || {
+    let (bounds, ids) = diagnostics.measure("effective_domains", || {
         let profile = step
             .profile_domain_id
             .as_ref()
@@ -42,7 +42,7 @@ pub fn plan(step: &Step, options: &Options, diagnostics: &mut Diagnostics) -> Re
         if ids.is_empty() {
             return Err("no physical material layers".into());
         }
-        Ok((board, bounds, ids))
+        Ok((bounds, ids))
     })?;
     let mut originals = vec![];
     let mut plans: Vec<(Vec<usize>, String)> = vec![];
@@ -57,11 +57,9 @@ pub fn plan(step: &Step, options: &Options, diagnostics: &mut Diagnostics) -> Re
                 .iter()
                 .find(|d| &d.id == id)
                 .ok_or("missing physical domain")?;
-            let original = document::shape(&authored.polygons)?.intersection(&board);
+            let original = document::shape(&authored.polygons)?;
             if original.empty() || original.area() <= 0. {
-                return Err(format!(
-                    "domain {id:?} has no physical area within the step profile"
-                ));
+                return Err(format!("domain {id:?} has no physical area"));
             }
             let mut existing = None;
             for (i, prior) in originals.iter().enumerate() {

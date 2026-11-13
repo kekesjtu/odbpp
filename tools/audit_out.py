@@ -86,7 +86,7 @@ def audit_outputs(out_dir: Path = ROOT / 'out'):
             accuracy = meta['accuracy']['profiles'][profile_id]
             area = accuracy['area']
             for name in profile['layers']:
-                source = domains[layers[name]['domain_id']].intersection(domains[step['profile_domain_id']])
+                source = domains[layers[name]['domain_id']]
                 layout = [(r.bounds_mm.x, r.bounds_mm.y, r.grid_counts) for r in by_layer[name]]
                 assert layout == [(r.bounds_mm.x, r.bounds_mm.y, r.grid_counts) for r in representative]
                 lost, gained = source.difference(modeled).area, modeled.difference(source).area

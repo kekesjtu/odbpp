@@ -89,11 +89,6 @@ pub fn evaluate(
             .iter()
             .find(|d| d.id == geometry.domain_ids[domain])
             .ok_or("missing sample domain")?;
-        let profile = step
-            .domains
-            .iter()
-            .find(|d| Some(&d.id) == step.profile_domain_id.as_ref())
-            .ok_or("missing step domain")?;
         let covering: Vec<_> = if layer.kind == "DIELECTRIC" {
             drills.iter().filter(|d| matched(layer, d)).collect()
         } else {
@@ -109,7 +104,6 @@ pub fn evaluate(
         };
         Ok(raster_index::Materials::new(
             edges(&domain_doc.polygons),
-            edges(&profile.polygons),
             &black,
         ))
     })?;

@@ -619,7 +619,7 @@ class Step:
         return {l.name: l for l in self.layers}
 
     def base_geometry(self, layer: Layer) -> SurfaceGeometry:
-        """Base polygon for *layer* per requirements.md parser constraint 3.
+        """Select the authored profile before resolving inherited step holes.
 
         Priority: the layer's own profile, else the step profile.  A layer
         profile that exists but could not be parsed raises
@@ -627,6 +627,7 @@ class Step:
         fabricate geometry.
 
         The returned object is shared, not copied; callers must not mutate it.
+        Use ``clipper.layer_profile_region`` for the final layer extent.
         """
         from .errors import LayerProfileError
 

@@ -27,7 +27,7 @@ is the arc-preserving representation the parser produces.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import Iterable, Iterator, Optional, Sequence
 
@@ -35,13 +35,14 @@ import pyclipper
 from . import _pcbkit_native as native
 
 from .geometry import TessellationOptions, bounding_box, is_clockwise
-from .model import ContourPart, Point, Polygon, SurfaceGeometry
+from .model import ContourPart, Layer, Point, Polygon, Step, SurfaceGeometry
 
 __all__ = [
     "SCALE",
     "Ring",
     "Region",
     "region_from_geometry",
+    "layer_profile_region",
     "region_from_rings",
     "to_surface_geometry",
     "union",
@@ -234,6 +235,23 @@ def region_from_geometry(geometry: SurfaceGeometry,
         if ring is not None:
             rings.append(ring)
     return Region(rings)
+
+
+def layer_profile_region(step: Step, layer: Layer,
+                         options: Optional[TessellationOptions] = None) -> Region:
+    """Resolve a layer's extent, inheriting step holes (spec p.182–183).
+
+    A missing layer profile defaults to the complete step profile. An explicit
+    layer profile keeps its islands, including portions outside the step islands.
+    """
+    region = region_from_geometry(step.base_geometry(layer), options)
+    if layer.profile is not None and step.profile is not None:
+        holes = SurfaceGeometry(polygons=[
+            replace(polygon, is_island=True)
+            for polygon in step.profile.polygons if not polygon.is_island
+        ])
+        region = difference(region, region_from_geometry(holes, options))
+    return region
 
 
 def polygon_points_of(polygon: Polygon) -> list[Point]:

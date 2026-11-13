@@ -1,12 +1,23 @@
 # 逐层轮廓与绝对叠层
 
-## 轮廓选择
+## 轮廓与实体范围
 
-解析器优先使用有效的层轮廓（layer profile），缺失时用整板轮廓（step profile）。层轮廓存在但无法解析时，报告该层失败。解析器将轮廓围成的实体范围存入中间 JSON。
+依据 [ODB++Design Format Specification，Release 8.1 Update 4](../../reference/ODB++_Format_User_Guide.pdf#page=182) p.181–183 的层轮廓定义，层实体范围遵循以下规则：
 
-等效器取层实体范围与整板实体范围的交集作为层有效计算域，并报告近似模型的漏失与新增面积。术语和分工见[项目架构](../../architecture.md)，profile 去重与独立分区见[几何规划](../pcbeq/geometry-planning.md)。
+- 有层轮廓（layer profile）：从层岛中扣除层孔与 step 孔的并集。step 孔完全落在层岛内或与层岛相交时，均参与扣除；相交的孔可使最终层岛缩小、分裂或消失。
+- 无层轮廓：以整板轮廓（step profile）作为默认值，层实体范围为 step 岛扣除 step 孔。
+- 层轮廓存在但无法解析：报告该层失败。
 
-介质 JSON 保留未扣 DRILL 的基底几何，预览在绘图副本中扣除相交钻孔。
+```text
+有 layer profile：层实体范围 = layer 岛 − (layer 孔 ∪ step 孔)
+无 layer profile：层实体范围 = step 岛 − step 孔
+```
+
+step 岛仅在缺省层轮廓时提供替代范围。层岛不要求包含于 step 岛，也不按 step 岛裁剪；层轮廓伸出整板轮廓属于允许的几何。孔的重叠部分按并集扣除，只计一次。
+
+解析器将最终层实体范围存入中间 JSON，JSON 与预览中的层域使用相同规则。等效器直接以该完整实体范围作为层有效计算域，并报告近似模型的漏失与新增面积。术语和分工见[项目架构](../../architecture.md)，profile 去重与独立分区见[几何规划](../pcbeq/geometry-planning.md)。
+
+轮廓孔定义真实空洞，与跨层 DRILL 图案分开处理。介质 JSON 保留已扣轮廓孔、未扣 DRILL 的基底几何，预览在绘图副本中扣除相交钻孔。
 
 ## 叠层与厚度决策
 
