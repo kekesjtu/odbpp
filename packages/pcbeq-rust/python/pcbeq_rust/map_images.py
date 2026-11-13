@@ -64,7 +64,10 @@ def render(source, output, **options):
     from .publication import OutputRun
     source = Path(source).resolve()
     output = Path(output)
-    with OutputRun(output, manifest="diagnostics/image-artifacts.json") as publication:
+    if any(source.is_relative_to((output / name).resolve())
+           for name in ("regions", "grids", "heatmaps", "index.html")):
+        raise ValueError("input must not be overwritten by image outputs")
+    with OutputRun(output) as publication:
         images = _render(source, publication.path, **options)
         relative = [image.relative_to(publication.path) for image in images]
         publication.commit()

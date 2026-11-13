@@ -1,6 +1,7 @@
 //! Independent, file-based PCB material equivalence.
 pub type Result<T> = std::result::Result<T, String>;
 
+mod diagnostics;
 mod document;
 mod fast;
 mod geometry;

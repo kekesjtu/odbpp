@@ -57,11 +57,13 @@ def main(argv=None) -> int:
             warmup = index < args.warmup
             if not warmup:
                 report['runs'].append(run)
-            print(f"{('warmup' if warmup else 'run')} {index + 1}: {run['durations_s']['total']:.6f} s, {run['cells']} cells", flush=True)
-        report['summary_s'] = {stage: {'median': statistics.median(values), 'min': min(values), 'max': max(values)} for stage in ('read_json', 'equivalence_and_write', 'total') for values in [[run['durations_s'][stage] for run in report['runs']]]}
+            print(f"{('warmup' if warmup else 'run')} {index + 1}: {run['performance']['total_s']:.6f} s, {run['cells']} cells", flush=True)
+        timings = [{**run['performance']['stages_s'], 'total': run['performance']['total_s']} for run in report['runs']]
+        report['summary_s'] = {stage: {'median': statistics.median(values), 'min': min(values), 'max': max(values)} for stage in timings[0] for values in [[t[stage] for t in timings]]}
         (args.output / 'benchmark.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-        for warning in report['runs'][-1]['warnings']:
-            print(warning, file=sys.stderr)
+        for kind in ('warnings', 'errors'):
+            for issue in report['runs'][-1]['issues'][kind]:
+                print(f"{issue['code']}: {issue['message']}", file=sys.stderr)
         print(f"median: {report['summary_s']['total']['median']:.6f} s; report: {args.output / 'benchmark.json'}")
         return 0
     except errors as exc:

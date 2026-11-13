@@ -71,7 +71,7 @@ impl Materials {
             black: black.iter().map(|p| Index::new(p)).collect(),
         }
     }
-    pub fn render(&self, x: Axis, y: Axis) -> Result<(Vec<u8>, usize)> {
+    pub fn render(&self, x: Axis, y: Axis) -> Result<Vec<u8>> {
         let bounds = [
             x.0 + (0.5 - 1e-9) * x.1,
             y.0 + (0.5 - 1e-9) * y.1,

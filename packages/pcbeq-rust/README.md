@@ -1,6 +1,6 @@
 # pcbeq
 
-独立 Rust CLI 消费 intermediate.json，完成校验、region 规划、geo 几何验收、局部网格、材料采样和等效，发布 materialmap.json 与数值诊断。计算程序无需 Python 或 GEOS。
+独立 Rust CLI 消费 intermediate.json，完成校验、region 规划、geo 几何验收、局部网格、材料采样和等效，发布 materialmap.json 与唯一的 diagnostics.json，不输出产物清单。计算程序无需 Python 或 GEOS。
 
 ## 构建与计算
 
@@ -21,7 +21,7 @@ cargo build -p pcbeq-rust --release --target x86_64-pc-windows-msvc
 
 交付 `target/x86_64-pc-windows-msvc/release/pcbeq.exe`；用户无需安装 Rust、Python 或 VC 运行库。构建环境需要 Rust 工具链及平台链接器。
 
-`pcbeq run --help` 查看计算参数。标准/粗/细档位与专家尺寸互斥；默认标准档位。`--summary-json` 将机器可读摘要写到 stdout，告警和错误写到 stderr，成功返回 0，失败返回 2。材料文件和逐字段命令行覆盖由 Rust 统一解释。
+`pcbeq run --help` 查看计算参数。标准/粗/细档位与专家尺寸互斥；默认标准档位。`--summary-json` 将机器可读摘要写到 stdout，告警和错误写到 stderr。计算完成返回 0，Z 不可信作为非阻断错误记录且正常生成 MaterialMap；阻断失败返回 2。诊断结构与统计口径见[运行诊断](../../docs/interfaces/pcbeq-diagnostics.md)。材料文件和逐字段命令行覆盖由 Rust 统一解释。
 
 ## 可选 Python 管线与绘图
 

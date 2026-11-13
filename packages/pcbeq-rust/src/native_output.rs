@@ -60,7 +60,7 @@ impl Writer {
         values: &[Vec<[f64; 5]>],
     ) -> Result<()> {
         let z = layer.z_mm.as_ref().ok_or("missing absolute Z")?;
-        let extent = if z.thickness_known {
+        let extent = if z.thickness_known && layer.thickness.as_ref().is_none_or(|t| t.known) {
             [Some(z.start_mm), Some(z.end_mm)]
         } else {
             [None, None]

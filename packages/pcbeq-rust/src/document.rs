@@ -49,8 +49,8 @@ pub struct Extent {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Thickness {
-    known: bool,
-    source: String,
+    pub known: bool,
+    pub source: String,
     input_value: Option<f64>,
     kind: Option<String>,
     unit: Option<String>,
@@ -78,7 +78,7 @@ pub struct Layer {
     pub domain_id: Option<String>,
     pub polygons: Vec<Polygon>,
     pub z_mm: Option<Extent>,
-    thickness: Option<Thickness>,
+    pub thickness: Option<Thickness>,
     pub start_layer: Option<String>,
     pub end_layer: Option<String>,
 }

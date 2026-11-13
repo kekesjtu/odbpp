@@ -72,10 +72,16 @@ def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5, grid_leve
         if cache['json_sha256'] != hashlib.sha256(preview.read_bytes()).hexdigest():
             return None
         base = directory / 'pcbeq'
-        owned = json.loads((base / 'diagnostics/artifacts.json').read_text(encoding='utf-8'))['files']
-        owned += json.loads((base / 'diagnostics/image-artifacts.json').read_text(encoding='utf-8'))['files']
-        if not {'materialmap.json', 'index.html', 'regions/regions.png', 'grids/cartesian-grid.png'}.issubset(owned):
+        diagnostics = json.loads((base / 'diagnostics.json').read_text(encoding='utf-8'))
+        if diagnostics['issues']['status'] == 'failed':
             return None
+        owned = ['materialmap.json', 'diagnostics.json', 'index.html', 'regions/regions.png',
+                 'regions/regions.svg', 'grids/cartesian-grid.png', 'grids/cartesian-grid.svg']
+        from pcbeq_rust.materialmap import read_document
+        from pcbeq_rust.heatmap_data import unique_image_stem
+        names = dict.fromkeys(r.layer.name for r in read_document(base / 'materialmap.json').regions)
+        used = set()
+        owned += [f'heatmaps/{unique_image_stem(name, used)}.png' for name in names]
         if any((not (base / p).is_file() or not (base / p).stat().st_size for p in owned)):
             return None
         return base / 'materialmap.json'
@@ -84,7 +90,7 @@ def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5, grid_leve
 
 def render_index(rows):
     lines = ['<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>PCB 案例输出</title>', '<h1>PCB 案例输出</h1><table><tr><th>Case</th><th>产物</th><th>网格</th></tr>']
-    links = [('pcbkit/preview.html', '预览'), ('pcbkit/intermediate.json', 'JSON'), ('pcbeq/materialmap.json', 'MaterialMap'), ('pcbeq/index.html', '图片'), ('pcbeq/regions/regions.svg', 'regions'), ('pcbeq/grids/cartesian-grid.svg', 'grids')]
+    links = [('pcbkit/preview.html', '预览'), ('pcbkit/intermediate.json', 'JSON'), ('pcbeq/materialmap.json', 'MaterialMap'), ('pcbeq/diagnostics.json', '诊断'), ('pcbeq/index.html', '图片'), ('pcbeq/regions/regions.svg', 'regions'), ('pcbeq/grids/cartesian-grid.svg', 'grids')]
     for name, source, directory, data, report in rows:
         relative = escape(directory.relative_to(OUT).as_posix())
         items = ' · '.join((f'<a href="{relative}/{p}">{label}</a>' for p, label in links))
@@ -94,9 +100,11 @@ def render_index(rows):
 def published_rows():
     """Index published outputs of this product line."""
     rows = []
-    paths = sorted((path for backend in ('rust',) for path in OUT.glob(f'**/{backend}/pcbeq/diagnostics/run.json')))
+    paths = sorted(OUT.glob('**/rust/pcbeq/diagnostics.json'))
     for path in paths:
-        directory = path.parents[2]
+        directory = path.parents[1]
+        if json.loads(path.read_text(encoding='utf-8'))['issues']['status'] == 'failed':
+            continue
         if not (directory / 'pcbeq/materialmap.json').is_file():
             continue
         report = json.loads((directory / 'pcbeq/materialmap.json').read_text(encoding='utf-8'))

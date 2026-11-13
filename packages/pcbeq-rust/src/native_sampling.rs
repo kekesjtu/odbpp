@@ -1,12 +1,12 @@
 //! Material sampling on independent region rasters in physical coordinates.
 use crate::{
     Result,
+    diagnostics::Diagnostics,
     document::{Layer, Polygon, Step},
     native_mesh::Mesh,
     planning::Geometry,
     raster_index, sampling,
 };
-use serde_json::{Value, json};
 pub fn edges(polygons: &[Polygon]) -> Vec<(f64, f64, f64, f64)> {
     polygons
         .iter()
@@ -81,76 +81,70 @@ pub fn evaluate(
     mesh: &Mesh,
     domain: usize,
     materials: [f64; 6],
-) -> Result<(Vec<Vec<[f64; 5]>>, Value)> {
-    let domain_doc = step
-        .domains
-        .iter()
-        .find(|d| d.id == geometry.domain_ids[domain])
-        .ok_or("missing sample domain")?;
-    let profile = step
-        .domains
-        .iter()
-        .find(|d| Some(&d.id) == step.profile_domain_id.as_ref())
-        .ok_or("missing step domain")?;
-    let covering: Vec<_> = if layer.kind == "DIELECTRIC" {
-        drills.iter().filter(|d| matched(layer, d)).collect()
-    } else {
-        vec![]
-    };
-    let black: Vec<&[Polygon]> = if layer.copper() {
-        vec![&layer.polygons]
-    } else {
-        covering
+    diagnostics: &mut Diagnostics,
+) -> Result<Vec<Vec<[f64; 5]>>> {
+    let source = diagnostics.measure("sampling", || {
+        let domain_doc = step
+            .domains
             .iter()
-            .map(|d| d.layer.polygons.as_slice())
-            .collect()
-    };
-    let source = raster_index::Materials::new(
-        edges(&domain_doc.polygons),
-        edges(&profile.polygons),
-        &black,
-    );
+            .find(|d| d.id == geometry.domain_ids[domain])
+            .ok_or("missing sample domain")?;
+        let profile = step
+            .domains
+            .iter()
+            .find(|d| Some(&d.id) == step.profile_domain_id.as_ref())
+            .ok_or("missing step domain")?;
+        let covering: Vec<_> = if layer.kind == "DIELECTRIC" {
+            drills.iter().filter(|d| matched(layer, d)).collect()
+        } else {
+            vec![]
+        };
+        let black: Vec<&[Polygon]> = if layer.copper() {
+            vec![&layer.polygons]
+        } else {
+            covering
+                .iter()
+                .map(|d| d.layer.polygons.as_slice())
+                .collect()
+        };
+        Ok(raster_index::Materials::new(
+            edges(&domain_doc.polygons),
+            edges(&profile.polygons),
+            &black,
+        ))
+    })?;
     let mut regions = vec![vec![]; geometry.rectangles.len()];
-    let mut base_pixels = 0;
     for &rid in &geometry.members[domain] {
         let tile = &mesh.rasters[rid];
         // The renderer initializes domain-exterior pixels as the base phase.
-        let (pixels, outside) = source.render(tile.x, tile.y)?;
-        base_pixels += outside;
-        let values = sampling::integrate_pixels(
-            &pixels,
-            tile.x.2,
-            tile.y.2,
-            tile.windows.clone(),
-            materials,
-            mesh.minimum,
-        )?;
-        for (q, value) in values.into_iter().enumerate() {
-            let value = value.ok_or(format!("layer {:?} region {rid} cell {q}: insufficient raster samples or domain/geometry contradiction; increase px/py",layer.name))?;
-            let mut properties = value;
-            for (i, v) in properties.iter_mut().enumerate() {
-                let factor = if i < 3 { 1e6 } else { 1e4 };
-                let rounded = (*v * factor).round_ties_even() / factor;
-                if rounded > 0. {
-                    *v = rounded;
+        let pixels = diagnostics.measure("sampling", || source.render(tile.x, tile.y))?;
+        regions[rid] = diagnostics.measure("equivalence", || {
+            let values = sampling::integrate_pixels(
+                &pixels,
+                tile.x.2,
+                tile.y.2,
+                tile.windows.clone(),
+                materials,
+                mesh.minimum,
+            )?;
+            let mut checked = Vec::with_capacity(values.len());
+            for (q, value) in values.into_iter().enumerate() {
+                let mut properties = value.ok_or_else(|| format!(
+                    "layer {:?} region {rid} cell {q}: insufficient raster samples or domain/geometry contradiction; increase px/py", layer.name))?;
+                for (i, v) in properties.iter_mut().enumerate() {
+                    let factor = if i < 3 { 1e6 } else { 1e4 };
+                    let rounded = (*v * factor).round_ties_even() / factor;
+                    if rounded > 0. {
+                        *v = rounded;
+                    }
+                    if !v.is_finite() || *v <= 0. {
+                        return Err("non-finite/nonpositive material property".into());
+                    }
                 }
-                if !v.is_finite() || *v <= 0. {
-                    return Err("non-finite/nonpositive material property".into());
-                }
+                checked.push(properties);
             }
-            regions[rid].push(properties);
-        }
+            Ok(checked)
+        })?;
     }
-    let z = layer.z_mm.as_ref().ok_or("missing layer Z")?;
-    let mut report = json!({"name":layer.name,"domain_id":layer.domain_id,
-        "outside_base_pixels":base_pixels});
-    if !z.thickness_known {
-        report["estimated_z_mm"] =
-            json!({"start_mm":z.start_mm,"end_mm":z.end_mm,"source":z.source});
-    }
-    if layer.kind == "DIELECTRIC" {
-        report["drill_overlays"] =
-            json!(covering.iter().map(|d| &d.layer.name).collect::<Vec<_>>());
-    }
-    Ok((regions, report))
+    Ok(regions)
 }

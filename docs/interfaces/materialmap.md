@@ -65,4 +65,4 @@ PCB 坐标 Y 向上，从左下角向右遍历一行再向上。PNG 上到下的
 
 [Flotherm CSV 参考](../reference/Flotherm_reference_MaterialMap.csv) 的 region 范围与 resolution 展示了均匀分格的紧凑表达。本项目采用自定义 XYZ 网格数与五物性元组，不要求该 JSON 可被 Flotherm 直接导入。
 
-图表的输入与用途见[可视化](../decisions/pcbeq/pcbeq-visualization.md)。材料来源、几何验收和采样配置由独立的 `diagnostics/run.json` 记录，格式见[pcbeq 运行诊断](pcbeq-diagnostics.md)。格式采用唯一的当前结构。
+图表的输入与用途见[可视化](../decisions/pcbeq/pcbeq-visualization.md)。几何统计、材料默认值与 Z 问题、面积及拓扑验收、阶段耗时由独立的 `diagnostics.json` 记录，格式见[pcbeq 运行诊断](pcbeq-diagnostics.md)。格式采用唯一的当前结构。

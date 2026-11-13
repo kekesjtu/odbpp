@@ -1,103 +1,90 @@
-# pcbeq 运行诊断与产物清单
+# pcbeq 运行诊断
 
-本接口定义等效器输出目录下的 `diagnostics/run.json`、`diagnostics/artifacts.json` 和 `diagnostics/image-artifacts.json`。正式区域、网格和物性由 [MaterialMap](materialmap.md) 提供；诊断保存计算依据、材料来源、几何误差、采样配置及运行信息。解析器诊断和管道报告属于各自的输出目录。
+等效器输出目录只使用一个 `diagnostics.json` 保存运行诊断，不输出产物清单。报告按几何统计、告警与错误、误差分析、性能分析四类组织。正式区域、局部网格和五项物性由 [MaterialMap](materialmap.md) 提供。
 
-## 发布边界
+长度单位为 mm，面积为 mm²，时间为秒。层名和 profile ID 区分大小写。
 
-`run.json` 与 MaterialMap 一起发布，表示一次成功数值计算，不是逐事件日志。计算失败通过 stderr 和非零退出码报告，不发布本轮失败诊断；目录中已有的诊断可以属于上一次成功计算。绘图失败时，已发布的数值结果仍可使用。事务与所有权规则见[输出与发布](../decisions/output-publication.md)。
-
-长度为 mm，面积为 mm²，耗时为秒。层名和 domain ID 区分大小写。
-
-## run.json 顶层与关联
+## 顶层结构
 
 | 字段 | 内容 |
 | --- | --- |
-| `rectification` | 有效 profile 去重关系、几何误差与拓扑验收 |
-| `grid` | 实际网格尺寸约束、档位和特征估计 |
-| `raster` | 基础采样参考与各独立局部光栅 |
-| `layers` | 层对应的有效域、材料采样诊断、未知 Z 或跳过原因 |
-| `materials` | 以等效层名为键的逐字段材料取值与配置来源 |
-| `warnings` | `{code, message}` 数组；无告警时为空数组 |
-| `durations_s` | 数值阶段耗时 |
+| `geometry` | 不同有效 profile 数量及各 profile 的层、region、网格统计 |
+| `issues` | 运行状态、材料默认值告警、Z 不可信及阻断错误 |
+| `accuracy` | 各 profile 的面积误差与三项拓扑检查 |
+| `performance` | 不重叠的阶段耗时与总耗时 |
 
-诊断中的 `region` 和 profile 的 `regions[]` 都直接引用同轮 `materialmap.json` 的 `regions` 数组下标，从 0 开始。多个物理层复用同一二维 profile 时，以首次发布的对应 region 为代表。通过该代表的 XY 范围和网格数恢复几何与采样关联；该代表的层名和 Z 不限制其他复用层。
+`geometry.profiles` 与 `accuracy.profiles` 使用相同的 profile ID。profile 表示参与等效的二维有效几何，域的物理语义见[几何规划](../decisions/pcbeq/geometry-planning.md)。同几何去重，不依赖输入 domain ID、顶点起点和绕序。只有参与等效的 BOARD 铜层与介质层计入统计。
 
-step、层类型、可信 Z、矩形坐标、网格数和单元数从 MaterialMap 读取。二维唯一 region 数等于 `raster.regions` 长度，物理 region 数等于 MaterialMap 的 region 数，物理单元数为各 region 的 `values` 长度之和。
+## 几何统计 geometry
 
-## 几何近似 rectification
+`profile_count` 表示独立有效几何数量；`profiles` 以 profile ID 为键，各项包含：
 
-| 字段 | 内容 |
+| 字段 | 口径 |
 | --- | --- |
-| `max_area_error_ratio` | 各有效 profile 独立采用的相对面积预算 |
-| `domain_profiles` | 输入 domain ID → 规范 profile ID，表达有效几何去重与复用关系 |
-| `profiles` | 以规范 profile ID 为键的独立几何报告，每个有效几何只保存一份 |
+| `layers`、`layer_count` | 复用该有效几何的物理层名列表与数量 |
+| `region_count` | 独立二维矩形数量，不乘复用层数 |
+| `cell_count` | 独立二维网格单元总数，不乘复用层数 |
+| `region_size_mm` | region 的实际 X/Y 边长范围 |
+| `cell_size_mm` | 局部均匀网格的实际 X/Y 单元边长范围 |
 
-每个 `profiles[id]` 包含：
+两个尺寸字段均为 `{"min":{"x":值,"y":值},"max":{"x":值,"y":值}}`。X/Y 独立取极值；最小 X 与最小 Y 不要求来自同一个矩形。尺寸不包含 Z，不代表面积、对角线或用户指定的网格上限。
 
-| 字段 | 内容 |
+一个 profile 被 8 层复用、划分成 20 个 region 和 1000 个网格时，报告记录 `layer_count=8`、`region_count=20`、`cell_count=1000`。MaterialMap 相应交付 160 个三维 region 和 8000 个物性单元。
+
+## 告警与错误 issues
+
+`status` 为 `completed`、`completed_with_warnings`、`completed_with_errors` 或 `failed`。`warnings`、`errors` 均为数组，无问题时为空。非阻断错误优先于告警决定状态。
+
+- `materials.default_used`：任一材料字段采用内置项目默认值时告警。条目记录 `code`、`message`、`layers`、`phase` 和 `default_values`。`phase` 为 `copper` 或 `base`，`default_values` 给出实际采用内置值的字段与数值；同相且默认字段和值相同的条目跨层合并。用户显式提供与内置值相同的数值不触发告警。
+- `z.thickness_unknown`：本层 `thickness.known=false`，记录非阻断错误。
+- `z.absolute_position_unknown`：Z 区间不可信、本层没有明确的厚度未知标记时，记录非阻断错误；本层厚度可以已知而累计位置未知。
+
+Z 错误记录 `code`、`message`、`layers`、`blocking=false`、`estimated_z_mm` 与 `thickness_source`。估算 Z 包含 `start_mm`、`end_mm`、`source`，不可当作可靠三维尺寸。MaterialMap 对不可信 Z 使用 `[null,null]`，仍交付完整 XY 网格与物性，不据此计算可信体积或质量。
+
+输入无效、缺少必要几何、无法满足近似约束、采样不足或发布失败属于阻断错误。条目记录阶段对应的稳定代码 `<stage>.failed`、`stage`、`message` 和 `blocking=true`；消息保留可用的层、domain、region 或单元位置。
+
+正常完成包括存在非阻断错误的情况，CLI 返回 0，问题同时写到 stderr，后续绘图可继续。阻断失败返回 2；输出目录可写且不会覆盖输入时，尽力发布本轮 `failed` 诊断，未完成或未知的统计使用 `null`，已完成统计保留。失败不发布本轮 MaterialMap，目录中保留的上一轮 MaterialMap 不属于本轮失败诊断。命令行语法解析失败发生在计算入口之前，仅由 CLI 报告。
+
+## 误差分析 accuracy
+
+每个 `profiles[id]` 含 `area` 和 `topology`。
+
+`area` 保存 `original_mm2`、`model_mm2`、`lost_mm2`、`gained_mm2`、`relative_error`、`allowed_relative_error` 与 `passed`。原始面积 A 为有效 profile 的面积，漏失为 L，新增为 G：
+
+- 模型面积：`A-L+G`。
+- 主验收误差：`(L+G)/A`，不是可相互抵消的净面积差。
+- 面积通过条件：`L+G <= allowed_relative_error*A + 1e-8 mm²`。
+
+`topology` 只交付三项检查及综合结论：
+
+| 字段 | 判定 |
 | --- | --- |
-| `regions` | 该二维 profile 的 MaterialMap 代表 region 下标数组 |
-| `original_area_mm2` | 与整板实体范围相交后的原始有效面积 |
-| `lost_area_mm2`、`gained_area_mm2` | 矩形模型相对原域的漏失、新增面积 |
-| `topology` | 实体、孔洞、正宽连接与保护核心验收 |
-| `search` | 需要 FAST 搜索时的实际搜索信息；直接矩形建模时省略 |
+| `components` | 原始实体与模型实体按正面积重叠双向一一对应 |
+| `holes` | 原始孔洞与模型孔洞按正面积重叠双向一一对应 |
+| `positive_width_connections` | 模型实体向内收缩极小距离后仍为单个实体，防止点接触冒充有效连接 |
+| `preserved` | 上述三项均通过 |
 
-设原始面积为 A、漏失为 L、新增为 G，则模型面积为 `A-L+G`，也可由代表 region 的矩形面积相加得到；对称差为 `L+G`，相对误差为 `(L+G)/A`，IoU 为 `(A-L)/(A+G)`。面积和拓扑约束见[几何规划](../decisions/pcbeq/geometry-planning.md)。
+`components`、`holes` 均包含 `original_count`、`model_count`、`forward_matches`、`reverse_matches`、`preserved`。对应数量数组分别按原始几何和模型几何排列；相交面积须大于 `1e-10 mm²`。正宽检查的收缩距离为 `1e-7 mm`，不保证连接宽度准确。
 
-`topology` 包含：
+保护核心继续作为内部局部覆盖约束参与候选验收，其尺度、数量及结果不写入诊断。面积和拓扑分别验收，几何近似误差不代表热仿真误差。
 
-- `component_correspondence`、`reverse_component_correspondence`：原实体与模型实体的双向对应数量数组。
-- `hole_correspondence`、`reverse_hole_correspondence`：原孔洞与模型孔洞的双向对应数量数组。对应以正面积相交判定；数组长度分别给出原域和模型的实体或孔洞数量。
-- `positive_width_connections`：正宽连接检查结果。
-- `protected_core_checks`：`{erosion_mm, cores, retained}` 数组，记录腐蚀尺度、几何核心数及保留数。
-- `preserved`：拓扑和保护核心综合验收结果。
+## 性能分析 performance
 
-`search` 包含 `pixels`（搜索列数、行数）、`resolution`、`tau` 和 `attempts`。尝试条目记录 `resolution`、`tau`、`ok`；失败尝试还可有 `rectangle_count`、`estimated_error_mm2` 和当时的 `audit`。搜索信息用于解释几何规划，不是材料采样光栅。
+`stages_s` 保存互不重叠的累计墙钟耗时：
 
-## 网格与采样
-
-`grid` 均有 `max_cell_mm`（X/Y 最大边长数组）和 `minimum_samples_per_axis`。档位模式另有 `preset`、`feature_estimate_min_mm`、`feature_estimate_representative_mm`、`feature_estimate_count`、`ignored_sliver_estimate_count`。没有可用特征估计时，相应尺寸为 `null`；没有 `preset` 时采用专家尺寸。具体分格数从代表 region 的 `grid_counts` 读取。
-
-`raster` 包含：
-
-| 字段 | 内容 |
+| 阶段 | 范围 |
 | --- | --- |
-| `mode` | `automatic` 或 `explicit` |
-| `board_bounds_mm` | 原始整板包围盒 `[x0,y0,x1,y1]`，用于定义基础参考相位 |
-| `px`、`py` | 整板基础参考像素数 |
-| `regions` | `{region, px, py, origin_mm: [x,y], pixel_step_mm: [dx,dy]}` 数组，每个独立二维 region 一项 |
+| `read_validate` | 参数检查、JSON 读取与契约校验 |
+| `prepare` | 材料配置、坐标规整、层前置检查、钻孔关系等准备 |
+| `effective_domains` | 层与整板范围求交、有效几何去重 |
+| `rectification` | region 近似搜索、面积与内部几何约束验收 |
+| `mesh` | 局部网格划分与采样窗口准备 |
+| `sampling` | 材料几何索引准备与局部光栅生成 |
+| `equivalence` | 样本积分、单元物性计算与数值检查 |
+| `write` | 结果暂存及 MaterialMap 序列化、写出与关闭 |
+| `publication` | 事务发布至 MaterialMap 安装完成 |
+| `other` | 调度、报告统计等未归入上述阶段的开销 |
 
-基础像素间距由整板包围盒尺寸除以基础像素数得到。实际局部像素中心为 `origin+(i+0.5)*pixel_step`。自动模式允许局部加密，应使用局部实际间距恢复采样位置。总像素数与峰值分别为各条目 `px*py` 的和与最大值，不含物理层重复采样。覆盖规则见[材料采样](../decisions/pcbeq/material-sampling.md)。
+`total_s` 从计算入口计至 MaterialMap 安装完成，包括 `other`；分项之和等于总耗时，允许浮点舍入差。循环处理多个 profile、region、层时累计计时。失败时总耗时截至失败，未执行阶段为 `null`，已进入阶段记录截至错误的耗时。诊断自身最后一次序列化、写入和安装、事务清理、独立 Python 绘图不计入总耗时。
 
-## 层与材料
-
-`layers` 按输入层顺序保存条目，每项都有 `name`。跳过层记录 `reason`；等效层记录：
-
-| 字段 | 内容 |
-| --- | --- |
-| `domain_id` | 输入层实体域引用，经 `rectification.domain_profiles` 找到有效 profile |
-| `outside_base_pixels` | 有效域外、按基底处理的局部采样像素总数，不是体积折减系数 |
-| `drill_overlays` | 仅介质层记录，值为参与采样的钻孔层名数组 |
-| `estimated_z_mm` | 仅绝对 Z 不可信时记录 `{start_mm,end_mm,source}`，供工程核对 |
-
-可信 Z 从 MaterialMap 读取。不可信 Z 在 MaterialMap 中为 `[null,null]`；不能把诊断中的估算值当作可信三维尺寸。
-
-`materials[layer_name]` 有 `copper` 和 `base` 两相，每相的 `k_w_mk`、`density_kg_m3`、`specific_heat_j_kgk` 均为 `{value, origin}`。单位分别为 W/(m·K)、kg/m³、J/(kg·K)。
-
-`origin` 为 `project_default`、`user_default`、`user_global`、`user_layer_type` 或 `layer_override`，依次覆盖。命令行逐字段覆盖并入 `global`。项目默认值、参考来源和配置优先级见[材料模型](../decisions/pcbeq/material-model.md)。
-
-## 告警与耗时
-
-`warnings` 保存告警代码与完整消息；运行时也输出到 stderr。`materials.default_used` 表示至少一个材料字段采用项目默认值，消息列出材料相与字段，相同消息跨层去重；具体层来源见 `materials`。
-
-钻孔覆盖只比较介质 row 与起止铜层 row。Z 不可信本身不单独告警；输入无效、必要端点无法解析、几何约束不满足、采样不足或发布失败均作为错误终止。构建工具告警不进入本文件。
-
-`durations_s` 包含 `read_json`、`equivalence_and_write`、`total`、`geometry`、`mesh`、`sampling`、`write`。读入包含输入校验；细分阶段存在未单列的调度开销，不要求加总等于总耗时。文件计时截止于数值结果写入关闭，不含最终事务发布。
-
-`--summary-json` 的 stdout 摘要用于进程调度和基准，包含上述耗时及 `cells`、`regions`、`layers`、`cells_per_s`、`materialmap_bytes`、`warnings`（消息字符串数组）。发布后补充 `durations_s.publication`，将发布耗时加入 `total`、`equivalence_and_write`、`write` 并重算吞吐率；该摘要与文件诊断是不同用途的输出。
-
-## 产物清单
-
-两个清单都使用 `{"files":["相对路径", ...]}`，路径相对本次输出目录，使用 `/` 分隔。数值清单登记 `materialmap.json`、`diagnostics/run.json`；图片清单登记实际请求并成功生成的 PNG、SVG、`index.html` 等文件。清单本身由发布器管理，不包含在自身 `files` 中。
-
-数值重算发布清理已登记的旧图片和图片清单，图片由后续绘图独立发布。未登记的用户文件保留。
+`--summary-json` 的 stdout 摘要供进程调度和基准使用，包含与诊断相同的 `performance`、`issues`，另有物理总量 `cells`、`regions`、`layers`、`cells_per_s`、`materialmap_bytes`，不写成额外文件。

@@ -1,18 +1,14 @@
 use crate::{Result, document::Step, geometry::Shape, grid, options::Options, planning::Geometry};
-use serde_json::{Value, json};
 pub struct Mesh {
     pub axes: Vec<(Vec<f64>, Vec<f64>)>,
     pub rasters: Vec<crate::region_raster::RegionRaster>,
-    pub raster_report: Value,
     pub minimum: usize,
-    pub config: Value,
 }
 pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh> {
     let bounds = geometry.bounds;
     let spans = [bounds[2] - bounds[0], bounds[3] - bounds[1]];
     let mut maximum = options.maximum();
     let mut minimum = 1;
-    let mut config = json!({"minimum_samples_per_axis":1});
     if let Some(preset) = options.grid_level.as_deref() {
         let mut estimates = vec![];
         for layer in step.layers.iter().filter(|l| l.copper()) {
@@ -49,12 +45,7 @@ pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh
         target = target.max(spans[0].max(spans[1]) / 512.);
         maximum = [target, target];
         minimum = 8;
-        config = json!({"preset":preset,"minimum_samples_per_axis":8,
-            "feature_estimate_min_mm":estimates.iter().copied().reduce(f64::min),
-            "feature_estimate_representative_mm":representative,"feature_estimate_count":estimates.len(),
-            "ignored_sliver_estimate_count":estimates.len()-usable.len()});
     }
-    config["max_cell_mm"] = json!(maximum);
     let mut axes = vec![];
     let mut cell_count = 0usize;
     for (i, r) in geometry.rectangles.iter().enumerate() {
@@ -75,12 +66,10 @@ pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh
     if cell_count == 0 {
         return Err("no modeled board cells".into());
     }
-    let (rasters, raster_report) = crate::region_raster::build(bounds, &axes, minimum, options)?;
+    let rasters = crate::region_raster::build(bounds, &axes, minimum, options)?;
     Ok(Mesh {
         axes,
         rasters,
-        raster_report,
         minimum,
-        config,
     })
 }

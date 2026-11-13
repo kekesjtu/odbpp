@@ -81,8 +81,9 @@ def test_native_thin_region_uses_a_local_raster(tmp_path):
     output=tmp_path/"native"
     summary=run(source,output,grid_level="standard")
     delivered=read_document(output/"materialmap.json")
-    raster=json.loads((output/"diagnostics/run.json").read_text())["raster"]
-    assert sum(tile["px"]*tile["py"] for tile in raster["regions"])<20_000_000
+    profile=json.loads((output/"diagnostics.json").read_text())["geometry"]["profiles"]["step_profile"]
+    assert profile["region_size_mm"]["min"]["y"] == pytest.approx(.0001, abs=1e-8)
+    assert profile["cell_size_mm"]["min"]["y"] == pytest.approx(.0001, abs=1e-8)
     thin=next(r for r in delivered.regions if r.bounds_mm.y[1]-r.bounds_mm.y[0]<.001)
     assert thin.values and all(v==(.3,.3,.3,1850,1100) for v in thin.values)
     assert summary["cells"]==sum(len(r.values) for r in delivered.regions)
@@ -124,6 +125,10 @@ def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
     with pytest.raises(ValueError):
         execute(document, tmp_path)
     assert not (tmp_path / "native/materialmap.json").exists()
+    report = json.loads((tmp_path / "native/diagnostics.json").read_text())
+    assert report["issues"]["status"] == "failed"
+    assert report["issues"]["errors"][-1]["blocking"]
+    assert report["geometry"]["profile_count"] is None
 
 
 def test_sampling_failure_keeps_previous_materialmap(tmp_path):
@@ -137,6 +142,12 @@ def test_sampling_failure_keeps_previous_materialmap(tmp_path):
         run(source, output, px=1, py=1, max_cell_mm=[1])
     assert read_document(output / "materialmap.json") == previous
     assert not list(output.glob("*.tmp"))
+    report = json.loads((output / "diagnostics.json").read_text())
+    assert report["issues"]["status"] == "failed"
+    assert report["issues"]["errors"][-1]["code"] == "mesh.failed"
+    profile = report["geometry"]["profiles"]["step_profile"]
+    assert profile["region_count"] == 1 and profile["cell_count"] is None
+    assert report["performance"]["stages_s"]["sampling"] is None
 
 
 def test_python_images_need_only_materialmap(tmp_path):
@@ -144,12 +155,13 @@ def test_python_images_need_only_materialmap(tmp_path):
     document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])
     _, _, output = execute(document, tmp_path)
     (tmp_path / "input.json").unlink()
-    (output / "diagnostics/run.json").unlink()
+    (output / "diagnostics.json").unlink()
     render(output / "materialmap.json", output, panel_width=480)
     assert (output / "regions/regions.png").is_file()
     assert (output / "grids/cartesian-grid.png").is_file()
     assert list((output / "heatmaps").glob("*.png"))
     assert (output / "index.html").is_file()
+    assert not (output / "diagnostics").exists()
 
 
 def test_rust_benchmark_uses_native_file_pipeline(tmp_path, monkeypatch):

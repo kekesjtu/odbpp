@@ -4,7 +4,6 @@ use crate::{
     options::Options,
     raster::{self, Axis},
 };
-use serde_json::{Value, json};
 
 pub struct RegionRaster {
     pub x: Axis,
@@ -17,7 +16,7 @@ pub fn build(
     axes: &[(Vec<f64>, Vec<f64>)],
     minimum: usize,
     options: &Options,
-) -> Result<(Vec<RegionRaster>, Value)> {
+) -> Result<Vec<RegionRaster>> {
     let spans = [bounds[2] - bounds[0], bounds[3] - bounds[1]];
     let automatic = options.px.is_none();
     let base = if let (Some(x), Some(y)) = (options.px, options.py) {
@@ -30,7 +29,6 @@ pub fn build(
     let reference: [Axis; 2] =
         std::array::from_fn(|i| (bounds[i], spans[i] / base[i] as f64, base[i]));
     let mut rasters = vec![];
-    let mut reports = vec![];
     for (rid, (xs, ys)) in axes.iter().enumerate() {
         let mut local = [(0., 1., 1); 2];
         let mut indices = [vec![], vec![]];
@@ -83,15 +81,11 @@ pub fn build(
                 windows.push((x[0], x[1], y[0], y[1]));
             }
         }
-        reports.push(json!({"region":rid,"px":local[0].2,"py":local[1].2,
-            "origin_mm":[local[0].0,local[1].0],"pixel_step_mm":[local[0].1,local[1].1]}));
         rasters.push(RegionRaster {
             x: local[0],
             y: local[1],
             windows,
         });
     }
-    let report = json!({"mode":if automatic{"automatic"}else{"explicit"},
-        "board_bounds_mm":bounds,"px":base[0],"py":base[1],"regions":reports});
-    Ok((rasters, report))
+    Ok(rasters)
 }

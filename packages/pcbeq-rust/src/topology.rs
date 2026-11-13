@@ -45,30 +45,28 @@ impl Source {
             holes.extend(target.holes());
         }
         let (hole_matches, reverse_hole_matches) = correspondence(&self.holes, &holes);
-        let mut checks = vec![];
-        let mut cores_kept = true;
-        for (radius, cores) in &self.cores {
-            let mut kept = 0;
-            for core in cores {
-                let overlap = core.intersection(model);
-                kept += usize::from(!overlap.empty() && overlap.area() > 1e-10);
-            }
-            cores_kept &= kept == cores.len();
-            checks.push(json!({"erosion_mm":radius,"cores":cores.len(),"retained":kept}));
-        }
-        let preserved = matches
+        let components_preserved = matches.iter().chain(&reverse_matches).all(|&n| n == 1)
+            && targets.len() == self.components.len();
+        let holes_preserved = hole_matches
             .iter()
-            .chain(&hole_matches)
-            .chain(&reverse_matches)
             .chain(&reverse_hole_matches)
             .all(|&n| n == 1)
-            && targets.len() == self.components.len()
-            && holes.len() == self.holes.len()
-            && positive
-            && cores_kept;
-        json!({"component_correspondence":matches,"reverse_component_correspondence":reverse_matches,
-            "hole_correspondence":hole_matches,"positive_width_connections":positive,
-            "reverse_hole_correspondence":reverse_hole_matches,
-            "protected_core_checks":checks,"preserved":preserved})
+            && holes.len() == self.holes.len();
+        json!({"components":{"original_count":self.components.len(),"model_count":targets.len(),
+                "forward_matches":matches,"reverse_matches":reverse_matches,"preserved":components_preserved},
+            "holes":{"original_count":self.holes.len(),"model_count":holes.len(),
+                "forward_matches":hole_matches,"reverse_matches":reverse_hole_matches,"preserved":holes_preserved},
+            "positive_width_connections":positive,
+            "preserved":components_preserved && holes_preserved && positive})
+    }
+
+    // An additional local-coverage constraint, deliberately absent from diagnostics.
+    pub fn protected_cores_preserved(&self, model: &Shape) -> bool {
+        self.cores.iter().all(|(_, cores)| {
+            cores.iter().all(|core| {
+                let overlap = core.intersection(model);
+                !overlap.empty() && overlap.area() > 1e-10
+            })
+        })
     }
 }

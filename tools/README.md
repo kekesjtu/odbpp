@@ -9,10 +9,10 @@
 | `sync_contract.py` | 同步本分支中间 JSON 模型与 schema |
 | `verify_distributions.py` | 独立安装与 sdist 重建验证 |
 | `benchmark_pcbeq.py` | 仅测 JSON 读取至 MaterialMap 关闭，不含图片 |
-| `audit_out.py` | 核查物性、局部网格、采样与实体域 |
+| `audit_out.py` | 独立核查实体域、拓扑、网格统计、Z 状态与物性有效性 |
 | `refresh_viewer_outputs.py` | 刷新解析器工程预览 CSS/JS |
 
-案例管道默认调用 `pcbkit-rust`、`pcbeq-rust`。目录与清单见[输出与发布](../docs/decisions/output-publication.md)。
+案例管道默认调用 `pcbkit-rust`、`pcbeq-rust`。输出目录与管理边界见[输出与发布](../docs/decisions/output-publication.md)。
 
 Python 等效管线从 `PATH` 定位独立的 `pcbeq`，也可设置 `PCBEQ_EXE` 为可执行文件路径。分发验证可用 `--pcbeq-exe` 指定单独交付的二进制文件。
 

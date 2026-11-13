@@ -43,19 +43,17 @@ def test_native_drill_coverage_uses_rows_and_endpoint_names(tmp_path, z_mode):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     summary = run(source, tmp_path / "out", px=100, py=100, max_cell_mm=[10])
-    report = json.loads((tmp_path / "out/diagnostics/run.json").read_text())
-    overlays = {layer["name"]: set(layer.get("drill_overlays", []))
-                for layer in report["layers"] if "domain_id" in layer}
-    assert overlays == {"C0": set(), "C1": set(), "C2": set(),
-                        "OUT_TOP": set(), "OUT_BOTTOM": set(),
-                        "A": {"D01", "D02"}, "B": {"D12", "D02"}}
+    report = json.loads((tmp_path / "out/diagnostics.json").read_text())
     values = {r.layer.name: r.values[0] for r in read_document(tmp_path / "out/materialmap.json").regions}
     for name in ("A", "B"):
         assert values[name][2] == pytest.approx(.6 * 385 + .4 * .3)
     for name in ("C0", "C1", "C2", "OUT_TOP", "OUT_BOTTOM"):
         assert values[name] == (.3, .3, .3, 1850, 1100)
-    assert all(item["code"] == "materials.default_used" for item in report["warnings"])
-    assert all(message.startswith("materials.default_used:") for message in summary["warnings"])
+    assert all(item["code"] == "materials.default_used" for item in report["issues"]["warnings"])
+    assert summary["issues"] == report["issues"]
+    errors = report["issues"]["errors"]
+    assert len(errors) == (7 if z_mode == "unknown_zero" else 0)
+    assert all(not error["blocking"] for error in errors)
 
 
 @pytest.mark.parametrize("change,match", [
@@ -125,7 +123,7 @@ def test_parser_preview_uses_matrix_rows_without_thickness():
     assert not diagnostics.items
 
 
-def test_diagnostics_reference_materialmap_regions_and_support_independent_audit(tmp_path):
+def test_diagnostics_group_layers_and_support_independent_audit(tmp_path):
     from tools.audit_out import audit_outputs
 
     document = build_document(domains=[
@@ -141,14 +139,14 @@ def test_diagnostics_reference_materialmap_regions_and_support_independent_audit
     output = source.parent.parent / "pcbeq"
     run(source, output, px=100, py=100, max_cell_mm=[10])
     delivered = read_document(output / "materialmap.json")
-    report = json.loads((output / "diagnostics/run.json").read_text())
-    profiles = report["rectification"]["profiles"]
-    mapping = report["rectification"]["domain_profiles"]
-    assert mapping["step_profile"] == mapping["duplicate"]
+    report = json.loads((output / "diagnostics.json").read_text())
+    profiles = report["geometry"]["profiles"]
     assert len(profiles) == 2
-    for domain, expected_width in (("step_profile", 10), ("left", 3)):
-        region = delivered.regions[profiles[mapping[domain]]["regions"][0]]
+    full = next(p for p in profiles.values() if "ALL" in p["layers"])
+    assert full["layers"] == ["ALL", "COPY"] and full["layer_count"] == 2
+    for name, expected_width in (("ALL", 10), ("LEFT", 3)):
+        region = next(r for r in delivered.regions if r.layer.name == name)
         assert region.bounds_mm.x == (0, expected_width)
-    estimates = {layer["name"]: layer for layer in report["layers"]}
-    assert estimates["COPY"]["estimated_z_mm"]["start_mm"] == 1
+    issue = next(e for e in report["issues"]["errors"] if e["layers"] == ["COPY"])
+    assert issue["estimated_z_mm"]["start_mm"] == 1
     assert audit_outputs(tmp_path)[0]["material_rows"] == 3

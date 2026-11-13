@@ -28,7 +28,8 @@ fn audit(original: &Shape, source: &Source, rectangles: &[Rect], ratio: f64) -> 
     let lost = original.difference(&model).area();
     let gained = model.difference(original).area();
     let topology = source.topology(&model);
-    json!({"ok":lost+gained<=ratio*original_area+1e-8 && topology["preserved"]==true,
+    json!({"ok":lost+gained<=ratio*original_area+1e-8 && topology["preserved"]==true
+            && source.protected_cores_preserved(&model),
         "original_area_mm2":original_area,"lost_area_mm2":lost,"gained_area_mm2":gained,
         "topology":topology})
 }
@@ -47,7 +48,6 @@ pub fn approximate(original: &Shape, ratio: f64) -> Result<Plan> {
     for resolution in [128, 256, 512, 1024] {
         for tau in [0.5, 0.75, 0.95] {
             let mut mask = Mask::new(original, resolution)?;
-            let pixels = [mask.width(), mask.height()];
             let mut remaining = 0.;
             for row in 0..mask.height() {
                 for col in 0..mask.width() {
@@ -74,9 +74,6 @@ pub fn approximate(original: &Shape, ratio: f64) -> Result<Plan> {
                     let merged = rectangles::merge(rectangles.clone());
                     last = audit(original, &source, &merged, ratio);
                     if last["ok"] == true {
-                        attempts.push(json!({"resolution":resolution,"tau":tau,"ok":true}));
-                        last["search"] = json!({"pixels":pixels,"resolution":resolution,
-                            "tau":tau,"attempts":attempts});
                         return Ok(Plan {
                             rectangles: merged,
                             audit: last,
@@ -102,6 +99,16 @@ pub fn approximate(original: &Shape, ratio: f64) -> Result<Plan> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn protected_cores_reject_a_missing_lobe_even_when_topology_and_area_pass() {
+        let original =
+            Shape::rectangles(&[[0., 0., 10., 10.], [10., 4.9, 12., 5.1], [12., 4., 14., 6.]]);
+        let source = Source::new(&original);
+        let report = audit(&original, &source, &[[0., 0., 10., 10.]], 0.1);
+        assert_eq!(report["topology"]["preserved"], true);
+        assert!(report["lost_area_mm2"].as_f64().unwrap() < original.area() * 0.1);
+        assert_eq!(report["ok"], false);
+    }
     #[test]
     fn weighted_seed_and_growth_use_physical_area_and_block_overlaps() {
         let mut mask = Mask {

@@ -100,7 +100,7 @@ impl PreparedRaster {
             black: black.into_iter().map(Scan::new).collect::<Result<_, _>>()?,
         })
     }
-    pub fn render_base(&self, x: Axis, y: Axis) -> Result<(Vec<u8>, usize), String> {
+    pub fn render_base(&self, x: Axis, y: Axis) -> Result<Vec<u8>, String> {
         for a in [x, y] {
             if !a.0.is_finite() || !a.1.is_finite() || a.1 <= 0. || a.2 == 0 {
                 return Err("invalid raster axis".into());
@@ -114,7 +114,6 @@ impl PreparedRaster {
         let mut domain = self.domain.window(low, high);
         let mut step = self.step.window(low, high);
         let mut black: Vec<_> = self.black.iter().map(|s| s.window(low, high)).collect();
-        let mut outside = count;
         let pixels = {
             let mut pixels = vec![255; count];
             for row in 0..y.2 {
@@ -132,9 +131,6 @@ impl PreparedRaster {
                     }
                     merged.push((a, b));
                 }
-                for &(lo, hi) in &dom {
-                    outside -= pixel_index(hi, x) - pixel_index(lo, x);
-                }
                 for (lo, hi) in intersection(&dom, &merged) {
                     let (a, b) = (pixel_index(lo, x), pixel_index(hi, x));
                     if b > a {
@@ -144,6 +140,6 @@ impl PreparedRaster {
             }
             pixels
         };
-        Ok((pixels, outside))
+        Ok(pixels)
     }
 }

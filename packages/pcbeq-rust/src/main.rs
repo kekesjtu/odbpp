@@ -129,8 +129,20 @@ fn main() -> ExitCode {
     } = Cli::parse();
     match args.execute() {
         Ok(summary) => {
-            for warning in summary["warnings"].as_array().into_iter().flatten() {
-                eprintln!("warning: {}", warning.as_str().unwrap_or_default());
+            for kind in ["warnings", "errors"] {
+                for issue in summary["issues"][kind].as_array().into_iter().flatten() {
+                    eprintln!(
+                        "{}: {}: {} (layers: {})",
+                        if kind == "warnings" {
+                            "warning"
+                        } else {
+                            "error"
+                        },
+                        issue["code"].as_str().unwrap_or_default(),
+                        issue["message"].as_str().unwrap_or_default(),
+                        issue["layers"]
+                    );
+                }
             }
             if args.summary_json {
                 println!("{summary}");
@@ -139,7 +151,7 @@ fn main() -> ExitCode {
                     "wrote materialmap.json: {} cells, {} regions; compute {:.6} s",
                     summary["cells"],
                     summary["regions"],
-                    summary["durations_s"]["total"].as_f64().unwrap()
+                    summary["performance"]["total_s"].as_f64().unwrap()
                 );
             }
             ExitCode::SUCCESS

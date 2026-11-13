@@ -1,6 +1,7 @@
 //! Independent effective profiles; geometrically equal inputs share one plan.
 use crate::{
     Result,
+    diagnostics::Diagnostics,
     document::{self, Step},
     fast,
     options::Options,
@@ -17,29 +18,32 @@ pub struct Geometry {
     pub bounds: Rect,
 }
 
-pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
-    let profile = step
-        .profile_domain_id
-        .as_ref()
-        .ok_or("missing step profile")?;
-    let board = step
-        .domains
-        .iter()
-        .find(|d| &d.id == profile)
-        .ok_or("missing step profile")?;
-    let board = document::shape(&board.polygons)?;
-    let bounds = board.bounds()?;
-    let mut ids: Vec<_> = step
-        .layers
-        .iter()
-        .filter(|l| l.physical())
-        .filter_map(|l| l.domain_id.clone())
-        .collect();
-    ids.sort();
-    ids.dedup();
-    if ids.is_empty() {
-        return Err("no physical material layers".into());
-    }
+pub fn plan(step: &Step, options: &Options, diagnostics: &mut Diagnostics) -> Result<Geometry> {
+    let (board, bounds, ids) = diagnostics.measure("effective_domains", || {
+        let profile = step
+            .profile_domain_id
+            .as_ref()
+            .ok_or("missing step profile")?;
+        let board = step
+            .domains
+            .iter()
+            .find(|d| &d.id == profile)
+            .ok_or("missing step profile")?;
+        let board = document::shape(&board.polygons)?;
+        let bounds = board.bounds()?;
+        let mut ids: Vec<_> = step
+            .layers
+            .iter()
+            .filter(|l| l.physical())
+            .filter_map(|l| l.domain_id.clone())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        if ids.is_empty() {
+            return Err("no physical material layers".into());
+        }
+        Ok((board, bounds, ids))
+    })?;
     let mut originals = vec![];
     let mut plans: Vec<(Vec<usize>, String)> = vec![];
     let mut rectangles = vec![];
@@ -47,29 +51,34 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
     let mut reports = BTreeMap::new();
     let mut domain_profiles = BTreeMap::new();
     for id in &ids {
-        let authored = step
-            .domains
-            .iter()
-            .find(|d| &d.id == id)
-            .ok_or("missing physical domain")?;
-        let original = document::shape(&authored.polygons)?.intersection(&board);
-        if original.empty() || original.area() <= 0. {
-            return Err(format!(
-                "domain {id:?} has no physical area within the step profile"
-            ));
-        }
-        let mut existing = None;
-        for (i, prior) in originals.iter().enumerate() {
-            if original.equals(prior) {
-                existing = Some(i);
-                break;
+        let (original, existing) = diagnostics.measure("effective_domains", || {
+            let authored = step
+                .domains
+                .iter()
+                .find(|d| &d.id == id)
+                .ok_or("missing physical domain")?;
+            let original = document::shape(&authored.polygons)?.intersection(&board);
+            if original.empty() || original.area() <= 0. {
+                return Err(format!(
+                    "domain {id:?} has no physical area within the step profile"
+                ));
             }
-        }
+            let mut existing = None;
+            for (i, prior) in originals.iter().enumerate() {
+                if original.equals(prior) {
+                    existing = Some(i);
+                    break;
+                }
+            }
+            Ok((original, existing))
+        })?;
         let (region_ids, canonical) = if let Some(i) = existing {
             plans[i].clone()
         } else {
-            let plan = fast::approximate(&original, options.max_area_error_ratio)
-                .map_err(|e| format!("domain {id:?}: {e}"))?;
+            let plan = diagnostics.measure("rectification", || {
+                fast::approximate(&original, options.max_area_error_ratio)
+                    .map_err(|e| format!("domain {id:?}: {e}"))
+            })?;
             let region_ids: Vec<_> =
                 (rectangles.len()..rectangles.len() + plan.rectangles.len()).collect();
             rectangles.extend(plan.rectangles);
