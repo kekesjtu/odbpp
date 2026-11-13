@@ -4,3 +4,4 @@ pub type Ring = (Vec<Point>, bool);
 
 pub mod boolean;
 pub mod curves;
+mod stroke_groups;
