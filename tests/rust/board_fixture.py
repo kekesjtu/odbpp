@@ -28,7 +28,7 @@ def build_document(*, profile=None, layers=(), domains=None, z=0.035) -> dict:
         }
         if row["type"] != "DRILL":
             row["z_mm"] = extent
-        for field in ("copper_index", "copper_span"):
+        for field in ("start_layer", "end_layer"):
             if field in spec:
                 row[field] = spec[field]
         layer_docs.append(row)
@@ -41,13 +41,13 @@ def drill_document(**kwargs):
     document = build_document(**kwargs)
     layers = document["steps"][0]["layers"]
     for layer in layers:
-        if layer["type"] in ("DIELECTRIC", "DRILL"):
-            layer["copper_span"] = [0, 1]
+        if layer["type"] == "DRILL":
+            layer.update(start_layer="ENDPOINT_TOP", end_layer="ENDPOINT_BOTTOM")
     endpoints = [
         {"name": name, "type": "SIGNAL", "polygons": [],
-         "domain_id": "step_profile", "copper_index": index,
+         "domain_id": "step_profile",
          "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": True}}
-        for index, name in enumerate(("ENDPOINT_TOP", "ENDPOINT_BOTTOM"))]
+        for name in ("ENDPOINT_TOP", "ENDPOINT_BOTTOM")]
     layers.insert(0, endpoints[0])
     layers.append(endpoints[1])
     for position, layer in enumerate(layers, start=1):

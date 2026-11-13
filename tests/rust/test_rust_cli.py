@@ -31,7 +31,7 @@ def test_standalone_exe_runs_without_python_or_geos(tmp_path):
                              "--max-cell-mm", "5", "--summary-json"],
                             cwd=isolated, env=environment, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["geometry_backend"] == "geo"
+    assert json.loads(result.stdout)["cells"] == 4
     data = json.loads((isolated / "result/materialmap.json").read_text())
     assert data["regions"][0]["values"][0] == [385, 385, 385, 8960, 385]
 

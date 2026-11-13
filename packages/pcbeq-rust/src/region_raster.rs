@@ -17,7 +17,7 @@ pub fn build(
     axes: &[(Vec<f64>, Vec<f64>)],
     minimum: usize,
     options: &Options,
-) -> Result<([usize; 2], Vec<RegionRaster>, Value)> {
+) -> Result<(Vec<RegionRaster>, Value)> {
     let spans = [bounds[2] - bounds[0], bounds[3] - bounds[1]];
     let automatic = options.px.is_none();
     let base = if let (Some(x), Some(y)) = (options.px, options.py) {
@@ -31,8 +31,6 @@ pub fn build(
         std::array::from_fn(|i| (bounds[i], spans[i] / base[i] as f64, base[i]));
     let mut rasters = vec![];
     let mut reports = vec![];
-    let mut total = 0usize;
-    let mut peak = 0;
     for (rid, (xs, ys)) in axes.iter().enumerate() {
         let mut local = [(0., 1., 1); 2];
         let mut indices = [vec![], vec![]];
@@ -62,7 +60,7 @@ pub fn build(
                     .collect();
             }
         }
-        let pixels = local[0]
+        local[0]
             .2
             .checked_mul(local[1].2)
             .filter(|n| *n <= raster::MAX_RASTER_PIXELS)
@@ -72,10 +70,6 @@ pub fn build(
                 local[1].2,
                 raster::MAX_RASTER_PIXELS
             ))?;
-        total = total
-            .checked_add(pixels)
-            .ok_or("region raster pixel count overflow")?;
-        peak = peak.max(pixels);
         let mut windows = vec![];
         for (j, y) in indices[1].windows(2).enumerate() {
             for (i, x) in indices[0].windows(2).enumerate() {
@@ -89,7 +83,7 @@ pub fn build(
                 windows.push((x[0], x[1], y[0], y[1]));
             }
         }
-        reports.push(json!({"region_id":rid,"px":local[0].2,"py":local[1].2,
+        reports.push(json!({"region":rid,"px":local[0].2,"py":local[1].2,
             "origin_mm":[local[0].0,local[1].0],"pixel_step_mm":[local[0].1,local[1].1]}));
         rasters.push(RegionRaster {
             x: local[0],
@@ -97,9 +91,7 @@ pub fn build(
             windows,
         });
     }
-    let report = json!({"layout":"region-local","mode":if automatic{"automatic"}else{"explicit"},
-        "px":base[0],"py":base[1],"base_pixel_step_mm":[reference[0].1,reference[1].1],
-        "default_long_side_px":4096,"max_region_pixels":raster::MAX_RASTER_PIXELS,
-        "total_pixels":total,"peak_region_pixels":peak,"regions":reports});
-    Ok((base, rasters, report))
+    let report = json!({"mode":if automatic{"automatic"}else{"explicit"},
+        "board_bounds_mm":bounds,"px":base[0],"py":base[1],"regions":reports});
+    Ok((rasters, report))
 }

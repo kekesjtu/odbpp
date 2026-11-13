@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 pub(super) fn require(ok: bool, message: impl Into<String>) -> Result<()> {
     if ok { Ok(()) } else { Err(message.into()) }
@@ -63,7 +63,7 @@ impl Board {
         )?;
         let mut names = HashSet::new();
         let mut rows = HashSet::new();
-        let mut copper = BTreeMap::new();
+        let mut copper = HashMap::new();
         for l in &step.layers {
             require(
                 !l.name.is_empty() && names.insert(l.name.as_str()),
@@ -116,31 +116,35 @@ impl Board {
                     "invalid absolute Z interval",
                 )?;
             }
-            if let Some(i) = l.copper_index {
-                require(
-                    l.copper() && l.context == "BOARD",
-                    "copper_index requires BOARD copper layer",
-                )?;
-                require(copper.insert(i, l.row).is_none(), "duplicate copper_index")?;
+            if l.copper() && l.context == "BOARD" {
+                copper.insert(l.name.as_str(), l.row);
             }
             if let Some(t) = &l.thickness {
                 t.validate()?;
             }
         }
-        require(
-            copper
-                .values()
-                .zip(copper.values().skip(1))
-                .all(|(a, b)| a < b),
-            "copper_index order must follow matrix rows",
-        )?;
         for l in &step.layers {
-            if let Some([a, b]) = l.copper_span {
-                require(a < b, "copper_span endpoints must increase")?;
+            require(
+                l.kind == "DRILL" || (l.start_layer.is_none() && l.end_layer.is_none()),
+                format!(
+                    "layer {:?}: start_layer/end_layer require a DRILL layer",
+                    l.name
+                ),
+            )?;
+            for endpoint in [&l.start_layer, &l.end_layer].into_iter().flatten() {
                 require(
-                    copper.contains_key(&a) && copper.contains_key(&b),
+                    copper.contains_key(endpoint.as_str()),
                     format!(
-                        "layer {:?}: copper_span endpoints must reference existing copper_index values",
+                        "layer {:?}: endpoint {endpoint:?} must reference an existing BOARD copper layer",
+                        l.name
+                    ),
+                )?;
+            }
+            if let (Some(a), Some(b)) = (&l.start_layer, &l.end_layer) {
+                require(
+                    copper[a.as_str()] < copper[b.as_str()],
+                    format!(
+                        "layer {:?}: drill endpoints must follow matrix rows",
                         l.name
                     ),
                 )?;

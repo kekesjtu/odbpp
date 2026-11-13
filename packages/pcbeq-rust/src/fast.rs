@@ -29,12 +29,8 @@ fn audit(original: &Shape, source: &Source, rectangles: &[Rect], ratio: f64) -> 
     let gained = model.difference(original).area();
     let topology = source.topology(&model);
     json!({"ok":lost+gained<=ratio*original_area+1e-8 && topology["preserved"]==true,
-        "strategy":"fast-greedy-rectangles","original_area_mm2":original_area,
-        "rectified_area_mm2":model.area(),"lost_area_mm2":lost,"gained_area_mm2":gained,
-        "shape_deviation_mm2":lost+gained,"relative_area_error":(lost+gained)/original_area,
-        "net_area_error_mm2":gained-lost,"iou":(original_area-lost)/(original_area+gained),
-        "rectangle_count":rectangles.len(),"audit":{"topology":topology,
-        "non_overlapping":true,"relative_area_budget":ratio,"area_budget_mm2":ratio*original_area}})
+        "original_area_mm2":original_area,"lost_area_mm2":lost,"gained_area_mm2":gained,
+        "topology":topology})
 }
 
 pub fn approximate(original: &Shape, ratio: f64) -> Result<Plan> {
@@ -79,16 +75,17 @@ pub fn approximate(original: &Shape, ratio: f64) -> Result<Plan> {
                     last = audit(original, &source, &merged, ratio);
                     if last["ok"] == true {
                         attempts.push(json!({"resolution":resolution,"tau":tau,"ok":true}));
-                        last["audit"]["search"] = json!({"pixels":pixels,"resolution":resolution,
-                        "tau":tau,"attempts":attempts,"max_rectangles":MAX_RECTANGLES,
-                        "max_search_cells":MAX_PIXELS,"seed":"largest available foreground rectangle",
-                        "benefit":"area*(foreground-tau)","edge_search":"coordinate ascent"});
+                        last["search"] = json!({"pixels":pixels,"resolution":resolution,
+                            "tau":tau,"attempts":attempts});
                         return Ok(Plan {
                             rectangles: merged,
                             audit: last,
                         });
                     }
-                    if last["shape_deviation_mm2"].as_f64().unwrap() > allowed + remaining + 1e-8 {
+                    if last["lost_area_mm2"].as_f64().unwrap()
+                        + last["gained_area_mm2"].as_f64().unwrap()
+                        > allowed + remaining + 1e-8
+                    {
                         break;
                     }
                 }

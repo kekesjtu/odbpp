@@ -14,7 +14,6 @@ Number = FiniteFloat
 # A compact coordinate pair, not a separate Pydantic object per vertex. Both
 # Python pairs and JSON arrays are accepted; strict finite elements remain.
 Point = Annotated[tuple[Number, Number], Field(strict=False)]
-Index = Annotated[StrictInt, Field(ge=0)]
 
 
 class ContractModel(BaseModel):
@@ -82,18 +81,17 @@ class LayerModel(ContractModel):
     geometry_error: str | None = None
     domain_id: str | None = None
     polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")
-    z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由 copper_span 端点铜层推导。")
+    z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由起止铜层推导。")
     thickness: ThicknessModel | None = None
-    copper_index: Index | None = None
-    copper_span: list[Index] | None = Field(default=None, min_length=2, max_length=2,
-                                          description="自顶向下的两个铜层索引；不重复存储端点名称。")
+    start_layer: str | None = Field(default=None, min_length=1, description="DRILL 起始铜层名称。")
+    end_layer: str | None = Field(default=None, min_length=1, description="DRILL 终止铜层名称。")
 
     @model_validator(mode="after")
     def consistent(self):
         if self.type == "DRILL" and self.z_mm is not None:
-            raise ValueError("DRILL must not carry z_mm; derive it from copper_span endpoint copper layers")
-        if self.copper_span is not None and self.copper_span[0] >= self.copper_span[1]:
-            raise ValueError("copper_span endpoints must increase")
+            raise ValueError("DRILL must not carry z_mm; derive it from endpoint copper layers")
+        if self.type != "DRILL" and (self.start_layer is not None or self.end_layer is not None):
+            raise ValueError("start_layer/end_layer require a DRILL layer")
         if self.geometry_status != "ready" and self.polygons:
             raise ValueError("failed/omitted geometry must not carry polygons")
         if self.geometry_status == "failed" and not self.geometry_error:
@@ -119,23 +117,20 @@ class StepModel(ContractModel):
         if len(rows) != len(set(rows)):
             raise ValueError("duplicate matrix row")
         domains = {d.id: d for d in self.domains}
-        indexed = [l for l in self.layers if l.copper_index is not None]
-        copper = {l.copper_index for l in indexed}
-        if len(copper) != len(indexed):
-            raise ValueError("duplicate copper_index")
-        if any(l.type not in ("SIGNAL", "POWER_GROUND", "MIXED") or l.context != "BOARD" for l in indexed):
-            raise ValueError("copper_index must belong to a BOARD copper layer")
-        ordered = sorted(indexed, key=lambda l: l.copper_index)
-        if any(a.row >= b.row for a, b in zip(ordered, ordered[1:])):
-            raise ValueError("copper_index order must follow matrix rows")
+        copper = {l.name: l for l in self.layers
+                  if l.type in ("SIGNAL", "POWER_GROUND", "MIXED") and l.context == "BOARD"}
         if self.profile_domain_id is not None:
             if self.profile_domain_id not in domains or domains[self.profile_domain_id].source != "step_profile":
                 raise ValueError("profile_domain_id must reference a step_profile domain")
         for layer in self.layers:
             if layer.domain_id is not None and layer.domain_id not in domains:
                 raise ValueError(f"layer {layer.name!r}: unknown domain_id {layer.domain_id!r}")
-            if layer.copper_span is not None and any(i not in copper for i in layer.copper_span):
-                raise ValueError(f"layer {layer.name!r}: copper_span endpoints must reference existing copper_index values")
+            for endpoint in (layer.start_layer, layer.end_layer):
+                if endpoint is not None and endpoint not in copper:
+                    raise ValueError(f"layer {layer.name!r}: endpoint {endpoint!r} must reference an existing BOARD copper layer")
+            if layer.start_layer is not None and layer.end_layer is not None:
+                if copper[layer.start_layer].row >= copper[layer.end_layer].row:
+                    raise ValueError(f"layer {layer.name!r}: drill endpoints must follow matrix rows")
         return self
 
 
@@ -173,7 +168,7 @@ class BoardDocument(ContractModel):
             "layers": [{"name": l.name, "type": l.type, "context": l.context,
                         "row": l.row, "geometry_status": l.geometry_status,
                         "geometry_error": l.geometry_error, "domain_id": l.domain_id,
-                        "copper_index": l.copper_index, "copper_span": l.copper_span,
+                        "start_layer": l.start_layer, "end_layer": l.end_layer,
                         "z_mm": None if l.z_mm is None else l.z_mm.model_dump(),
                         "polygons": [{"island": p.island, "points": p.points} for p in l.polygons]}
                        for l in step.layers]} for step in self.steps]}

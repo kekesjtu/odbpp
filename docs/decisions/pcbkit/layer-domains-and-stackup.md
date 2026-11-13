@@ -10,8 +10,7 @@
 
 ## 叠层与厚度决策
 
-Z 使用毫米，自叠层顶面向下。matrix 行序给出层次，铜层具有自上而下的 `copper_index`，介质和钻孔用 `copper_span` 表示铜层跨度。
-介质的跨度取 matrix 行序中的相邻铜层；外侧介质没有双端跨度，其位置仍由 row 明确表达。钻孔覆盖与预览扣孔仅比较介质 row 和起止铜层 row，不依赖介质跨度、层厚或绝对 Z。
+Z 使用毫米，自叠层顶面向下。matrix row 给出层次，钻孔以 `start_layer/end_layer` 直接引用起止 BOARD 铜层。介质只需自身 row，不保存相邻铜层关系。钻孔覆盖与预览扣孔仅比较介质 row 和端点铜层 row，不依赖层厚或绝对 Z。
 板内实体层给出 best-effort 的绝对 Z 起止与来源。数值厚度由 Z 差得到。
 
 | 来源 | 解释 |
@@ -27,4 +26,4 @@ Z 使用毫米，自叠层顶面向下。matrix 行序给出层次，铜层具�
 结构层厚度未知时，后续位置携带未知状态；装饰层厚度未知时标记自身未知，铜面位置的累计可信性独立维护。
 MaterialMap 对联合可信状态为 false 的两个 Z 端点使用 null；中间 JSON 与运行诊断保留估算值。
 
-DRILL 作为跨层图案交付投影和 `copper_span`。字段定义见[中间 JSON](../../interfaces/intermediate-json.md)，覆盖规则见[材料采样](../pcbeq/material-sampling.md)。
+DRILL 作为跨层图案交付投影和起止铜层名称。字段定义见[中间 JSON](../../interfaces/intermediate-json.md)，覆盖规则见[材料采样](../pcbeq/material-sampling.md)。

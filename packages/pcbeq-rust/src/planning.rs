@@ -41,11 +41,11 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
         return Err("no physical material layers".into());
     }
     let mut originals = vec![];
-    let mut plans: Vec<(Vec<usize>, Value)> = vec![];
+    let mut plans: Vec<(Vec<usize>, String)> = vec![];
     let mut rectangles = vec![];
     let mut members = vec![];
     let mut reports = BTreeMap::new();
-    let mut reused = 0;
+    let mut domain_profiles = BTreeMap::new();
     for id in &ids {
         let authored = step
             .domains
@@ -65,11 +65,8 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
                 break;
             }
         }
-        let (region_ids, mut report) = if let Some(i) = existing {
-            reused += 1;
-            let mut report = plans[i].1.clone();
-            report["reused_from"] = report["canonical_domain_id"].clone();
-            (plans[i].0.clone(), report)
+        let (region_ids, canonical) = if let Some(i) = existing {
+            plans[i].clone()
         } else {
             let plan = fast::approximate(&original, options.max_area_error_ratio)
                 .map_err(|e| format!("domain {id:?}: {e}"))?;
@@ -77,24 +74,18 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
                 (rectangles.len()..rectangles.len() + plan.rectangles.len()).collect();
             rectangles.extend(plan.rectangles);
             let mut report = plan.audit;
-            report["canonical_domain_id"] = json!(id);
+            report.as_object_mut().unwrap().remove("ok");
+            report["regions"] = json!(region_ids);
             originals.push(original);
-            plans.push((region_ids.clone(), report.clone()));
-            (region_ids, report)
+            plans.push((region_ids.clone(), id.clone()));
+            reports.insert(id.clone(), report);
+            (region_ids, id.clone())
         };
-        report["region_ids"] = json!(region_ids);
+        domain_profiles.insert(id.clone(), canonical);
         members.push(region_ids);
-        reports.insert(id.clone(), report);
     }
-    let domain_regions: BTreeMap<_, _> = ids.iter().zip(&members).collect();
-    let report = json!({"ok":true,"strategy":"fast-greedy-independent-profiles",
-        "rectangle_count":rectangles.len(),"profile_count":ids.len(),"unique_profile_count":plans.len(),
-        "reused_profile_count":reused,"relative_area_budget":options.max_area_error_ratio,
-        "rectangles":rectangles.iter().map(|r|json!({"x0_mm":r[0],"y0_mm":r[1],"x1_mm":r[2],"y1_mm":r[3]})).collect::<Vec<_>>(),
-        "audit":{"domains":reports,"domain_region_ids":domain_regions,
-            "relative_area_budget":options.max_area_error_ratio,
-            "cross_layer_alignment_required":false,"per_profile_non_overlapping":true,
-            "effective_profile_identity":"geo topological equality after board intersection"}});
+    let report = json!({"max_area_error_ratio":options.max_area_error_ratio,
+        "domain_profiles":domain_profiles,"profiles":reports});
     Ok(Geometry {
         rectangles,
         domain_ids: ids,

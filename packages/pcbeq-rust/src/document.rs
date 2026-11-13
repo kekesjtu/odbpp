@@ -79,8 +79,8 @@ pub struct Layer {
     pub polygons: Vec<Polygon>,
     pub z_mm: Option<Extent>,
     thickness: Option<Thickness>,
-    pub copper_index: Option<usize>,
-    pub copper_span: Option<[usize; 2]>,
+    pub start_layer: Option<String>,
+    pub end_layer: Option<String>,
 }
 impl Layer {
     pub fn copper(&self) -> bool {

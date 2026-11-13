@@ -37,26 +37,26 @@ pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
         .iter()
         .filter(|l| l.context == "BOARD" && l.kind == "DRILL")
     {
-        let span = layer.copper_span.ok_or(format!(
-            "drill layer {:?}: cannot resolve copper_span",
-            layer.name
-        ))?;
+        let (start, end) = layer
+            .start_layer
+            .as_ref()
+            .zip(layer.end_layer.as_ref())
+            .ok_or(format!(
+                "drill layer {:?}: missing start_layer/end_layer",
+                layer.name
+            ))?;
         let top = step
             .layers
             .iter()
-            .find(|l| l.copper_index == Some(span[0]))
+            .find(|l| &l.name == start)
             .ok_or(format!(
                 "drill layer {:?}: missing start copper layer",
                 layer.name
             ))?;
-        let bottom = step
-            .layers
-            .iter()
-            .find(|l| l.copper_index == Some(span[1]))
-            .ok_or(format!(
-                "drill layer {:?}: missing end copper layer",
-                layer.name
-            ))?;
+        let bottom = step.layers.iter().find(|l| &l.name == end).ok_or(format!(
+            "drill layer {:?}: missing end copper layer",
+            layer.name
+        ))?;
         if layer.geometry_status != "ready" {
             return Err(format!(
                 "drill layer {:?}: geometry is {}",
@@ -111,7 +111,6 @@ pub fn evaluate(
         &black,
     );
     let mut regions = vec![vec![]; geometry.rectangles.len()];
-    let mut cells = 0;
     let mut base_pixels = 0;
     for &rid in &geometry.members[domain] {
         let tile = &mesh.rasters[rid];
@@ -126,7 +125,6 @@ pub fn evaluate(
             materials,
             mesh.minimum,
         )?;
-        cells += values.len();
         for (q, value) in values.into_iter().enumerate() {
             let value = value.ok_or(format!("layer {:?} region {rid} cell {q}: insufficient raster samples or domain/geometry contradiction; increase px/py",layer.name))?;
             let mut properties = value;
@@ -144,10 +142,15 @@ pub fn evaluate(
         }
     }
     let z = layer.z_mm.as_ref().ok_or("missing layer Z")?;
-    let report = json!({"name":layer.name,"type":layer.kind,"status":"equivalent","domain_id":layer.domain_id,
-        "domain_source":domain_doc.source,"cell_count":cells,
-        "outside_material":"base","outside_base_pixels":base_pixels,
-        "z_mm":{"start_mm":z.start_mm,"end_mm":z.end_mm,"thickness_known":z.thickness_known,"source":z.source},
-        "drill_overlays":covering.iter().map(|d|&d.layer.name).collect::<Vec<_>>()});
+    let mut report = json!({"name":layer.name,"domain_id":layer.domain_id,
+        "outside_base_pixels":base_pixels});
+    if !z.thickness_known {
+        report["estimated_z_mm"] =
+            json!({"start_mm":z.start_mm,"end_mm":z.end_mm,"source":z.source});
+    }
+    if layer.kind == "DIELECTRIC" {
+        report["drill_overlays"] =
+            json!(covering.iter().map(|d| &d.layer.name).collect::<Vec<_>>());
+    }
     Ok((regions, report))
 }

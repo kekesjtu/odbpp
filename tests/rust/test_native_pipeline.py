@@ -23,7 +23,6 @@ def execute(document, tmp_path, **options):
 def test_full_pipeline_has_no_python_product_imports(tmp_path):
     document = build_document(layers=[{"name":"CU","polygons":[rect(0,0,10,10)]}])
     summary,delivered,output=execute(document,tmp_path)
-    assert summary["execution"]=="native-json-to-materialmap"
     assert summary["cells"]==16
     assert all(values==(385,385,385,8960,385) for _,_,values in iter_cells(delivered))
     assert not list(output.rglob("*.png"))
@@ -82,8 +81,8 @@ def test_native_thin_region_uses_a_local_raster(tmp_path):
     output=tmp_path/"native"
     summary=run(source,output,grid_level="standard")
     delivered=read_document(output/"materialmap.json")
-    assert summary["raster_sampling"]["layout"]=="region-local"
-    assert summary["raster_sampling"]["total_pixels"]<20_000_000
+    raster=json.loads((output/"diagnostics/run.json").read_text())["raster"]
+    assert sum(tile["px"]*tile["py"] for tile in raster["regions"])<20_000_000
     thin=next(r for r in delivered.regions if r.bounds_mm.y[1]-r.bounds_mm.y[0]<.001)
     assert thin.values and all(v==(.3,.3,.3,1850,1100) for v in thin.values)
     assert summary["cells"]==sum(len(r.values) for r in delivered.regions)
@@ -106,7 +105,7 @@ def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path):
     assert values==pytest.approx(((.3+harmonic)/2,)*2+(96.475,density,cp),abs=1e-4)
 
 
-@pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "domain", "z", "span"])
+@pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "domain", "z", "endpoint"])
 def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
     document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])
     layer = document["steps"][0]["layers"][0]
@@ -121,7 +120,7 @@ def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
     elif change == "z":
         layer["z_mm"]["end_mm"] = -1
     else:
-        layer["copper_span"] = [0, 1]
+        layer["start_layer"] = "missing"
     with pytest.raises(ValueError):
         execute(document, tmp_path)
     assert not (tmp_path / "native/materialmap.json").exists()
@@ -164,7 +163,7 @@ def test_rust_benchmark_uses_native_file_pipeline(tmp_path, monkeypatch):
                                  "--px", "32", "--py", "32", "--max-cell-mm", "5",
                                  "--repeat", "1", "--warmup", "0"]) == 0
     report = json.loads((output / "benchmark.json").read_text(encoding="utf-8"))
-    assert report["runs"][0]["execution"] == "native-json-to-materialmap"
+    assert report["runs"][0]["cells"] == 4
 
 
 def test_native_publication_invalidates_owned_images_and_keeps_user_files(tmp_path):

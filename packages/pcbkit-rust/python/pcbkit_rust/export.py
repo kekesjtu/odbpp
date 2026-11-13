@@ -43,7 +43,7 @@ from .errors import LayerProfileError
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
 from .model import Job, Layer, LayerType, Step
-from .stackup import Stackup, describe_span
+from .stackup import Stackup
 from .intermediate import BoardDocument, LayerModel
 
 
@@ -195,12 +195,6 @@ class LayerPreview:
         if self.stackup is None:
             return None
         return self.stackup.weight(self.layer)
-
-    def z_span(self) -> Optional[dict]:
-        """Which copper planes this layer sits between, or ``None``."""
-        if self.stackup is None:
-            return None
-        return describe_span(self.stackup, self.stackup.span_of(self.layer))
 
     def z_extent(self):
         """Absolute millimetre Z extent (:class:`~pcbkit.stackup.ZExtent`).
@@ -531,10 +525,11 @@ def _serialised_rings(preview, digits: int) -> tuple[list[Ring], float, Optional
 def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> dict:
     """One authoritative layer record; numerical thickness is derived from Z."""
     ref = layer.ref
-    # DRILL depth is already defined by copper_span and the endpoint copper Z.
+    # DRILL dimensions are derived from the endpoint copper layers.
     # Keep the derived extent inside Stackup for previews, not in the interface.
     extent = None if stackup is None or layer.type is LayerType.DRILL else stackup.z_extent(layer)
-    span = None if stackup is None else stackup.span_of(layer)
+    endpoints = (stackup.drill_endpoints(layer)
+                 if stackup is not None and layer.type is LayerType.DRILL else None)
     thickness = None
     if stackup is not None and layer.type is not None and (
             layer.is_copper or layer.type.is_non_copper_material):
@@ -558,8 +553,8 @@ def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> di
         "context": ref.context.value, "row": ref.row,
         "form": ref.form.value, "form_source": ref.form_source.value,
         "thickness": thickness,
-        "copper_index": None if stackup is None else stackup.copper_index(layer.name),
-        "copper_span": None if span is None else span.as_dict(),
+        "start_layer": None if endpoints is None else endpoints[0].name,
+        "end_layer": None if endpoints is None else endpoints[1].name,
         "z_mm": None if extent is None else {
             "start_mm": _round(extent.start_mm, digits + 3),
             "end_mm": _round(extent.end_mm, digits + 3),

@@ -1,15 +1,6 @@
 use crate::Result;
 use serde_json::{Value, json};
 const FIELDS: [&str; 3] = ["k_w_mk", "density_kg_m3", "specific_heat_j_kgk"];
-const SOURCES: [&str; 2] = [
-    "pure annealed copper at ~25 C; CRC Handbook of Chemistry and Physics",
-    "typical cured FR-4 datasheet values, e.g. Isola 370HR",
-];
-pub fn defaults() -> Value {
-    json!({
-    "copper":{"k_w_mk":385.,"density_kg_m3":8960.,"specific_heat_j_kgk":385.,"source":SOURCES[0]},
-    "base":{"k_w_mk":0.3,"density_kg_m3":1850.,"specific_heat_j_kgk":1100.,"source":SOURCES[1]}})
-}
 pub struct Materials {
     config: Value,
     pub warnings: Vec<String>,
@@ -70,11 +61,7 @@ impl Materials {
                 if origin == "project_default" {
                     missing.push(*field);
                 }
-                fields.insert(
-                    field.to_string(),
-                    json!({"value":value,"origin":origin,
-                    "source":if origin=="project_default"{SOURCES[index]}else{origin}}),
-                );
+                fields.insert(field.to_string(), json!({"value":value,"origin":origin}));
             }
             if !missing.is_empty() {
                 let message = format!(
@@ -85,16 +72,9 @@ impl Materials {
                     self.warnings.push(message);
                 }
             }
-            provenance.insert(
-                phase.to_string(),
-                json!({"k_w_mk":values[index][0],"density_kg_m3":values[index][1],
-                "specific_heat_j_kgk":values[index][2],"fields":fields}),
-            );
+            provenance.insert(phase.to_string(), json!(fields));
         }
-        self.by_layer.insert(
-            name.to_string(),
-            json!({"phase1":"copper","phase2":"base","provenance":provenance}),
-        );
+        self.by_layer.insert(name.to_string(), json!(provenance));
         Ok([
             values[0][0],
             values[1][0],

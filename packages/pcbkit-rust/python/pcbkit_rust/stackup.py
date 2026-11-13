@@ -1,41 +1,7 @@
-"""Layer stack geometry: what sits above what, and which holes pass through it.
+"""Matrix layer order, drill endpoint references and attribute-based absolute Z.
 
-The parser knows the matrix row order, each layer's ``TYPE`` and the drill
-layers' ``START_NAME``/``END_NAME``.  It does **not** know, without a stack
-model, whether a hole in ``D_3_8`` passes through ``DIELECTRIC_5``.  requirements.md
-constraint 3 requires that judgement for dielectric display cutouts and
-solid-copper dielectric sampling. The intermediate geometry stays uncut;
-copper artwork and its sampling are independent of DRILL projections.
-
-The model used here is deliberately coarse but honest:
-
-* Copper layers define **planes**.  Planes are indexed ``0..n-1`` from the top of
-  the matrix down.
-* A **dielectric** between the copper at index ``i`` and the copper at index
-  ``j`` has the neighbouring copper span ``(i, j)`` in matrix row order.
-  Exterior dielectrics have no such span, but their matrix rows are still known.
-* A **drill** from ``START_NAME`` to ``END_NAME`` occupies ``(a, b)`` where
-  ``a``/``b`` are the copper indices those names resolve to.
-
-Drill coverage uses only matrix rows: a dielectric is crossed exactly when its
-row lies strictly between the endpoint copper rows. Thickness and absolute Z
-do not participate; exterior dielectrics are outside every resolved drill span.
-Unresolved drill endpoints are reported rather than guessed.
-
-Thickness comes from ``.layer_dielectric``, interpreted with the unit scope of
-the file that declared it.  That scope is the part the old export dropped: the
-value ``0.00255906`` is 65 um in an ``INCH`` attrlist and 2.6 nm in an ``MM`` one.
-
-**Absolute Z.**  Copper-plane indices order the stack but do not give it a
-length.  :meth:`Stackup.z_extent` adds millimetres on top of that ordering by
-walking the board layers top-down and accumulating each layer's thickness:
-``.copper_weight`` for copper (an areal density in an imperial job, converted
-with an assumed copper density), ``.layer_dielectric`` for dielectric and
-solder mask.  A structural layer whose thickness the format does not state
-marks every Z below it ``thickness_known=False``, so the reader can tell a
-measured stack from a partially assumed one.  A *decorative* layer (paste,
-silkscreen, ...) without a stated thickness is marked unknown for itself -- its
-zero is an assumption -- while the copper positions around it stay known.
+Drill coverage compares dielectric rows with endpoint copper rows. Thickness
+and cumulative absolute Z describe dimensions and never select drill coverage.
 """
 
 from __future__ import annotations
@@ -45,34 +11,14 @@ from typing import Optional
 
 from .diagnostics import (
     ATTR_LAYER_DIELECTRIC_ON_COPPER,
-    STACKUP_DRILL_SPAN_UNKNOWN,
+    STACKUP_DRILL_ENDPOINTS_UNKNOWN,
     STACKUP_THICKNESS_UNKNOWN,
     Diagnostics,
 )
 from .model import Layer, LayerContext, LayerType, Step
 from .units import CopperWeight, UnitScope, copper_weight
 
-__all__ = ["ZSpan", "ZExtent", "Thickness", "Stackup"]
-
-
-@dataclass(frozen=True)
-class ZSpan:
-    """A half-open interval in copper-plane index space.
-
-    ``start`` is the index of the plane the interval begins at (the top of the
-    interval) and ``end`` the plane it ends at.  A copper plane has no extent in
-    this model, so only dielectrics and drills carry a span.
-    """
-
-    start: int
-    end: int
-
-    @property
-    def is_valid(self) -> bool:
-        return self.end > self.start
-
-    def as_dict(self) -> list[int]:
-        return [self.start, self.end]
+__all__ = ["ZExtent", "Thickness", "Stackup"]
 
 
 @dataclass(frozen=True)
@@ -143,7 +89,7 @@ class Thickness:
 
 
 class Stackup:
-    """The ordered board stack of one step, with drill spans resolved."""
+    """The ordered board stack of one step, with drill endpoints resolved."""
 
     def __init__(self, step: Step, *, diagnostics: Optional[Diagnostics] = None) -> None:
         self.step = step
@@ -155,14 +101,7 @@ class Stackup:
             (l for l in step.layers if l.ref.context is LayerContext.BOARD),
             key=lambda l: l.ref.row,
         )
-        self.copper_layers: list[Layer] = [l for l in self.board_layers if l.is_copper]
-
-        self._copper_by_name: dict[str, int] = {
-            l.name.casefold(): index for index, l in enumerate(self.copper_layers)
-        }
-        self._position: dict[str, int] = {
-            l.name.casefold(): index for index, l in enumerate(self.board_layers)
-        }
+        self._copper_by_name = {layer.name.casefold(): layer for layer in self.board_layers if layer.is_copper}
         self._warned: set[str] = set()
         #: Lazily built absolute-Z table, keyed by layer name.
         self._z_table: Optional[dict[str, ZExtent]] = None
@@ -176,91 +115,20 @@ class Stackup:
         self._warned.add(key)
         self.diagnostics.warn(code, message, path)
 
-    def copper_index(self, name: str) -> Optional[int]:
-        """Index of the copper layer called *name*, or ``None``."""
-        return self._copper_by_name.get(name.strip().casefold()) if name else None
-
-    def layer_index(self, layer: Layer) -> Optional[int]:
-        """Position of *layer* in matrix row order."""
-        return self._position.get(layer.name.casefold())
-
-    def _neighbouring_copper(self, layer: Layer) -> tuple[Optional[int], Optional[int]]:
-        """Copper indices immediately above and below *layer* by matrix row."""
-        position = self.layer_index(layer)
-        if position is None:
-            return None, None
-        above = below = None
-        for index in range(position - 1, -1, -1):
-            candidate = self.board_layers[index]
-            folded = candidate.name.casefold()
-            if folded in self._copper_by_name:
-                above = self._copper_by_name[folded]
-                break
-        for index in range(position + 1, len(self.board_layers)):
-            candidate = self.board_layers[index]
-            folded = candidate.name.casefold()
-            if folded in self._copper_by_name:
-                below = self._copper_by_name[folded]
-                break
-        return above, below
-
-    # ---------------------------------------------------------------- spans
-
-    def dielectric_span(self, layer: Layer) -> Optional[ZSpan]:
-        """Neighbouring copper indices, or ``None`` for an exterior dielectric."""
-        above, below = self._neighbouring_copper(layer)
-        if above is None or below is None or below <= above:
-            return None
-        return ZSpan(above, below)
-
-    def drill_span(self, layer: Layer) -> Optional[ZSpan]:
-        """Copper interval a drill layer spans, or ``None`` if unknown.
-
-        ``START_NAME``/``END_NAME`` are the only fields that state a drill's
-        extent.  A missing or unresolvable endpoint is reported rather than
-        widened to the whole board: the fallback would be indistinguishable from
-        a genuine through-hole in the output while being far more destructive.
-        """
+    def drill_endpoints(self, layer: Layer) -> Optional[tuple[Layer, Layer]]:
+        """Resolve START_NAME/END_NAME to distinct BOARD copper layers, top first."""
         ref = layer.ref
-        start = self.copper_index(ref.start_name)
-        end = self.copper_index(ref.end_name)
-        if start is None or end is None:
+        start = self._copper_by_name.get(ref.start_name.strip().casefold())
+        end = self._copper_by_name.get(ref.end_name.strip().casefold())
+        if start is None or end is None or start is end:
             self._warn_once(
-                f"drill-span:{layer.name}",
-                STACKUP_DRILL_SPAN_UNKNOWN,
-                f"drill layer {layer.name!r} declares START_NAME="
-                f"{ref.start_name!r}/END_NAME={ref.end_name!r}, which do not both "
-                f"resolve to copper layers; its matrix coverage is unknown and it is "
-                f"not projected into any dielectric",
+                f"drill-endpoints:{layer.name}", STACKUP_DRILL_ENDPOINTS_UNKNOWN,
+                f"drill layer {layer.name!r}: START_NAME={ref.start_name!r}/"
+                f"END_NAME={ref.end_name!r} must resolve to two distinct BOARD copper layers",
                 layer.dir_name or None,
             )
             return None
-        if end < start:
-            start, end = end, start
-        if end == start:
-            self._warn_once(
-                f"drill-span:{layer.name}",
-                STACKUP_DRILL_SPAN_UNKNOWN,
-                f"drill layer {layer.name!r} starts and ends on the same copper "
-                f"layer ({ref.start_name!r}); no dielectric lies between them",
-                layer.dir_name or None,
-            )
-            return None
-        return ZSpan(start, end)
-
-    def span_of(self, layer: Layer) -> Optional[ZSpan]:
-        """Z interval of a dielectric sheet or a drill, else ``None``.
-
-        ``ROUT`` is excluded on purpose: it is a milling contour rather than a
-        drilled hole, and requirements.md parser constraint 3 projects *drills* into dielectrics.
-        """
-        if layer.type is LayerType.DIELECTRIC:
-            return self.dielectric_span(layer)
-        if layer.type is LayerType.DRILL:
-            return self.drill_span(layer)
-        return None
-
-    # ------------------------------------------------------------ overlap
+        return (start, end) if start.ref.row < end.ref.row else (end, start)
 
     def drill_layers(self) -> list[Layer]:
         """Physical drill layers, in matrix order (``ROUT`` excluded)."""
@@ -272,10 +140,9 @@ class Stackup:
             return []
         out = []
         for drill in self.drill_layers():
-            other = self.drill_span(drill)
-            if (other is not None
-                    and self.copper_layers[other.start].ref.row < layer.ref.row
-                    < self.copper_layers[other.end].ref.row):
+            endpoints = self.drill_endpoints(drill)
+            if (endpoints is not None
+                    and endpoints[0].ref.row < layer.ref.row < endpoints[1].ref.row):
                 out.append(drill)
         return out
 
@@ -401,8 +268,6 @@ class Stackup:
 
     def _build_z_table(self) -> dict[str, ZExtent]:
         out: dict[str, ZExtent] = {}
-        plane_top: dict[int, float] = {}
-        plane_bottom: dict[int, float] = {}
         z = 0.0
         # Whether the cumulative position reached so far rests only on stated
         # thicknesses.  Two questions are kept apart on purpose: *where* a layer
@@ -426,27 +291,16 @@ class Stackup:
             if not stated and self._is_structural(layer):
                 position_known = False
             out[layer.name] = ZExtent(start, end, known, source)
-            index = self.copper_index(layer.name)
-            if layer.is_copper and index is not None:
-                plane_top[index] = start
-                plane_bottom[index] = end
 
-        for layer in self.board_layers:
-            if layer.type is not LayerType.DRILL:
+        for layer in self.drill_layers():
+            endpoints = self.drill_endpoints(layer)
+            if endpoints is None:
                 continue
-            span = self.drill_span(layer)
-            if span is None:
-                continue
-            if span.start not in plane_top or span.end not in plane_bottom:
-                continue
-            end_plane = self.copper_layers[span.end]
-            reference = out.get(end_plane.name)
+            top, bottom = endpoints
             out[layer.name] = ZExtent(
-                plane_top[span.start],
-                plane_bottom[span.end],
-                bool(reference is not None and reference.thickness_known),
-                f"drill span {self.copper_layers[span.start].name}"
-                f"..{end_plane.name}",
+                out[top.name].start_mm, out[bottom.name].end_mm,
+                out[bottom.name].thickness_known,
+                f"drill endpoints {top.name}..{bottom.name}",
             )
         return out
 
@@ -481,17 +335,3 @@ class Stackup:
         if self.step.header is not None:
             return self.step.header.units
         return UnitScope.default()
-
-
-def describe_span(stackup: Stackup, span: Optional[ZSpan]) -> Optional[dict]:
-    """JSON-ready description of a span, naming the copper planes at each end."""
-    if span is None:
-        return None
-    names = [l.name for l in stackup.copper_layers]
-    top = names[span.start] if 0 <= span.start < len(names) else None
-    bottom = names[span.end] if 0 <= span.end < len(names) else None
-    return {
-        "from_layer": top,
-        "to_layer": bottom,
-        "copper_index": span.as_dict(),
-    }

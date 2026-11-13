@@ -56,7 +56,7 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
         normalize(&mut layer.polygons);
     }
     let geometry_start = Instant::now();
-    let geometry = planning::plan(step, &options)?;
+    let mut geometry = planning::plan(step, &options)?;
     let geometry_end = Instant::now();
     let mesh = native_mesh::build(step, &geometry, &options)?;
     let mesh_end = Instant::now();
@@ -64,12 +64,13 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
     let publication = crate::native_publication::Publication::new(output)?;
     let mut writer = Writer::open(&publication.path, &step.name)?;
     let mut layer_reports = vec![];
+    let mut region_indices = vec![None; geometry.rectangles.len()];
     let mut sample_seconds = 0.;
     let mut write_seconds = 0.;
     let mut layers = 0;
     for layer in &step.layers {
         if !layer.physical() {
-            layer_reports.push(json!({"name":layer.name,"type":layer.kind,"status":"skipped", "reason":if layer.context!="BOARD"{"non-BOARD context has no physical slab"}else{"only copper and dielectric layers are equivalented"}}));
+            layer_reports.push(json!({"name":layer.name,"reason":if layer.context!="BOARD"{"non-BOARD context has no physical slab"}else{"only copper and dielectric layers are equivalented"}}));
             continue;
         }
         if layer.geometry_status != "ready" {
@@ -103,6 +104,9 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
             native_sampling::evaluate(step, layer, &drills, &geometry, &mesh, domain, pair)?;
         sample_seconds += before.elapsed().as_secs_f64();
         let before = Instant::now();
+        for (offset, &rid) in geometry.members[domain].iter().enumerate() {
+            region_indices[rid].get_or_insert(writer.regions + offset);
+        }
         writer.layer(layer, &geometry, &mesh, domain, &values)?;
         write_seconds += before.elapsed().as_secs_f64();
         layer_reports.push(report);
@@ -117,26 +121,30 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
         "equivalence_and_write":end.duration_since(read_end).as_secs_f64(),"total":elapsed,
         "geometry":geometry_end.duration_since(geometry_start).as_secs_f64(),
         "mesh":mesh_end.duration_since(geometry_end).as_secs_f64(),"sampling":sample_seconds,"write":write_seconds},
-        "cells":writer.cells,"regions":writer.regions,"layers":layers,"raster":mesh.pixels,
+        "cells":writer.cells,"regions":writer.regions,"layers":layers,
         "cells_per_s":writer.cells as f64/elapsed,"materialmap_bytes":fs::metadata(&writer.destination).map_err(|e|e.to_string())?.len(),
-        "warnings":materials.warnings,"numerical_backend":"rust","execution":"native-json-to-materialmap",
-        "geometry_backend":"geo","raster_sampling":mesh.raster_report});
-    let grid_regions:Vec<_>=geometry.rectangles.iter().zip(&mesh.axes).enumerate().map(|(i,(r,(x,y)))|
-        json!({"region_id":i,"bounds_mm":{"x":[r[0],r[2]],"y":[r[1],r[3]]},"grid_counts":{"x":x.len()-1,"y":y.len()-1,"z":1}})).collect();
-    let mut audit = json!({"numerical_backend":"rust","execution":"native-json-to-materialmap","step":step.name,
-        "cell_count":writer.cells,
-        "raster":{"board_bounds_mm":geometry.bounds,
-            "pixel_step_mm":[(geometry.bounds[2]-geometry.bounds[0])/mesh.pixels[0]as f64,(geometry.bounds[3]-geometry.bounds[1])/mesh.pixels[1]as f64]},
-        "grid":{"layout":"region-local-cartesian","conformity_required":false,
-            "region_count":geometry.rectangles.len(),"cell_count":mesh.cell_count,"regions":grid_regions,
-            "mesh_configuration":mesh.config,"size_constraints_mm":{"max":mesh.config["max_cell_mm"]}},
-        "rectification":geometry.report,"layers":layer_reports,"materials":{"defaults":crate::native_materials::defaults(),"by_layer":materials.by_layer},
-        "diagnostics":materials.warnings.iter().map(|w|json!({"level":"warning","code":w.split(':').next().unwrap_or("warning"),"message":w,"path":null})).collect::<Vec<_>>(),
-        "runtime":{"elapsed_s":elapsed},"performance":summary});
-    audit["raster"]
+        "warnings":materials.warnings});
+    let region_indices = region_indices
+        .into_iter()
+        .map(|index| index.ok_or_else(|| "unpublished geometry region".to_string()))
+        .collect::<Result<Vec<_>>>()?;
+    for profile in geometry.report["profiles"]
         .as_object_mut()
         .unwrap()
-        .extend(mesh.raster_report.as_object().unwrap().clone());
+        .values_mut()
+    {
+        for index in profile["regions"].as_array_mut().unwrap() {
+            *index = json!(region_indices[index.as_u64().unwrap() as usize]);
+        }
+    }
+    let mut raster = mesh.raster_report;
+    for tile in raster["regions"].as_array_mut().unwrap() {
+        tile["region"] = json!(region_indices[tile["region"].as_u64().unwrap() as usize]);
+    }
+    let audit = json!({"raster":raster,"grid":mesh.config,"rectification":geometry.report,
+        "layers":layer_reports,"materials":materials.by_layer,
+        "warnings":materials.warnings.iter().map(|w|json!({"code":w.split(':').next().unwrap_or("warning"),"message":w})).collect::<Vec<_>>(),
+        "durations_s":summary["durations_s"]});
     let diagnostics = publication.path.join("diagnostics");
     fs::create_dir_all(&diagnostics).map_err(|e| e.to_string())?;
     let temporary = diagnostics.join(format!(".run-{}.tmp", std::process::id()));

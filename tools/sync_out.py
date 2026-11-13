@@ -78,8 +78,7 @@ def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5, grid_leve
             return None
         if any((not (base / p).is_file() or not (base / p).stat().st_size for p in owned)):
             return None
-        report = json.loads((base / 'diagnostics/run.json').read_text(encoding='utf-8'))
-        return None if any((d['level'] == 'error' for d in report['diagnostics'])) else report
+        return base / 'materialmap.json'
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -89,7 +88,7 @@ def render_index(rows):
     for name, source, directory, data, report in rows:
         relative = escape(directory.relative_to(OUT).as_posix())
         items = ' · '.join((f'<a href="{relative}/{p}">{label}</a>' for p, label in links))
-        lines.append(f"<tr><td>{escape(name)}</td><td>{items}</td><td>{report['grid']['region_count']} regions / {report['grid']['cell_count']} cells</td></tr>")
+        lines.append(f"<tr><td>{escape(name)}</td><td>{items}</td><td>{len(report['regions'])} regions / {sum(len(r['values']) for r in report['regions'])} cells</td></tr>")
     return '\n'.join(lines + ['</table></html>'])
 
 def published_rows():
@@ -100,7 +99,7 @@ def published_rows():
         directory = path.parents[2]
         if not (directory / 'pcbeq/materialmap.json').is_file():
             continue
-        report = json.loads(path.read_text(encoding='utf-8'))
+        report = json.loads((directory / 'pcbeq/materialmap.json').read_text(encoding='utf-8'))
         rows.append((directory.relative_to(OUT).as_posix(), None, directory, None, report))
     return rows
 

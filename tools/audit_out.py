@@ -86,77 +86,70 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         directory=path.parent
         meta=json.loads((directory/"diagnostics/run.json").read_text(encoding="utf-8"))
         materialmap=read_document(path)
-        assert all(not l.get("drill_overlays",[]) for l in meta["layers"] if l["type"]!="DIELECTRIC")
-        assert not any(d["level"]=="error" for d in meta["diagnostics"])
         document=json.loads((directory.parent / "pcbkit/intermediate.json").read_text(encoding="utf-8"))
         step=document["steps"][0]
         domains={d["id"]:physical_shape(d["polygons"]) for d in step["domains"]}
-        reports={l["name"]:l for l in meta["layers"] if l["status"]=="equivalent"}
-        regions=meta["rectification"]["rectangles"]
-        ids=meta["rectification"]["audit"]["domain_region_ids"]
-        geometry_audit=meta["rectification"]["audit"]
-        ratio=geometry_audit["relative_area_budget"]
-        region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
-        for domain_id,members in ids.items():
+        source_layers={l["name"]:l for l in step["layers"]}
+        reports={l["name"]:l for l in meta["layers"] if "domain_id" in l}
+        geometry=meta["rectification"]
+        profiles=geometry["profiles"]
+        ratio=geometry["max_area_error_ratio"]
+        def region_box(region):
+            x0,x1=region.bounds_mm.x; y0,y1=region.bounds_mm.y
+            return (x0,y0,x1,y1)
+        for domain_id,canonical in geometry["domain_profiles"].items():
             source=domains[domain_id].intersection(domains[step["profile_domain_id"]])
-            modeled=unary_union([region_shapes[rid] for rid in members])
+            shapes=[box(*region_box(materialmap.regions[i])) for i in profiles[canonical]["regions"]]
+            modeled=unary_union(shapes)
             assert source.symmetric_difference(modeled).area<=source.area*ratio+1e-8
-            assert abs(sum(region_shapes[rid].area for rid in members)-modeled.area)<1e-7
+            assert abs(sum(p.area for p in shapes)-modeled.area)<1e-7
             assert _topology(source,modeled)["preserved"]
-        rect_ids={domain_id:{(regions[rid]["x0_mm"],regions[rid]["y0_mm"],
-                               regions[rid]["x1_mm"],regions[rid]["y1_mm"]):rid for rid in members}
-                  for domain_id,members in ids.items()}
-        assert meta["grid"]["layout"]=="region-local-cartesian"
-        assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
-        local_grids={r["region_id"]:r for r in meta["grid"]["regions"]}
-        limits=meta["grid"]["size_constraints_mm"]
+        rect_ids={canonical:{region_box(materialmap.regions[i]):i for i in profile["regions"]}
+                  for canonical,profile in profiles.items()}
         raster=meta["raster"]
-        px,py=raster["px"],raster["py"]
-        tiles={r["region_id"]:r for r in raster["regions"]}
-        required=meta["grid"]["mesh_configuration"]["minimum_samples_per_axis"]
+        tiles={r["region"]:r for r in raster["regions"]}
+        limits=meta["grid"]["max_cell_mm"]
+        required=meta["grid"]["minimum_samples_per_axis"]
+        for name,layer in reports.items():
+            source=source_layers[name]
+            if source["type"]=="DIELECTRIC":
+                expected={d["name"] for d in source_layers.values()
+                          if d["type"]=="DRILL" and d.get("context","BOARD")=="BOARD"
+                          and source_layers[d["start_layer"]]["row"]<source["row"]<source_layers[d["end_layer"]]["row"]}
+                assert set(layer["drill_overlays"])==expected
         counts={}; minimum=10**9
         for region in materialmap.regions:
-            name=region.layer.name; layer=reports[name]
-            a,c=region.bounds_mm.x; b,d=region.bounds_mm.y
-            rid=rect_ids[layer["domain_id"]][(a,b,c,d)]
-            assert region.grid_counts.model_dump()==local_grids[rid]["grid_counts"]
-            assert local_grids[rid]["bounds_mm"]=={"x":[a,c],"y":[b,d]}
-            assert rid in ids[layer["domain_id"]]
-            assert layer["outside_material"] == "base"
-            expected_z=(layer["z_mm"]["start_mm"],layer["z_mm"]["end_mm"]) if layer["z_mm"]["thickness_known"] else (None,None)
+            name=region.layer.name
+            source=source_layers[name]
+            z=source["z_mm"]
+            expected_z=(z["start_mm"],z["end_mm"]) if z["thickness_known"] else (None,None)
             assert region.bounds_mm.z==expected_z
-        for region,bounds5,values in iter_cells(materialmap):
-            a,b,c,d=bounds5
+            if not z["thickness_known"]:
+                estimate=reports[name]["estimated_z_mm"]
+                assert (estimate["start_mm"],estimate["end_mm"])==(z["start_mm"],z["end_mm"])
+        for region,bounds,values in iter_cells(materialmap):
+            a,b,c,d=bounds
             for axis,length in enumerate((c-a,d-b)):
-                assert 0<length<=limits["max"][axis]+1e-8
-            x0,x1=region.bounds_mm.x; y0,y1=region.bounds_mm.y
-            tile=tiles[rect_ids[reports[region.layer.name]["domain_id"]][(x0,y0,x1,y1)]]
+                assert 0<length<=limits[axis]+1e-8
+            name=region.layer.name
+            canonical=geometry["domain_profiles"][reports[name]["domain_id"]]
+            tile=tiles[rect_ids[canonical][region_box(region)]]
             ax=RasterAxis(tile["origin_mm"][0],tile["pixel_step_mm"][0],tile["px"])
             ay=RasterAxis(tile["origin_mm"][1],tile["pixel_step_mm"][1],tile["py"])
             columns=ax.range_for(a,c);rows=ay.range_for(b,d)
             samples=min(columns[1]-columns[0],rows[1]-rows[0])
             assert samples>=required;minimum=min(minimum,samples)
-            name=region.layer.name
-            materials=meta["materials"]["by_layer"][name]
-            phases = ([materials["material_1_black"],materials["material_2_white"]]
-                      if "material_1_black" in materials else [materials["provenance"][name] for name in ("copper","base")])
+            materials=meta["materials"][name]
             fields=("k_w_mk",)*3+("density_kg_m3","specific_heat_j_kgk")
             for value,field in zip(values,fields):
-                lo,hi=sorted(p[field] for p in phases)
+                lo,hi=sorted(materials[phase][field]["value"] for phase in ("copper","base"))
                 assert math.isfinite(value) and value>0 and lo-1e-4<=value<=hi+1e-4
             counts[name]=counts.get(name,0)+1
-        assert counts=={name:layer["cell_count"] for name,layer in reports.items()}
+        assert set(counts)==set(reports)
         records.append({"case":directory.relative_to(out_dir).as_posix(),
-            "region_count":len(regions),"physical_region_count":len(materialmap.regions),
-            "region_grid_counts":[r["grid_counts"] for r in local_grids.values()],
-            "grid_cells":meta["grid"]["cell_count"],
-            "material_rows":sum(counts.values()),"raster_base":[px,py],
-            "total_region_pixels":raster["total_pixels"],"peak_region_pixels":raster["peak_region_pixels"],
+            "physical_regions":len(materialmap.regions),"material_rows":sum(counts.values()),
             "minimum_samples_per_axis":minimum,
-            "max_profile_area_error_ratio":max(r["relative_area_error"] for r in geometry_audit["domains"].values()),
-            "max_area_error_ratio":ratio,"area_and_topology_checks_passed":True,
-            "layer_count":len(reports),
-            "copper_drill_overlays_ignored":True,"all_checks_passed":True})
+            "max_profile_area_error_ratio":max((p["lost_area_mm2"]+p["gained_area_mm2"])/p["original_area_mm2"] for p in profiles.values())})
         print(records[-1],flush=True)
     assert records,"no MaterialMap JSON outputs to audit"
     return records

@@ -152,7 +152,7 @@ TOOLS_NO_UNITS = "tools.no_units"
 TOOLS_DUPLICATE_NUM = "tools.duplicate_num"
 
 # Stackup: matrix drill endpoints and attribute thickness.
-STACKUP_DRILL_SPAN_UNKNOWN = "stackup.drill_span_unknown"
+STACKUP_DRILL_ENDPOINTS_UNKNOWN = "stackup.drill_endpoints_unknown"
 STACKUP_THICKNESS_UNKNOWN = "stackup.thickness_unknown"
 
 # geometry expansion (research 05 §12: sweeps, polarity, missing symbols)
@@ -203,7 +203,6 @@ GRID_CELL_WITHOUT_PIXEL = "grid.cell_without_pixel"
 EQUIV_LAYER_FAILED = "equiv.layer_failed"
 EQUIV_LAYER_SKIPPED = "equiv.layer_skipped"
 EQUIV_MISSING_DOMAIN = "equiv.missing_domain"
-EQUIV_DRILL_SPAN_UNKNOWN = "equiv.drill_span_unknown"
 EQUIV_LAYER_Z_UNKNOWN = "equiv.layer_z_unknown"
 EQUIV_LAYER_EMPTY = "equiv.layer_empty"
 

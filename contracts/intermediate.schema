@@ -132,7 +132,7 @@
             }
           ],
           "default": null,
-          "description": "实体物理层自身的绝对 Z；DRILL 不保存此字段，由 copper_span 端点铜层推导。"
+          "description": "实体物理层自身的绝对 Z；DRILL 不保存此字段，由起止铜层推导。"
         },
         "thickness": {
           "anyOf": [
@@ -145,37 +145,33 @@
           ],
           "default": null
         },
-        "copper_index": {
+        "start_layer": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "minLength": 1,
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Copper Index"
+          "description": "DRILL 起始铜层名称。",
+          "title": "Start Layer"
         },
-        "copper_span": {
+        "end_layer": {
           "anyOf": [
             {
-              "items": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
+              "minLength": 1,
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "自顶向下的两个铜层索引；不重复存储端点名称。",
-          "title": "Copper Span"
+          "description": "DRILL 终止铜层名称。",
+          "title": "End Layer"
         }
       },
       "required": [

@@ -47,11 +47,10 @@ def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent
                {"name": "B", "domain_id": "duplicate", "polygons": []}])
     _, delivered, output = execute(document, tmp_path)
     report = json.loads((output / "diagnostics/run.json").read_text())["rectification"]
-    assert report["unique_profile_count"] == 1
-    assert report["reused_profile_count"] == 1
-    assert report["rectangle_count"] == 2
-    ids = report["audit"]["domain_region_ids"]
+    assert len(report["profiles"]) == 1
+    ids = report["domain_profiles"]
     assert ids["step_profile"] == ids["duplicate"]
+    assert len(report["profiles"][ids["step_profile"]]["regions"]) == 2
     by_layer = {name: [(r.bounds_mm, r.grid_counts) for r in delivered.regions if r.layer.name == name]
                 for name in ("A", "B")}
     assert by_layer["A"] == by_layer["B"]
@@ -69,8 +68,7 @@ def test_distinct_profiles_do_not_split_each_others_regions(tmp_path):
     assert regions["ALL"].bounds_mm.x == (0, 10)
     assert regions["LEFT"].bounds_mm.x == (0, 3)
     report = json.loads((output / "diagnostics/run.json").read_text())["rectification"]
-    assert report["unique_profile_count"] == 2
-    assert report["audit"]["cross_layer_alignment_required"] is False
+    assert len(report["profiles"]) == 2
 
 
 def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
@@ -85,16 +83,15 @@ def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
     assert len(delivered.regions) == 1
     report = json.loads((output / "diagnostics/run.json").read_text())
     layer = report["layers"][0]
-    assert layer["outside_material"] == "base"
     assert layer["outside_base_pixels"] > 0
     phi = 1 - layer["outside_base_pixels"] / 10000
     values = delivered.regions[0].values[0]
     assert values[2] == pytest.approx(phi * 385 + (1 - phi) * .3, abs=1e-6)
     assert values[3] == pytest.approx(phi * 8960 + (1 - phi) * 1850, abs=1e-4)
-    geometry = report["rectification"]["audit"]["domains"]["step_profile"]
+    geometry = report["rectification"]["profiles"]["step_profile"]
     assert geometry["lost_area_mm2"] == pytest.approx(0)
     assert geometry["gained_area_mm2"] == pytest.approx(.02)
-    assert geometry["relative_area_error"] == pytest.approx(.02 / 99.98)
+    assert (geometry["lost_area_mm2"]+geometry["gained_area_mm2"])/geometry["original_area_mm2"] == pytest.approx(.02 / 99.98)
 
 
 def test_profile_hole_witness_does_not_remove_its_nested_island(tmp_path):

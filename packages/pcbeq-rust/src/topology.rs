@@ -66,11 +66,9 @@ impl Source {
             && holes.len() == self.holes.len()
             && positive
             && cores_kept;
-        json!({"original_components":self.components.len(),"model_components":targets.len(),
-            "component_correspondence":matches,"reverse_component_correspondence":reverse_matches,
-            "original_holes":self.holes.len(),"model_holes":holes.len(),
+        json!({"component_correspondence":matches,"reverse_component_correspondence":reverse_matches,
             "hole_correspondence":hole_matches,"positive_width_connections":positive,
             "reverse_hole_correspondence":reverse_hole_matches,
-            "correspondence":"positive-area overlap","protected_core_checks":checks,"preserved":preserved})
+            "protected_core_checks":checks,"preserved":preserved})
     }
 }
