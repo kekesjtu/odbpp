@@ -39,27 +39,18 @@ impl Board {
         }
         let step = &self.steps[0];
         require(!step.name.is_empty(), "step name is empty")?;
-        let mut domains = HashSet::new();
-        for d in &step.domains {
+        let mut profiles = HashSet::new();
+        for d in &step.profiles {
             require(
-                !d.id.is_empty() && domains.insert(d.id.as_str()),
-                "empty/duplicate domain id",
-            )?;
-            require(
-                matches!(d.source.as_str(), "step_profile" | "layer_profile"),
-                "invalid domain source",
+                !d.id.is_empty() && profiles.insert(d.id.as_str()),
+                "empty/duplicate profile id",
             )?;
             validate_polygons(&d.polygons)?;
         }
-        let profile = step
-            .profile_domain_id
-            .as_ref()
-            .ok_or("missing step_profile domain")?;
+        let profile = step.profile_id.as_ref().ok_or("missing step profile")?;
         require(
-            step.domains
-                .iter()
-                .any(|d| &d.id == profile && d.source == "step_profile"),
-            "profile_domain_id must reference a step_profile domain",
+            step.profiles.iter().any(|d| &d.id == profile),
+            "profile_id must reference an existing profile",
         )?;
         let mut names = HashSet::new();
         let mut copper = HashSet::new();
@@ -69,10 +60,7 @@ impl Board {
                 "empty/duplicate layer name",
             )?;
             require(!l.kind.is_empty() && l.row > 0, "invalid layer type/row")?;
-            require(
-                matches!(l.context.as_str(), "BOARD" | "MISC"),
-                "invalid layer context",
-            )?;
+            require(l.context == "BOARD", "invalid layer context")?;
             require(
                 matches!(l.form.as_str(), "RIGID" | "FLEX"),
                 "invalid layer form",
@@ -97,12 +85,6 @@ impl Board {
                     || l.geometry_error.as_ref().is_some_and(|s| !s.is_empty()),
                 "failed geometry requires geometry_error",
             )?;
-            if let Some(d) = &l.domain_id {
-                require(
-                    domains.contains(d.as_str()),
-                    format!("layer {:?}: unknown domain_id {d:?}", l.name),
-                )?;
-            }
             validate_polygons(&l.polygons)?;
             if let Some(z) = &l.z_mm {
                 require(l.kind != "DRILL", "DRILL must not carry z_mm")?;
@@ -120,6 +102,19 @@ impl Board {
             }
             if let Some(t) = &l.thickness {
                 t.validate()?;
+            }
+        }
+        let mut assigned = HashSet::new();
+        for profile in &step.profiles {
+            for name in &profile.layers {
+                require(
+                    names.contains(name.as_str()),
+                    format!("profile {:?}: unknown layer {name:?}", profile.id),
+                )?;
+                require(
+                    assigned.insert(name.as_str()),
+                    format!("layer {name:?}: multiple profile assignments"),
+                )?;
             }
         }
         for l in &step.layers {

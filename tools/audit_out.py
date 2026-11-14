@@ -1,4 +1,4 @@
-"""Audit final MaterialMap JSON against source domains and run diagnostics.
+"""Audit final MaterialMap JSON against source profiles and run diagnostics.
 
 Run: uv run --all-extras python tools/audit_out.py
 """
@@ -90,22 +90,23 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         assert not any(d["level"]=="error" for d in meta["diagnostics"])
         document=json.loads((directory.parent / "pcbkit/intermediate.json").read_text(encoding="utf-8"))
         step=document["steps"][0]
-        domains={d["id"]:physical_shape(d["polygons"]) for d in step["domains"]}
+        profiles={d["id"]:physical_shape(d["polygons"]) for d in step["profiles"]}
+        profile_of={name:p["id"] for p in step["profiles"] for name in p["layers"]}
         reports={l["name"]:l for l in meta["layers"] if l["status"]=="equivalent"}
         regions=meta["rectification"]["rectangles"]
-        ids=meta["rectification"]["audit"]["domain_region_ids"]
+        ids=meta["rectification"]["audit"]["profile_region_ids"]
         geometry_audit=meta["rectification"]["audit"]
         ratio=geometry_audit["relative_area_budget"]
         region_shapes=[box(r["x0_mm"],r["y0_mm"],r["x1_mm"],r["y1_mm"]) for r in regions]
-        for domain_id,members in ids.items():
-            source=domains[domain_id].intersection(domains[step["profile_domain_id"]])
+        for profile_id,members in ids.items():
+            source=profiles[profile_id].intersection(profiles[step["profile_id"]])
             modeled=unary_union([region_shapes[rid] for rid in members])
             assert source.symmetric_difference(modeled).area<=source.area*ratio+1e-8
             assert abs(sum(region_shapes[rid].area for rid in members)-modeled.area)<1e-7
             assert _topology(source,modeled)["preserved"]
-        rect_ids={domain_id:{(regions[rid]["x0_mm"],regions[rid]["y0_mm"],
+        rect_ids={profile_id:{(regions[rid]["x0_mm"],regions[rid]["y0_mm"],
                                regions[rid]["x1_mm"],regions[rid]["y1_mm"]):rid for rid in members}
-                  for domain_id,members in ids.items()}
+                  for profile_id,members in ids.items()}
         assert meta["grid"]["layout"]=="region-local-cartesian"
         assert "x_lines_mm" not in meta["grid"] and "y_lines_mm" not in meta["grid"]
         local_grids={r["region_id"]:r for r in meta["grid"]["regions"]}
@@ -118,10 +119,10 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
         for region in materialmap.regions:
             name=region.layer.name; layer=reports[name]
             a,c=region.bounds_mm.x; b,d=region.bounds_mm.y
-            rid=rect_ids[layer["domain_id"]][(a,b,c,d)]
+            rid=rect_ids[profile_of[layer["name"]]][(a,b,c,d)]
             assert region.grid_counts.model_dump()==local_grids[rid]["grid_counts"]
             assert local_grids[rid]["bounds_mm"]=={"x":[a,c],"y":[b,d]}
-            assert rid in ids[layer["domain_id"]]
+            assert rid in ids[profile_of[layer["name"]]]
             assert layer["outside_material"] == "base"
             expected_z=(layer["z_mm"]["start_mm"],layer["z_mm"]["end_mm"]) if layer["z_mm"]["thickness_known"] else (None,None)
             assert region.bounds_mm.z==expected_z
@@ -130,7 +131,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             for axis,length in enumerate((c-a,d-b)):
                 assert 0<length<=limits["max"][axis]+1e-8
             x0,x1=region.bounds_mm.x; y0,y1=region.bounds_mm.y
-            tile=tiles[rect_ids[reports[region.layer.name]["domain_id"]][(x0,y0,x1,y1)]]
+            tile=tiles[rect_ids[reports[region.layer.name]["profile_id"]][(x0,y0,x1,y1)]]
             ax=RasterAxis(tile["origin_mm"][0],tile["pixel_step_mm"][0],tile["px"])
             ay=RasterAxis(tile["origin_mm"][1],tile["pixel_step_mm"][1],tile["py"])
             columns=ax.range_for(a,c);rows=ay.range_for(b,d)
@@ -153,7 +154,7 @@ def audit_outputs(out_dir: Path = ROOT / "out"):
             "material_rows":sum(counts.values()),"raster_base":[px,py],
             "total_region_pixels":raster["total_pixels"],"peak_region_pixels":raster["peak_region_pixels"],
             "minimum_samples_per_axis":minimum,
-            "max_profile_area_error_ratio":max(r["relative_area_error"] for r in geometry_audit["domains"].values()),
+            "max_profile_area_error_ratio":max(r["relative_area_error"] for r in geometry_audit["profiles"].values()),
             "max_area_error_ratio":ratio,"area_and_topology_checks_passed":True,
             "layer_count":len(reports),
             "copper_drill_overlays_ignored":True,"all_checks_passed":True})

@@ -35,9 +35,9 @@ pub struct Polygon {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Domain {
+pub struct Profile {
     pub id: String,
-    pub source: String,
+    pub layers: Vec<String>,
     pub polygons: Vec<Polygon>,
 }
 #[derive(Deserialize, Clone)]
@@ -79,7 +79,6 @@ pub struct Layer {
     #[serde(default = "ready")]
     pub geometry_status: String,
     pub geometry_error: Option<String>,
-    pub domain_id: Option<String>,
     pub polygons: Vec<Polygon>,
     pub z_mm: Option<Extent>,
     thickness: Option<Thickness>,
@@ -91,16 +90,23 @@ impl Layer {
         matches!(self.kind.as_str(), "SIGNAL" | "POWER_GROUND" | "MIXED")
     }
     pub fn physical(&self) -> bool {
-        self.context == "BOARD" && (self.copper() || self.kind == "DIELECTRIC")
+        self.copper() || self.kind == "DIELECTRIC"
     }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
     pub name: String,
-    pub profile_domain_id: Option<String>,
-    pub domains: Vec<Domain>,
+    pub profile_id: Option<String>,
+    pub profiles: Vec<Profile>,
     pub layers: Vec<Layer>,
+}
+impl Step {
+    pub fn profile_for_layer(&self, name: &str) -> Option<&Profile> {
+        self.profiles
+            .iter()
+            .find(|p| p.layers.iter().any(|n| n == name))
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

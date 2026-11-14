@@ -2,6 +2,7 @@ use pcb_geometry::{Point, curves};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
 mod compose;
+mod drawing;
 mod native;
 mod parser;
 mod symbols;

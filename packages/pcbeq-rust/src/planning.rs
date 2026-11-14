@@ -11,19 +11,16 @@ use std::collections::BTreeMap;
 
 pub struct Geometry {
     pub rectangles: Vec<Rect>,
-    pub domain_ids: Vec<String>,
+    pub profile_ids: Vec<String>,
     pub members: Vec<Vec<usize>>,
     pub report: Value,
     pub bounds: Rect,
 }
 
 pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
-    let profile = step
-        .profile_domain_id
-        .as_ref()
-        .ok_or("missing step profile")?;
+    let profile = step.profile_id.as_ref().ok_or("missing step profile")?;
     let board = step
-        .domains
+        .profiles
         .iter()
         .find(|d| &d.id == profile)
         .ok_or("missing step profile")?;
@@ -33,7 +30,7 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
         .layers
         .iter()
         .filter(|l| l.physical())
-        .filter_map(|l| l.domain_id.clone())
+        .filter_map(|l| step.profile_for_layer(&l.name).map(|p| p.id.clone()))
         .collect();
     ids.sort();
     ids.dedup();
@@ -48,14 +45,14 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
     let mut reused = 0;
     for id in &ids {
         let authored = step
-            .domains
+            .profiles
             .iter()
             .find(|d| &d.id == id)
-            .ok_or("missing physical domain")?;
+            .ok_or("missing physical profile")?;
         let original = document::shape(&authored.polygons)?.intersection(&board);
         if original.empty() || original.area() <= 0. {
             return Err(format!(
-                "domain {id:?} has no physical area within the step profile"
+                "profile {id:?} has no physical area within the step profile"
             ));
         }
         let mut existing = None;
@@ -68,16 +65,16 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
         let (region_ids, mut report) = if let Some(i) = existing {
             reused += 1;
             let mut report = plans[i].1.clone();
-            report["reused_from"] = report["canonical_domain_id"].clone();
+            report["reused_from"] = report["canonical_profile_id"].clone();
             (plans[i].0.clone(), report)
         } else {
             let plan = fast::approximate(&original, options.max_area_error_ratio)
-                .map_err(|e| format!("domain {id:?}: {e}"))?;
+                .map_err(|e| format!("profile {id:?}: {e}"))?;
             let region_ids: Vec<_> =
                 (rectangles.len()..rectangles.len() + plan.rectangles.len()).collect();
             rectangles.extend(plan.rectangles);
             let mut report = plan.audit;
-            report["canonical_domain_id"] = json!(id);
+            report["canonical_profile_id"] = json!(id);
             originals.push(original);
             plans.push((region_ids.clone(), report.clone()));
             (region_ids, report)
@@ -86,18 +83,18 @@ pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
         members.push(region_ids);
         reports.insert(id.clone(), report);
     }
-    let domain_regions: BTreeMap<_, _> = ids.iter().zip(&members).collect();
+    let profile_regions: BTreeMap<_, _> = ids.iter().zip(&members).collect();
     let report = json!({"ok":true,"strategy":"fast-greedy-independent-profiles",
         "rectangle_count":rectangles.len(),"profile_count":ids.len(),"unique_profile_count":plans.len(),
         "reused_profile_count":reused,"relative_area_budget":options.max_area_error_ratio,
         "rectangles":rectangles.iter().map(|r|json!({"x0_mm":r[0],"y0_mm":r[1],"x1_mm":r[2],"y1_mm":r[3]})).collect::<Vec<_>>(),
-        "audit":{"domains":reports,"domain_region_ids":domain_regions,
+        "audit":{"profiles":reports,"profile_region_ids":profile_regions,
             "relative_area_budget":options.max_area_error_ratio,
             "cross_layer_alignment_required":false,"per_profile_non_overlapping":true,
             "effective_profile_identity":"geo topological equality after board intersection"}});
     Ok(Geometry {
         rectangles,
-        domain_ids: ids,
+        profile_ids: ids,
         members,
         report,
         bounds,

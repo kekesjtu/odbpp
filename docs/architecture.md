@@ -21,7 +21,7 @@ ODB++ 单板目录或压缩包
 | 层实体范围 | 由层轮廓确定的二维实体区域，扣除轮廓定义的内孔。缺少层轮廓时取整板轮廓围成的实体范围 |
 | 层有效计算域 | 层实体范围与整板实体范围的交集，作为该层建模和材料采样的面积范围 |
 
-例如刚挠板的某层只覆盖刚性区，该层轮廓只围住刚性区。中间 JSON 的 `domains` 存的是轮廓规整成的实体多边形，可用于面积和包含性检查。铜图案和钻孔投影描述有效计算域内的材料分布。选择轮廓和解释层厚的规则见[逐层轮廓与叠层](decisions/pcbkit/layer-domains-and-stackup.md)。
+例如刚挠板的某层只覆盖刚性区，该层轮廓只围住刚性区。中间 JSON 的 `profiles` 保存按几何去重的整板与层轮廓多边形，`profiles[].layers` 记录层归属，step 的 `profile_id` 指定整板轮廓。铜图案和钻孔投影描述有效计算域内的材料分布。选择轮廓和解释层厚的规则见[逐层轮廓与叠层](decisions/pcbkit/layer-profiles-and-stackup.md)。
 
 ## 等效器的数据流
 
@@ -39,6 +39,8 @@ ODB++ 单板目录或压缩包
 | --- | --- |
 | `pcbkit-rust` | 包内 Python 负责目录与压缩包适配、元数据输入、Pydantic 契约边界与 SVG/HTML/PNG 预览；Rust 负责 features/profile 记录解析、符号展开、图元放置、极性合成与输出几何规整 |
 | `pcbeq-rust` | 独立 Rust CLI 从 JSON 读取校验到 MaterialMap 和数值诊断发布，可单文件分发。可选 Python 工具通过子进程调用 CLI，并从正式 MaterialMap 渲染图表 |
+
+MISC 层只用于预览，不进入中间 JSON。Rust 将其展开成有序绘图指令，保留极性、符号放置和线宽，不构造整层 MultiPolygon；Python 在绘图边界生成 SVG/HTML/PNG。
 
 解析器的记录、符号缓存与中间几何保存在 Rust 内部。PyO3 以原生句柄传递已解析文件和最终 Region；整层展开与合成在一次调用内完成，不把逐图元坐标交回 Python。Python 仅在 JSON 契约交付和绘图边界读取最终坐标。
 

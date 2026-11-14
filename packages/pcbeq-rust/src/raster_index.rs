@@ -59,14 +59,14 @@ impl Index {
     }
 }
 pub struct Materials {
-    domain: Vec<Edge>,
+    coverage: Vec<Edge>,
     profile: Vec<Edge>,
     black: Vec<Index>,
 }
 impl Materials {
-    pub fn new(domain: Vec<Edge>, profile: Vec<Edge>, black: &[&[Polygon]]) -> Self {
+    pub fn new(coverage: Vec<Edge>, profile: Vec<Edge>, black: &[&[Polygon]]) -> Self {
         Self {
-            domain,
+            coverage,
             profile,
             black: black.iter().map(|p| Index::new(p)).collect(),
         }
@@ -79,7 +79,7 @@ impl Materials {
             y.0 + (y.2 as f64 - 0.5 + 1e-9) * y.1,
         ];
         PreparedRaster::new(
-            self.domain.clone(),
+            self.coverage.clone(),
             self.profile.clone(),
             self.black.iter().map(|i| i.edges(bounds)).collect(),
         )?

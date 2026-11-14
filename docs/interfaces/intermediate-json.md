@@ -16,7 +16,7 @@ uv run python tools/sync_contract.py --check
 
 ## 数据流与职责
 
-单位解释和极性规整由解析器负责。入口验证有限数值、点维度、显式岛孔、Z 起止、唯一标识、域引用、铜层跨度及必要的厚度来源。近似误差、连通性和孔洞保留在等效器的矢量几何验收中检查。
+单位解释和极性规整由解析器负责。入口验证有限数值、点维度、显式岛孔、Z 起止、唯一标识、轮廓归属、铜层跨度及必要的厚度来源。近似误差、连通性和孔洞保留在等效器的矢量几何验收中检查。
 
 ## 唯一数据与字段
 
@@ -26,18 +26,21 @@ uv run python tools/sync_contract.py --check
 | 根 `resolution_mm` | 输出坐标规整网格，默认 0.0001 mm；与材料光栅无关 |
 | 根 `source` | 输入路径、job root、输入单位、产品名称及 ODB++ 版本；手工合成数据可省略 |
 | 根 `steps` | 恰好一个单板 step，不支持矩阵拼板和嵌套引用 |
-| step `profile_domain_id` | `domains` 中整板实体范围的引用 |
-| step `domains` | `{id, source, polygons}`。保存整板或层轮廓围成的实体范围，可被多层引用 |
-| step `layers` | 按 matrix row 排列的完整层目录；唯一存储层类型、上下文、Z、跨度、厚度来源与图案 |
-| layer `domain_id` | 层实体范围的引用。等效器再与整板实体范围求交得到层有效计算域 |
+| step `profile_id` | `profiles` 中整板轮廓的引用 |
+| step `profiles` | `{id, polygons, layers}`。按规整后的几何去重；相同轮廓只导出一份 polygon 集合，`layers` 列出所属 BOARD 层名称 |
+| step `layers` | 按 matrix row 排列的 BOARD 层目录；唯一存储层类型、上下文、Z、跨度、厚度来源与图案 |
 | layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
-| layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
+| layer `geometry_error` | 失败或轮廓不可用的原因；失败层必须提供，不静默继承 step profile |
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
 | layer `z_mm` | `{start_mm, end_mm, thickness_known, source}`；实体物理层自身的位置；DRILL 不导出 |
 | layer `thickness` | 本层厚度可信状态与原始物理量来源；保留原始量追溯；数值厚度由 Z 差得到 |
 | layer `copper_index` | 铜层自顶向下的索引 |
 | layer `copper_span` | 介质或钻孔跨越的两个铜层索引；不重复保存端点名称 |
 | layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
+
+MISC 上下文的层不进入此接口，包括层目录、图案、轮廓归属与叠层信息。预览直接使用独立绘图指令，不从中间 JSON 恢复 MISC 图案。BOARD 层的图案仍是规整实体；介质图案保留完整基底。
+
+轮廓按输出精度规整后以几何等价去重，涵盖整板轮廓、不同层的相同轮廓及与整板相同的层轮廓。环起点、方向、共线点及对象身份不决定是否重复。层归属只记录在 `profiles[].layers`，同层最多归属一个 profile；失效轮廓不回退，也不分配归属。整板 profile 即使没有所属层也保留供求交使用。
 
 轮廓、实体范围与有效计算域的区别见[项目架构](../architecture.md#从轮廓到有效计算域)。
 

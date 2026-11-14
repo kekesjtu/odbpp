@@ -49,8 +49,8 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
     }
     let mut materials = Materials::new(config)?;
     let step = &mut document.steps[0];
-    for domain in &mut step.domains {
-        normalize(&mut domain.polygons);
+    for profile in &mut step.profiles {
+        normalize(&mut profile.polygons);
     }
     for layer in &mut step.layers {
         normalize(&mut layer.polygons);
@@ -69,7 +69,7 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
     let mut layers = 0;
     for layer in &step.layers {
         if !layer.physical() {
-            layer_reports.push(json!({"name":layer.name,"type":layer.kind,"status":"skipped", "reason":if layer.context!="BOARD"{"non-BOARD context has no physical slab"}else{"only copper and dielectric layers are equivalented"}}));
+            layer_reports.push(json!({"name":layer.name,"type":layer.kind,"status":"skipped", "reason":"only copper and dielectric layers are equivalented"}));
             continue;
         }
         if layer.geometry_status != "ready" {
@@ -81,15 +81,15 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
         if layer.z_mm.is_none() {
             return Err(format!("layer {:?}: no absolute Z interval", layer.name));
         }
-        let id = layer
-            .domain_id
-            .as_ref()
-            .ok_or(format!("layer {:?}: no computational domain", layer.name))?;
-        let domain = geometry
-            .domain_ids
+        let id = &step
+            .profile_for_layer(&layer.name)
+            .ok_or(format!("layer {:?}: no profile assignment", layer.name))?
+            .id;
+        let profile = geometry
+            .profile_ids
             .iter()
             .position(|key| key == id)
-            .ok_or("unplanned physical domain")?;
+            .ok_or("unplanned physical profile")?;
         let pair = materials.resolve(
             &layer.name,
             if layer.copper() {
@@ -114,10 +114,10 @@ pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
         }
         let before = Instant::now();
         let (values, report) =
-            native_sampling::evaluate(step, layer, &drills, &geometry, &mesh, domain, pair)?;
+            native_sampling::evaluate(step, layer, &drills, &geometry, &mesh, profile, pair)?;
         sample_seconds += before.elapsed().as_secs_f64();
         let before = Instant::now();
-        writer.layer(layer, &geometry, &mesh, domain, &values)?;
+        writer.layer(layer, &geometry, &mesh, profile, &values)?;
         write_seconds += before.elapsed().as_secs_f64();
         layer_reports.push(report);
         layers += 1;

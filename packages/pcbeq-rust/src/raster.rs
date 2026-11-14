@@ -88,14 +88,18 @@ pub fn pixel_index(value: f64, axis: Axis) -> usize {
 }
 
 pub struct PreparedRaster {
-    domain: Scan,
+    coverage: Scan,
     step: Scan,
     black: Vec<Scan>,
 }
 impl PreparedRaster {
-    pub fn new(domain: Vec<Edge>, step: Vec<Edge>, black: Vec<Vec<Edge>>) -> Result<Self, String> {
+    pub fn new(
+        coverage: Vec<Edge>,
+        step: Vec<Edge>,
+        black: Vec<Vec<Edge>>,
+    ) -> Result<Self, String> {
         Ok(Self {
-            domain: Scan::new(domain)?,
+            coverage: Scan::new(coverage)?,
             step: Scan::new(step)?,
             black: black.into_iter().map(Scan::new).collect::<Result<_, _>>()?,
         })
@@ -111,7 +115,7 @@ impl PreparedRaster {
                 .filter(|n| *n <= MAX_RASTER_PIXELS)
                 .ok_or("raster resource limit: 120000000 pixels")?;
         let (low, high) = (y.0 + 0.5 * y.1, y.0 + (y.2 as f64 - 0.5) * y.1);
-        let mut domain = self.domain.window(low, high);
+        let mut coverage = self.coverage.window(low, high);
         let mut step = self.step.window(low, high);
         let mut black: Vec<_> = self.black.iter().map(|s| s.window(low, high)).collect();
         let mut outside = count;
@@ -119,7 +123,7 @@ impl PreparedRaster {
             let mut pixels = vec![255; count];
             for row in 0..y.2 {
                 let yy = y.0 + (row as f64 + 0.5) * y.1;
-                let dom = intersection(&domain.spans(yy), &step.spans(yy));
+                let dom = intersection(&coverage.spans(yy), &step.spans(yy));
                 let mut ink: Vec<Span> = black.iter_mut().flat_map(|scan| scan.spans(yy)).collect();
                 ink.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
                 let mut merged: Vec<Span> = vec![];

@@ -39,18 +39,18 @@ def test_native_area_budget_preserves_slopes_and_connections(tmp_path, points, r
 def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent(tmp_path):
     duplicate = rect(-1, -1, 11, 11)
     duplicate["points"].reverse()
-    document = build_document(domains=[
-        {"id": "step_profile", "source": "step_profile", "polygons": [{"island": True,
+    document = build_document(profiles=[
+        {"id": "step_profile", "polygons": [{"island": True,
          "points": [(0, 0), (10, 0), (10, 5), (6, 5), (6, 10), (0, 10)]}]},
-        {"id": "duplicate", "source": "layer_profile", "polygons": [duplicate]},
+        {"id": "duplicate", "polygons": [duplicate]},
     ], layers=[{"name": "A", "polygons": []},
-               {"name": "B", "domain_id": "duplicate", "polygons": []}])
+               {"name": "B", "profile_id": "duplicate", "polygons": []}])
     _, delivered, output = execute(document, tmp_path)
     report = json.loads((output / "diagnostics/run.json").read_text())["rectification"]
     assert report["unique_profile_count"] == 1
     assert report["reused_profile_count"] == 1
     assert report["rectangle_count"] == 2
-    ids = report["audit"]["domain_region_ids"]
+    ids = report["audit"]["profile_region_ids"]
     assert ids["step_profile"] == ids["duplicate"]
     by_layer = {name: [(r.bounds_mm, r.grid_counts) for r in delivered.regions if r.layer.name == name]
                 for name in ("A", "B")}
@@ -58,11 +58,11 @@ def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent
 
 
 def test_distinct_profiles_do_not_split_each_others_regions(tmp_path):
-    document = build_document(domains=[
-        {"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
-        {"id": "left", "source": "layer_profile", "polygons": [rect(0, 0, 3, 10)]},
+    document = build_document(profiles=[
+        {"id": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
+        {"id": "left", "polygons": [rect(0, 0, 3, 10)]},
     ], layers=[{"name": "ALL", "polygons": []},
-               {"name": "LEFT", "domain_id": "left", "polygons": []}])
+               {"name": "LEFT", "profile_id": "left", "polygons": []}])
     _, delivered, output = execute(document, tmp_path)
     regions = {r.layer.name: r for r in delivered.regions}
     assert len(delivered.regions) == 2
@@ -91,16 +91,15 @@ def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
     values = delivered.regions[0].values[0]
     assert values[2] == pytest.approx(phi * 385 + (1 - phi) * .3, abs=1e-6)
     assert values[3] == pytest.approx(phi * 8960 + (1 - phi) * 1850, abs=1e-4)
-    geometry = report["rectification"]["audit"]["domains"]["step_profile"]
+    geometry = report["rectification"]["audit"]["profiles"]["step_profile"]
     assert geometry["lost_area_mm2"] == pytest.approx(0)
     assert geometry["gained_area_mm2"] == pytest.approx(.02)
     assert geometry["relative_area_error"] == pytest.approx(.02 / 99.98)
 
 
 def test_profile_hole_witness_does_not_remove_its_nested_island(tmp_path):
-    document = build_document(domains=[{
-        "id": "step_profile", "source": "step_profile",
-        "polygons": [rect(0, 0, 10, 10), hole(2, 2, 8, 8), rect(4, 4, 6, 6)],
+    document = build_document(profiles=[{
+        "id": "step_profile", "polygons": [rect(0, 0, 10, 10), hole(2, 2, 8, 8), rect(4, 4, 6, 6)],
     }], layers=[{"name": "CU", "polygons": []}])
     _, delivered, _ = execute(document, tmp_path)
     model = unary_union([box(*bounds) for _, bounds, _ in iter_cells(delivered)])

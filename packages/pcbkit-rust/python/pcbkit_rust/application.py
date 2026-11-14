@@ -232,6 +232,7 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
         tessellation=TessellationOptions(sagitta_mm=args.sagitta),
         layers=args.layer,
         exclude_types=args.exclude_type or (),
+        include_misc=not args.only_json,
         minimum_stroke_mm=args.minimum_stroke,
         round_digits=args.digits,
     )

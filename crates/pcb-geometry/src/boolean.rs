@@ -80,6 +80,7 @@ pub fn operate(
         "union" => ClipType::Union,
         "difference" => ClipType::Difference,
         "intersection" => ClipType::Intersection,
+        "xor" => ClipType::Xor,
         _ => return Err(format!("unknown geometry operation {operation}")),
     };
     resolve(&paths(subject, scale)?, &paths(clip, scale)?, op, scale)

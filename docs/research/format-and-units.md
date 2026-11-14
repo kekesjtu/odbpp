@@ -35,7 +35,7 @@ matrix 是层目录与顺序依据，实体名需要匹配样本中的大小写�
 字段解释必须依据本文件及符号声明的有效单位；`misc/info` 缺默认单位时采用 INCH 并警告。
 matrix 的 `CU_TOP/CU_BOTTOM` 是 UID 引用，不是坐标或层名。
 
-项目对铜重和层厚的解释见[逐层轮廓与叠层](../decisions/pcbkit/layer-domains-and-stackup.md)。
+项目对铜重和层厚的解释见[逐层轮廓与叠层](../decisions/pcbkit/layer-profiles-and-stackup.md)。
 
 ## 属性与记录
 

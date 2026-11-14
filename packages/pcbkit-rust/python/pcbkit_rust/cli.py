@@ -92,7 +92,8 @@ def main(argv: Optional[Sequence[str]] = None, *, prog="pcbkit-rust") -> int:
 
     diagnostics = Diagnostics()
 
-    options = LoadOptions(step=args.step, load_features=not args.no_features)
+    options = LoadOptions(step=args.step, load_features=not args.no_features,
+                          load_misc=not getattr(args, "only_json", False))
 
     try:
         job = load_job(args.path, options=options, diagnostics=diagnostics)

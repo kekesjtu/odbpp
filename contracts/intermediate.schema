@@ -1,37 +1,5 @@
 {
   "$defs": {
-    "DomainModel": {
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "minLength": 1,
-          "title": "Id",
-          "type": "string"
-        },
-        "source": {
-          "enum": [
-            "step_profile",
-            "layer_profile"
-          ],
-          "title": "Source",
-          "type": "string"
-        },
-        "polygons": {
-          "items": {
-            "$ref": "#/$defs/PolygonModel"
-          },
-          "title": "Polygons",
-          "type": "array"
-        }
-      },
-      "required": [
-        "id",
-        "source",
-        "polygons"
-      ],
-      "title": "DomainModel",
-      "type": "object"
-    },
     "LayerModel": {
       "additionalProperties": false,
       "properties": {
@@ -47,11 +15,8 @@
           "type": "string"
         },
         "context": {
+          "const": "BOARD",
           "default": "BOARD",
-          "enum": [
-            "BOARD",
-            "MISC"
-          ],
           "title": "Context",
           "type": "string"
         },
@@ -101,18 +66,6 @@
           ],
           "default": null,
           "title": "Geometry Error"
-        },
-        "domain_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Domain Id"
         },
         "polygons": {
           "description": "本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。",
@@ -247,6 +200,38 @@
       "title": "ProductModel",
       "type": "object"
     },
+    "ProfileModel": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "layers": {
+          "description": "使用此轮廓的 BOARD 层名称；每层最多归属一个轮廓。",
+          "items": {
+            "type": "string"
+          },
+          "title": "Layers",
+          "type": "array"
+        },
+        "polygons": {
+          "items": {
+            "$ref": "#/$defs/PolygonModel"
+          },
+          "title": "Polygons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "layers",
+        "polygons"
+      ],
+      "title": "ProfileModel",
+      "type": "object"
+    },
     "SourceModel": {
       "additionalProperties": false,
       "properties": {
@@ -287,7 +272,7 @@
           "title": "Name",
           "type": "string"
         },
-        "profile_domain_id": {
+        "profile_id": {
           "anyOf": [
             {
               "type": "string"
@@ -297,18 +282,18 @@
             }
           ],
           "default": null,
-          "description": "整板 step profile 在 domains 中的引用；不能以铜图案替代。",
-          "title": "Profile Domain Id"
+          "description": "整板轮廓在 profiles 中的引用。",
+          "title": "Profile Id"
         },
-        "domains": {
+        "profiles": {
           "items": {
-            "$ref": "#/$defs/DomainModel"
+            "$ref": "#/$defs/ProfileModel"
           },
-          "title": "Domains",
+          "title": "Profiles",
           "type": "array"
         },
         "layers": {
-          "description": "唯一层目录；包含失败及未导出层，按 matrix row 排列。",
+          "description": "BOARD 层目录，包含失败及未导出层，按 matrix row 排列。",
           "items": {
             "$ref": "#/$defs/LayerModel"
           },
@@ -318,7 +303,7 @@
       },
       "required": [
         "name",
-        "domains",
+        "profiles",
         "layers"
       ],
       "title": "StepModel",

@@ -317,6 +317,65 @@ impl Engine {
             boolean::operate("union", &rings, &[], boolean::SCALE)
         }
     }
+    pub fn drawing(
+        &mut self,
+        file: Option<&Features>,
+        profile: Option<&crate::parser::Surface>,
+        invert: bool,
+        seed: bool,
+    ) -> Result<crate::drawing::Drawing> {
+        use crate::drawing::{Drawing, Paint};
+        let mut operations = vec![];
+        if seed {
+            let rings = profile
+                .ok_or("drawing has no usable base profile")?
+                .region(self.sagitta, self.maximum)?;
+            operations.push(Paint {
+                positive: true,
+                width: 0.,
+                points: vec![],
+                rings,
+            });
+        }
+        if let Some(file) = file {
+            for record in &file.records {
+                let positive = record.positive != invert;
+                if matches!(record.shape, Shape::Line { .. } | Shape::Arc { .. }) {
+                    if let Some(symbol) = self.symbol(record.shape.symbol(), &file.path)? {
+                        if let Stroke::Round(radius) = symbol.stroke {
+                            let width = if radius > 0. {
+                                radius * 2.
+                            } else {
+                                self.minimum_stroke
+                            };
+                            if width > 0. {
+                                let points = self.path(&record.shape, file)?;
+                                if points.len() >= 2 {
+                                    operations.push(Paint {
+                                        positive,
+                                        width,
+                                        points,
+                                        rings: vec![],
+                                    });
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                }
+                let rings = self.run(std::slice::from_ref(record), file)?;
+                if !rings.is_empty() {
+                    operations.push(Paint {
+                        positive,
+                        width: 0.,
+                        points: vec![],
+                        rings,
+                    });
+                }
+            }
+        }
+        Ok(Drawing::new(operations))
+    }
     pub fn compose(
         &mut self,
         file: &Features,

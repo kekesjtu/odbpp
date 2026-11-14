@@ -5,9 +5,9 @@
 各实际 region 使用独立光栅，像素中心与网格共享毫米物理坐标系，允许 X/Y 像素间距不同。各层的有效计算域由整板实体范围与层实体范围相交得到。扫描线在区间或掩膜层组合计算域、铜图案和相交钻孔。
 
 ```text
-domain = board_extent AND layer_extent
-copper_black = domain AND copper_pattern
-dielectric_black = domain AND overlapping_drills
+effective_region = board_extent AND layer_extent
+copper_black = effective_region AND copper_pattern
+dielectric_black = effective_region AND overlapping_drills
 white = region AND NOT black
 ```
 

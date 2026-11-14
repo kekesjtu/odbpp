@@ -133,6 +133,14 @@ impl NativeRegion {
             })
             .collect()
     }
+    fn same_geometry(&self, py: Python<'_>, other: &NativeRegion) -> PyResult<bool> {
+        if self.bounds != other.bounds {
+            return Ok(false);
+        }
+        py.detach(|| boolean::operate("xor", &self.data, &other.data, boolean::SCALE))
+            .map(|rings| rings.is_empty())
+            .map_err(value_error)
+    }
     fn snap(&self, py: Python<'_>, digits: u32) -> PyResult<(Self, usize)> {
         py.detach(|| boolean::snap(&self.data, 10f64.powf(digits as f64)))
             .map(|(r, n)| (Self::from(r), n))
@@ -363,6 +371,31 @@ pub fn symbol_cycles(definitions: HashMap<String, PyRef<'_, NativeFeatures>>) ->
     cycles
 }
 
+#[pyclass(name = "Drawing", frozen, module = "pcbkit_rust._pcbkit_native")]
+pub struct NativeDrawing {
+    data: crate::drawing::Drawing,
+}
+#[pymethods]
+impl NativeDrawing {
+    fn __bool__(&self) -> bool {
+        !self.data.operations.is_empty()
+    }
+    #[getter]
+    fn bounds(&self) -> Option<(f64, f64, f64, f64)> {
+        self.data.bounds
+    }
+    fn svg(&self, py: Python<'_>) -> String {
+        py.detach(|| self.data.svg())
+    }
+    fn commands(&self) -> Vec<(bool, f64, Vec<Point>, Vec<Ring>)> {
+        self.data
+            .operations
+            .iter()
+            .map(|op| (op.positive, op.width, op.points.clone(), op.rings.clone()))
+            .collect()
+    }
+}
+
 #[pyclass(name = "Composer", module = "pcbkit_rust._pcbkit_native")]
 pub struct Composer {
     engine: Engine,
@@ -430,6 +463,25 @@ impl Composer {
         })
         .map_err(value_error)
     }
+    fn drawing(
+        &mut self,
+        py: Python<'_>,
+        features: Option<&NativeFeatures>,
+        profile: Option<&NativeProfile>,
+        invert: bool,
+        seed: bool,
+    ) -> PyResult<NativeDrawing> {
+        py.detach(|| {
+            self.engine.drawing(
+                features.map(|f| f.data.as_ref()),
+                profile.map(|p| p.data.as_ref()),
+                invert,
+                seed,
+            )
+        })
+        .map(|data| NativeDrawing { data })
+        .map_err(value_error)
+    }
     fn diagnostics_json(&self) -> String {
         serde_json::to_string(&self.engine.diagnostics).unwrap()
     }
@@ -441,6 +493,7 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NativeFeatures>()?;
     m.add_class::<NativeProfile>()?;
     m.add_class::<Composer>()?;
+    m.add_class::<NativeDrawing>()?;
     m.add_function(wrap_pyfunction!(region_boolean, m)?)?;
     m.add_function(wrap_pyfunction!(describe_symbol, m)?)?;
     m.add_function(wrap_pyfunction!(symbol_cycles, m)?)?;

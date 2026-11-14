@@ -61,6 +61,7 @@ class LoadOptions:
     #: Parse ``features`` files.  Turning this off makes enumeration-only runs
     #: (layer inventory, stackup inspection) cheap on large jobs.
     load_features: bool = True
+    load_misc: bool = True
 
     #: Parse ``tools`` files for drill/rout layers.
     load_tools: bool = True
@@ -320,6 +321,8 @@ def _load_layer(
     diags: Diagnostics,
 ) -> Layer:
     layer = Layer(ref=ref, dir_name=dir_name)
+    if ref.context.value == "MISC" and not opts.load_misc:
+        return layer
 
     attr_rel = f"{layer_rel}/attrlist"
     if archive.exists(attr_rel):

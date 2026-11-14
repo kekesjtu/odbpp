@@ -96,19 +96,19 @@ pub fn evaluate(
     drills: &[Drill<'_>],
     geometry: &Geometry,
     mesh: &Mesh,
-    domain: usize,
+    profile_index: usize,
     materials: [f64; 6],
 ) -> Result<(Vec<Vec<[f64; 5]>>, Value)> {
-    let domain_doc = step
-        .domains
+    let layer_profile = step
+        .profiles
         .iter()
-        .find(|d| d.id == geometry.domain_ids[domain])
-        .ok_or("missing sample domain")?;
+        .find(|d| d.id == geometry.profile_ids[profile_index])
+        .ok_or("missing sample profile")?;
     let profile = step
-        .domains
+        .profiles
         .iter()
-        .find(|d| Some(&d.id) == step.profile_domain_id.as_ref())
-        .ok_or("missing step domain")?;
+        .find(|d| Some(&d.id) == step.profile_id.as_ref())
+        .ok_or("missing step profile")?;
     let covering: Vec<_> = if layer.kind == "DIELECTRIC" {
         drills.iter().filter(|d| matched(layer, d)).collect()
     } else {
@@ -123,16 +123,16 @@ pub fn evaluate(
             .collect()
     };
     let source = raster_index::Materials::new(
-        edges(&domain_doc.polygons),
+        edges(&layer_profile.polygons),
         edges(&profile.polygons),
         &black,
     );
     let mut regions = vec![vec![]; geometry.rectangles.len()];
     let mut cells = 0;
     let mut base_pixels = 0;
-    for &rid in &geometry.members[domain] {
+    for &rid in &geometry.members[profile_index] {
         let tile = &mesh.rasters[rid];
-        // The renderer initializes domain-exterior pixels as the base phase.
+        // The renderer initializes profile-exterior pixels as the base phase.
         let (pixels, outside) = source.render(tile.x, tile.y)?;
         base_pixels += outside;
         let values = sampling::integrate_pixels(
@@ -145,7 +145,7 @@ pub fn evaluate(
         )?;
         cells += values.len();
         for (q, value) in values.into_iter().enumerate() {
-            let value = value.ok_or(format!("layer {:?} region {rid} cell {q}: insufficient raster samples or domain/geometry contradiction; increase px/py",layer.name))?;
+            let value = value.ok_or(format!("layer {:?} region {rid} cell {q}: insufficient raster samples or profile/geometry contradiction; increase px/py",layer.name))?;
             let mut properties = value;
             for (i, v) in properties.iter_mut().enumerate() {
                 let factor = if i < 3 { 1e6 } else { 1e4 };
@@ -161,8 +161,8 @@ pub fn evaluate(
         }
     }
     let z = layer.z_mm.as_ref().ok_or("missing layer Z")?;
-    let report = json!({"name":layer.name,"type":layer.kind,"status":"equivalent","domain_id":layer.domain_id,
-        "domain_source":domain_doc.source,"cell_count":cells,
+    let report = json!({"name":layer.name,"type":layer.kind,"status":"equivalent","profile_id":layer_profile.id,
+        "cell_count":cells,
         "outside_material":"base","outside_base_pixels":base_pixels,
         "z_mm":{"start_mm":z.start_mm,"end_mm":z.end_mm,"thickness_known":z.thickness_known,"source":z.source},
         "drill_overlays":covering.iter().map(|d|&d.layer.name).collect::<Vec<_>>()});

@@ -204,7 +204,6 @@ GRID_CELL_WITHOUT_PIXEL = "grid.cell_without_pixel"
 # Per-layer evaluation.
 EQUIV_LAYER_FAILED = "equiv.layer_failed"
 EQUIV_LAYER_SKIPPED = "equiv.layer_skipped"
-EQUIV_MISSING_DOMAIN = "equiv.missing_domain"
 EQUIV_DRILL_SPAN_UNKNOWN = "equiv.drill_span_unknown"
 #: A drill had no copper-plane span in the document, so it was matched to a
 #: layer by absolute Z alone (safe only when the layer thickness is known).

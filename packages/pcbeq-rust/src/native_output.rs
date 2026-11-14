@@ -56,7 +56,7 @@ impl Writer {
         layer: &Layer,
         geometry: &Geometry,
         mesh: &Mesh,
-        domain: usize,
+        profile: usize,
         values: &[Vec<[f64; 5]>],
     ) -> Result<()> {
         let z = layer.z_mm.as_ref().ok_or("missing absolute Z")?;
@@ -65,7 +65,7 @@ impl Writer {
         } else {
             [None, None]
         };
-        for &rid in &geometry.members[domain] {
+        for &rid in &geometry.members[profile] {
             let r = geometry.rectangles[rid];
             let (xs, ys) = &mesh.axes[rid];
             if values[rid].len() != (xs.len() - 1) * (ys.len() - 1) || values[rid].is_empty() {

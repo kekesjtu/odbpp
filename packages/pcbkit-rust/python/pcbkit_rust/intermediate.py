@@ -27,9 +27,9 @@ class PolygonModel(ContractModel):
     points: list[Point] = Field(min_length=3, description="毫米坐标；首点不在末尾重复；至少三个点。")
 
 
-class DomainModel(ContractModel):
+class ProfileModel(ContractModel):
     id: str = Field(min_length=1)
-    source: Literal["step_profile", "layer_profile"]
+    layers: list[str] = Field(description="使用此轮廓的 BOARD 层名称；每层最多归属一个轮廓。")
     polygons: list[PolygonModel]
 
 
@@ -74,13 +74,12 @@ class ThicknessModel(ContractModel):
 class LayerModel(ContractModel):
     name: str = Field(min_length=1)
     type: str = Field(min_length=1, description="ODB++ 层类型；等效器明确报告不支持的材料类型。")
-    context: Literal["BOARD", "MISC"] = "BOARD"
+    context: Literal["BOARD"] = "BOARD"
     row: StrictInt = Field(default=1, ge=1)
     form: Literal["RIGID", "FLEX"] = "RIGID"
     form_source: Literal["DECLARED", "FLEX_SUBTYPE", "DEFAULT"] = "DEFAULT"
     geometry_status: Literal["ready", "failed", "omitted"] = "ready"
     geometry_error: str | None = None
-    domain_id: str | None = None
     polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")
     z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由 copper_span 端点铜层推导。")
     thickness: ThicknessModel | None = None
@@ -103,31 +102,35 @@ class LayerModel(ContractModel):
 
 class StepModel(ContractModel):
     name: str = Field(min_length=1)
-    profile_domain_id: str | None = Field(default=None, description="整板 step profile 在 domains 中的引用；不能以铜图案替代。")
-    domains: list[DomainModel]
-    layers: list[LayerModel] = Field(description="唯一层目录；包含失败及未导出层，按 matrix row 排列。")
+    profile_id: str | None = Field(default=None, description="整板轮廓在 profiles 中的引用。")
+    profiles: list[ProfileModel]
+    layers: list[LayerModel] = Field(description="BOARD 层目录，包含失败及未导出层，按 matrix row 排列。")
 
     @model_validator(mode="after")
     def references(self):
-        ids = [d.id for d in self.domains]
+        ids = [p.id for p in self.profiles]
         names = [l.name for l in self.layers]
         if len(ids) != len(set(ids)):
-            raise ValueError("duplicate domain id")
+            raise ValueError("duplicate profile id")
         if len(names) != len(set(names)):
             raise ValueError("duplicate layer name")
-        domains = {d.id: d for d in self.domains}
+        if self.profile_id is not None and self.profile_id not in ids:
+            raise ValueError("unknown step profile_id")
+        assigned = set()
+        for profile in self.profiles:
+            for name in profile.layers:
+                if name not in names:
+                    raise ValueError(f"profile {profile.id!r}: unknown layer {name!r}")
+                if name in assigned:
+                    raise ValueError(f"layer {name!r}: multiple profile assignments")
+                assigned.add(name)
         indexed = [l for l in self.layers if l.copper_index is not None]
         copper = {l.copper_index for l in indexed}
         if len(copper) != len(indexed):
             raise ValueError("duplicate copper_index")
         if any(l.type not in ("SIGNAL", "POWER_GROUND", "MIXED") or l.context != "BOARD" for l in indexed):
             raise ValueError("copper_index must belong to a BOARD copper layer")
-        if self.profile_domain_id is not None:
-            if self.profile_domain_id not in domains or domains[self.profile_domain_id].source != "step_profile":
-                raise ValueError("profile_domain_id must reference a step_profile domain")
         for layer in self.layers:
-            if layer.domain_id is not None and layer.domain_id not in domains:
-                raise ValueError(f"layer {layer.name!r}: unknown domain_id {layer.domain_id!r}")
             if layer.copper_span is not None and any(i not in copper for i in layer.copper_span):
                 raise ValueError(f"layer {layer.name!r}: copper_span endpoints must reference existing copper_index values")
         return self
@@ -160,13 +163,13 @@ class BoardDocument(ContractModel):
         Returned mappings belong to this one computation; no validation in loops.
         """
         return {"units": self.units, "steps": [{
-            "name": step.name, "profile_domain_id": step.profile_domain_id,
-            "domains": [{"id": d.id, "source": d.source,
+            "name": step.name, "profile_id": step.profile_id,
+            "profiles": [{"id": d.id, "layers": d.layers,
                          "polygons": [{"island": p.island, "points": p.points} for p in d.polygons]}
-                        for d in step.domains],
+                        for d in step.profiles],
             "layers": [{"name": l.name, "type": l.type, "context": l.context,
                         "row": l.row, "geometry_status": l.geometry_status,
-                        "geometry_error": l.geometry_error, "domain_id": l.domain_id,
+                        "geometry_error": l.geometry_error,
                         "copper_index": l.copper_index, "copper_span": l.copper_span,
                         "z_mm": None if l.z_mm is None else l.z_mm.model_dump(),
                         "polygons": [{"island": p.island, "points": p.points} for p in l.polygons]}

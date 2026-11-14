@@ -61,21 +61,20 @@ def test_drills_only_affect_dielectrics_and_combine_overlap_once(tmp_path):
 
 def test_rigidflex_holes_and_layer_existence_are_preserved(tmp_path):
     from shapely.geometry import Polygon
-    domains = [{"id": "step_profile", "source": "step_profile", "polygons": [rect(0, 0, 10, 10), hole(4, 4, 6, 6)]},
-               {"id": "left", "source": "layer_profile", "polygons": [rect(0, 0, 3, 10)]}]
-    document = build_document(domains=domains, layers=[
-        {"name": "ALL", "polygons": []}, {"name": "LEFT", "domain_id": "left", "polygons": []}])
+    profiles = [{"id": "step_profile", "polygons": [rect(0, 0, 10, 10), hole(4, 4, 6, 6)]},
+               {"id": "left", "polygons": [rect(0, 0, 3, 10)]}]
+    document = build_document(profiles=profiles, layers=[
+        {"name": "ALL", "polygons": []}, {"name": "LEFT", "profile_id": "left", "polygons": []}])
     _, delivered, _ = execute(document, tmp_path)
-    for name, domain in (("ALL", domains[0]), ("LEFT", domains[1])):
-        original = Polygon(domain["polygons"][0]["points"], [p["points"] for p in domain["polygons"][1:]])
+    for name, profile in (("ALL", profiles[0]), ("LEFT", profiles[1])):
+        original = Polygon(profile["polygons"][0]["points"], [p["points"] for p in profile["polygons"][1:]])
         modeled = unary_union([box(*bounds) for region, bounds, _ in iter_cells(delivered) if region.layer.name == name])
         assert original.symmetric_difference(modeled).area <= original.area * .05 + 1e-8
     assert not any(box(*bounds).intersects(box(4.01, 4.01, 5.99, 5.99)) for _, bounds, _ in iter_cells(delivered))
 
 
 def test_native_thin_region_uses_a_local_raster(tmp_path):
-    document=build_document(domains=[{"id":"step_profile","source":"step_profile",
-        "polygons":[rect(0,0,10,10),rect(11,4,12,4.0001)]}],
+    document=build_document(profiles=[{"id":"step_profile","polygons":[rect(0,0,10,10),rect(11,4,12,4.0001)]}],
         layers=[{"name":"CU","polygons":[rect(0,0,6,10)]}])
     source=tmp_path/"input.json"
     source.write_text(json.dumps(document),encoding="utf-8")
@@ -91,10 +90,10 @@ def test_native_thin_region_uses_a_local_raster(tmp_path):
 
 
 def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path):
-    document=build_document(domains=[
-        {"id":"step_profile","source":"step_profile","polygons":[rect(0,0,12,10)]},
-        {"id":"centre","source":"layer_profile","polygons":[rect(4,4,6,6)]}],
-        layers=[{"name":"CU","domain_id":"centre","polygons":[
+    document=build_document(profiles=[
+        {"id":"step_profile","polygons":[rect(0,0,12,10)]},
+        {"id":"centre","polygons":[rect(4,4,6,6)]}],
+        layers=[{"name":"CU","profile_id":"centre","polygons":[
             rect(0,0,10,10),hole(2,2,8,8),rect(4.5,4.5,5.5,5.5),rect(11,0,12,1)]}])
     source=tmp_path/"input.json"
     source.write_text(json.dumps(document),encoding="utf-8")
@@ -106,7 +105,7 @@ def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path):
     assert values==pytest.approx(((.3+harmonic)/2,)*2+(96.475,density,cp),abs=1e-4)
 
 
-@pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "domain", "z", "span"])
+@pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "profile", "duplicate_assignment", "misc", "short_polygon", "z", "span"])
 def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
     document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])
     layer = document["steps"][0]["layers"][0]
@@ -116,8 +115,14 @@ def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
         layer["polygons"][0]["points"][0][0] = "1.0"
     elif change == "unknown":
         document["unexpected"] = 1
-    elif change == "domain":
-        layer["domain_id"] = "missing"
+    elif change == "profile":
+        document["steps"][0]["profiles"][0]["layers"] = ["missing"]
+    elif change == "duplicate_assignment":
+        document["steps"][0]["profiles"].append({"id":"other", "layers":[layer["name"]], "polygons":[rect(0,0,5,5)]})
+    elif change == "misc":
+        layer["context"] = "MISC"
+    elif change == "short_polygon":
+        layer["polygons"][0]["points"] = [[0,0],[1,1]]
     elif change == "z":
         layer["z_mm"]["end_mm"] = -1
     else:

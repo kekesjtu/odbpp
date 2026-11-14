@@ -166,13 +166,13 @@ def test_snap_keeps_self_crossings_and_counts_collapsed_rings():
 
 
 @pytest.mark.parametrize("name", ["fx_negative_layer", "fx_nested_symbol", "fx_flex_form"])
-def test_input_adapter_to_contract_keeps_layer_domains_and_z(name):
+def test_input_adapter_to_contract_keeps_layer_profiles_and_z(name):
     job = load_job(str(fixture_path(name)))
     preview = build_step_preview(job)
     assert not preview.failed_layers
     document = step_to_document(job, preview)
-    assert document.steps[0].domains
-    assert len(document.steps[0].layers) == len(job.single_step.layers)
+    assert document.steps[0].profiles
+    assert len(document.steps[0].layers) == sum(l.ref.context.value == "BOARD" for l in job.single_step.layers)
     assert any(layer.polygons for layer in document.steps[0].layers)
 
 
@@ -181,7 +181,77 @@ def test_invalid_layer_profile_has_failed_status():
     preview = build_step_preview(job)
     document = step_to_document(job, preview)
     failed = [layer for layer in document.steps[0].layers if layer.geometry_status == "failed"]
-    assert failed and all(layer.domain_id is None for layer in failed)
+    assigned = {name for p in document.steps[0].profiles for name in p.layers}
+    assert failed and all(layer.name not in assigned for layer in failed)
+
+
+def test_profiles_deduplicate_geometry_and_own_layer_membership():
+    job = load_job(str(fixture_path("fx_negative_layer")))
+    step = job.single_step
+    step.profile = features(surface(0, 0, 10, 10)).profile()
+    for layer in step.layers:
+        layer.profile = features("S P 0\nOB 10 10 I\nOS 5 10\nOS 0 10\nOS 0 0\nOS 10 0\nOS 10 10\nOE\nSE\n").profile()
+    document = step_to_document(job, build_step_preview(job))
+    delivered = document.steps[0]
+    assert len(delivered.profiles) == 1
+    assert delivered.profile_id == delivered.profiles[0].id
+    assert set(delivered.profiles[0].layers) == {layer.name for layer in delivered.layers}
+    assert all("profile_id" not in layer.model_dump() for layer in delivered.layers)
+
+
+def test_misc_uses_ordered_paint_and_stays_out_of_json(tmp_path, monkeypatch):
+    from dataclasses import replace
+    import pcbkit_rust.export as export
+    from pcbkit_rust.model import LayerContext, LayerType, Polarity
+    from pcbkit_rust.png import write_layer_pngs
+    from pcbkit_rust.svg import SvgOptions, render_svg
+    job = load_job(str(fixture_path("fx_negative_layer")))
+    layer = job.single_step.layers[0]
+    layer.ref = replace(layer.ref, context=LayerContext.MISC, type=LayerType.DOCUMENT, polarity=Polarity.POSITIVE)
+    layer.features = features(surface(0, 0, 10, 10) + surface(2, 2, 8, 8, "N") + surface(4, 4, 6, 6))
+    job.single_step.layers = [layer]
+    def unexpected(*args, **kwargs):
+        pytest.fail("MISC must not use whole-layer polygon composition")
+    monkeypatch.setattr(export, "expand_layer", unexpected)
+    preview = build_step_preview(job)
+    assert preview.layers[0].drawing and not preview.layers[0].rings
+    assert [op[0] for op in preview.layers[0].drawing.commands()] == [True, False, True]
+    document = step_to_document(job, preview).steps[0]
+    assert not document.layers and all(not p.layers for p in document.profiles)
+    svg = render_svg(preview)
+    assert '<mask id="paint-L0"' in svg and 'fill="black"' in svg
+    paths = write_layer_pngs(preview, tmp_path, SvgOptions(), max_edge=232)
+    with Image.open(paths[0]) as image:
+        assert image.getpixel((36, 196)) != (255, 255, 255)
+        assert image.getpixel((76, 156)) == (255, 255, 255)
+        assert image.getpixel((116, 116)) != (255, 255, 255)
+
+
+def test_misc_round_strokes_keep_centerlines_and_width_without_polygons():
+    f = features("UNITS=MM\n$0 r1000\nL 0 0 1 0 0 P 0\nA 1 0 0 1 0 0 0 N 0 N\n")
+    drawing = native.Composer({}).drawing(f, None, False, False)
+    operations = drawing.commands()
+    assert [op[0] for op in operations] == [True, False]
+    assert all(op[1] == 1 and len(op[2]) >= 2 and not op[3] for op in operations)
+    assert 'stroke-linecap="round"' in drawing.svg()
+
+
+def test_json_only_does_not_parse_misc_features(tmp_path):
+    from conftest import write_tree
+    source = tmp_path / "input"
+    write_tree(source, {
+        "misc/info": "JOB_NAME=test\nVERSION_MAJOR=8\nVERSION_MINOR=1\nUNITS=MM\n",
+        "matrix/matrix": "STEP {\nCOL=1\nNAME=board\n}\nLAYER {\nROW=1\nCONTEXT=BOARD\nTYPE=SIGNAL\nNAME=cu\n}\nLAYER {\nROW=2\nCONTEXT=MISC\nTYPE=DOCUMENT\nNAME=notes\n}\n",
+        "steps/board/profile": "UNITS=MM\n" + surface(0, 0, 10, 10),
+        "steps/board/stephdr": "UNITS=MM\nX_DATUM=0\nY_DATUM=0\nX_ORIGIN=0\nY_ORIGIN=0\n",
+        "steps/board/layers/cu/features": "UNITS=MM\n$0 r1000\nP 5 5 0 P 0 0\n",
+        "steps/board/layers/notes/features": "UNITS=MM\nP BROKEN\n",
+    })
+    output = tmp_path / "result"
+    assert main(["export", str(source), "-o", str(output), "--only-json", "--no-diagnostics"]) == 0
+    step = json.loads((output / "intermediate.json").read_text())["steps"][0]
+    assert [layer["name"] for layer in step["layers"]] == ["cu"]
+    assert step["profiles"][0]["layers"] == ["cu"]
 
 
 def test_input_adapter_reports_recursive_symbol_cycle():

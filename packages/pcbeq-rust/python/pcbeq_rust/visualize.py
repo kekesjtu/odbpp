@@ -122,7 +122,7 @@ def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
     colourbar.ax.tick_params(labelsize=font - 2, length=3, colors="#526071")
     colourbar.outline.set_visible(False)
     figure.legend(handles=[Patch(facecolor=absent, edgecolor="none",
-                                 label="No cell / outside layer domain")],
+                                 label="No cell / outside layer profile")],
                   loc="lower left", bbox_to_anchor=(left / width, 0.005),
                   frameon=False, prop={"family": family, "size": font - 2})
     renderer.draw()

@@ -1,27 +1,8 @@
-"""The render-ready model: a job composed into per-layer positive polygons.
+"""Native BOARD regions and independent MISC drawings for export and preview.
 
-This is data-flow step 2.  It sits between the parser (which knows what the files
-say) and any renderer (which needs flat polygons in millimetres), and it is the
-only place that decides *what a layer's area actually is*.
-
-Design notes
-------------
-**Millimetres, always.**  Input may be ``INCH`` or ``MM``; the model is metric
-(requirements.md parser constraint 4).  No unit is ever reported as a raw file value.
-
-**Positive only.**  Every ring that comes out is a real boundary: islands wound
-clockwise, holes counter-clockwise (spec p.39).  A renderer needs no fill-rule
-trickery -- and in particular must not use ``evenodd``, which would punch a hole
-where two positive features overlap.
-
-**Curves are gone by this point.**  Booleans cannot carry arcs, so the model is
-polygonal.  ``tessellation.sagitta_mm`` is therefore the last point at which
-curve fidelity is decided, which is why it is an option on the *preview* and not
-buried in the parser.
-
-**Native ownership.** Layer previews hold immutable Rust Region handles. Python
-reads final vertices at the contract and drawing boundaries. Callers that need
-only one layer at a time can consume :func:`iter_step_previews` incrementally.
+BOARD geometry is regularised in Rust and shared by the JSON contract and
+renderers. MISC uses ordered paint handles only. Profile geometry is quantised,
+deduplicated and assigned to layers at the contract boundary.
 """
 
 from __future__ import annotations
@@ -69,6 +50,7 @@ class PreviewOptions:
     #: Skip layers of these types, e.g. ``("DOCUMENT",)`` for fabrication
     #: drawings whose hundreds of thousands of records dwarf everything else.
     exclude_types: Sequence[str] = ()
+    include_misc: bool = True
     #: Render a zero-width stroke (``r0``) as a hairline of this width.
     #:
     #: Real jobs do contain ``r0`` lines -- ``designodb-rigidflex`` draws its
@@ -101,7 +83,7 @@ class PreviewOptions:
 
 @dataclass
 class LayerPreview:
-    """One composed layer, ready to serialise or draw."""
+    """One BOARD region or preview-only MISC drawing."""
 
     layer: Layer
     geometry: LayerGeometry
@@ -114,6 +96,7 @@ class LayerPreview:
     #: precision re-regularises instead of silently rounding points.
     round_digits: Optional[int] = None
     drawing_only: bool = field(default=False, repr=False, compare=False)
+    drawing: Optional[object] = field(default=None, repr=False, compare=False)
 
     @property
     def name(self) -> str:
@@ -141,11 +124,11 @@ class LayerPreview:
 
     @property
     def bounds(self) -> Optional[tuple[float, float, float, float]]:
-        return self.geometry.bounds
+        return self.drawing.bounds if self.drawing is not None else self.geometry.bounds
 
     @property
     def is_empty(self) -> bool:
-        return not self.geometry.region
+        return not self.drawing if self.drawing is not None else not self.geometry.region
 
     def layer_attributes(self) -> dict[str, str]:
         """Layer-level attributes worth surfacing, per requirements.md thickness-unit rules.
@@ -214,7 +197,7 @@ class LayerPreview:
 
 @dataclass
 class StepPreview:
-    """A step composed into per-layer polygons, plus stackup context."""
+    """A step with BOARD regions, MISC drawings and stackup context."""
 
     step: Step
     layers: list[LayerPreview]
@@ -283,7 +266,7 @@ def _selected_layers(step: Step, options: PreviewOptions,
     nothing looks identical to a layer that is genuinely empty, and the two want
     opposite responses.
     """
-    layers = list(step.layers)
+    layers = [l for l in step.layers if options.include_misc or l.ref.context.value == "BOARD"]
 
     if options.layers:
         wanted = {name.casefold() for name in options.layers}
@@ -331,6 +314,18 @@ def iter_step_previews(
         if layer.features is None and layer.profile is None and step.profile is None:
             continue
         try:
+            if layer.ref.context.value == "MISC":
+                from ._pcbkit_native import Region
+                from .features import collect_diagnostics
+                seed = layer.is_negative or layer.type is LayerType.DIELECTRIC
+                if layer.profile_error is not None:
+                    step.base_geometry(layer)
+                drawing = expander.native.drawing(layer.features, step.base_geometry(layer) if seed else None,
+                                                   layer.is_negative, seed)
+                collect_diagnostics(expander.native, diags)
+                yield LayerPreview(layer=layer, geometry=LayerGeometry(layer.name, Region(), layer.feature_count),
+                                   stackup=stackup, round_digits=opts.round_digits, drawing=drawing)
+                continue
             geometry = expand_layer(layer, step, expander=expander,
                                     round_digits=opts.round_digits)
         except LayerProfileError as exc:
@@ -397,6 +392,9 @@ def regularise_preview(
     diags = diagnostics if diagnostics is not None else preview.diagnostics
     layers: list[LayerPreview] = []
     for layer in preview.layers:
+        if layer.drawing is not None:
+            layers.append(replace(layer, round_digits=digits))
+            continue
         region, collapsed = snap_to_grid(layer.geometry.region, digits)
         if collapsed:
             diags.warn(
@@ -438,7 +436,7 @@ def build_step_preview(
     options: Optional[PreviewOptions] = None,
     diagnostics: Optional[Diagnostics] = None,
 ) -> StepPreview:
-    """Compose one step completely, holding every layer's polygons in memory."""
+    """Prepare native BOARD regions and MISC drawings for one step."""
     opts = options or PreviewOptions()
     diags = diagnostics if diagnostics is not None else (
         job.diagnostics if isinstance(job.diagnostics, Diagnostics) else Diagnostics()
@@ -551,14 +549,14 @@ def _layer_data(preview: LayerPreview, digits: int) -> dict:
         region, _ = snap_to_grid(region, digits)
     return {
         **_layer_metadata(preview.layer, preview.stackup, digits),
-        "geometry_status": "ready", "domain_id": None,
+        "geometry_status": "ready",
         "polygons": region.polygons(),
     }
 
 
 def layer_to_json(preview: LayerPreview, *, round_digits: Optional[int] = None) -> dict:
     """Serialise a single layer through the shared Pydantic IO contract."""
-    if preview.drawing_only:
+    if preview.drawing_only or preview.layer.ref.context.value != "BOARD":
         raise ValueError("a drawing-only layer cannot be exported as intermediate JSON")
     from .intermediate import LayerModel
     return LayerModel.model_validate(_layer_data(preview, _preview_digits(preview, round_digits))).model_dump(
@@ -576,13 +574,15 @@ def step_to_document(job: Job, preview: StepPreview, *,
         raise ValueError("a drawing-only preview cannot be exported as intermediate JSON; use the uncut model")
     digits = _preview_digits(preview, round_digits)
     view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
-    domains, domain_of_layer = _domains_json(view, digits)
+    profiles, profile_id, profile_errors = _profiles_json(view, digits)
     composed = {l.name.casefold(): l for l in view.layers}
     failed = {name.casefold() for name in view.failed_layers}
     catalog = {l.name.casefold(): l for l in view.step.layers}
     catalog.update({l.name.casefold(): l.layer for l in view.layers})
     layers = []
     for layer in sorted(catalog.values(), key=lambda l: l.ref.row):
+        if layer.ref.context.value != "BOARD":
+            continue
         ready = composed.get(layer.name.casefold())
         if ready is not None:
             data = _layer_data(ready, digits)
@@ -595,10 +595,8 @@ def step_to_document(job: Job, preview: StepPreview, *,
                 messages = [d.message for d in view.diagnostics
                             if d.level == "error" and layer.name in d.message]
                 data["geometry_error"] = layer.profile_error or (messages[-1] if messages else "layer geometry could not be composed")
-        info = domain_of_layer.get(layer.name, {})
-        data["domain_id"] = info.get("id")
-        if info.get("error") and data.get("geometry_error") is None:
-            data["geometry_error"] = info["error"]
+        if layer.name in profile_errors and data.get("geometry_error") is None:
+            data["geometry_error"] = profile_errors[layer.name]
         # Validate one layer at a time so the complete untyped coordinate tree
         # does not coexist with a second full Pydantic coordinate tree.
         layers.append(LayerModel.model_validate(data))
@@ -608,8 +606,8 @@ def step_to_document(job: Job, preview: StepPreview, *,
                    "input_units": preview.units_in,
                    "product": {"name": job.info.job_name or None, "odb_version": job.info.version}},
         "steps": [{"name": preview.step.name,
-                   "profile_domain_id": "step_profile" if preview.step.profile is not None else None,
-                   "domains": domains, "layers": layers}],
+                   "profile_id": profile_id,
+                   "profiles": profiles, "layers": layers}],
     })
 
 
@@ -619,89 +617,41 @@ def step_to_json(job: Job, preview: StepPreview, *,
     return step_to_document(job, preview, round_digits=round_digits).model_dump(mode="json", exclude_none=True)
 
 
-def _domains_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], dict]:
-    """The computational domains available to this step, and which layer uses which.
+def _profiles_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], Optional[str], dict]:
+    """Export each quantised profile geometry once, with its layer membership."""
+    profiles, regions, errors = [], [], {}
+    cached = {}
 
-    requirements.md parser constraint 7: a material-equivalence consumer needs each physical
-    layer's two-dimensional calculation domain separately from its material
-    *pattern*.  The copper polygons are a pattern -- where the metal is -- and
-    they say nothing about where the layer exists at all.  This array is that
-    domain, resolved with the constraint 3 priority rule:
+    def register(profile):
+        key = id(profile)
+        if key in cached:
+            return cached[key]
+        region, _ = snap_to_grid(region_from_geometry(profile, preview.expansion_options.tessellation), round_digits)
+        for index, existing in enumerate(regions):
+            if region.same_geometry(existing):
+                cached[key] = index
+                return index
+        index = len(profiles)
+        regions.append(region)
+        profiles.append({"id": f"profile:{index}", "layers": [], "polygons": region.polygons()})
+        cached[key] = index
+        return index
 
-    * a valid layer profile wins (``source: layer_profile``);
-    * otherwise the step profile applies (``source: step_profile``);
-    * a layer profile that exists but cannot be parsed is *not* silently
-      replaced by the step profile: it sets ``geometry_error`` and leaves
-      ``domain_id`` null.
-
-    The step profile is emitted once and shared by every layer that falls back to
-    it, rather than copied per layer, so a 43-layer rigid-flex board does not
-    repeat the same polygon set 40 times.
-
-    Returns ``(domains, mapping)`` where *mapping* is keyed by layer name.
-    """
-    from .clipper import region_from_geometry
-
-    domains: list[dict] = []
-    mapping: dict[str, dict] = {}
-    seen: dict[int, str] = {}
-
-    step = preview.step
-    step_domain_id: Optional[str] = None
-    if step.profile is not None:
-        step_domain_id = "step_profile"
-        region, collapsed = snap_to_grid(
-            region_from_geometry(step.profile, preview.expansion_options.tessellation), round_digits
-        )
-        if collapsed:
-            preview.diagnostics.warn(
-                EXPORT_DEGENERATE_RING,
-                f"step {step.name!r} profile: {collapsed} ring(s) had no area left at "
-                f"the {round_digits}-decimal output grid and were dropped; "
-                f"the remaining geometry was re-regularised at that resolution",
-            )
-        domains.append(_domain_json(step_domain_id, "step_profile",
-                                    region, round_digits))
-
+    step_id = None
+    if preview.step.profile is not None:
+        step_id = profiles[register(preview.step.profile)]["id"]
     for layer in preview.step.layers:
+        if layer.ref.context.value != "BOARD":
+            continue
         if layer.profile_error is not None:
-            mapping[layer.name] = {
-                "id": None,
-                "source": None,
-                "error": f"layer profile could not be parsed: {layer.profile_error}",
-            }
+            errors[layer.name] = f"layer profile could not be parsed: {layer.profile_error}"
             continue
-        if layer.profile is not None:
-            # Two layers sharing one profile object (rare, but a step can be
-            # authored that way) get one entry keyed by object identity.
-            key = id(layer.profile)
-            domain_id = seen.get(key)
-            if domain_id is None:
-                domain_id = f"layer_profile:{layer.name}"
-                region, _collapsed = snap_to_grid(
-                    region_from_geometry(layer.profile, preview.expansion_options.tessellation), round_digits
-                )
-                domains.append(_domain_json(domain_id, "layer_profile", region, round_digits))
-                seen[key] = domain_id
-            mapping[layer.name] = {"id": domain_id, "source": "layer_profile",
-                                   "error": None}
+        profile = layer.profile if layer.profile is not None else preview.step.profile
+        if profile is None:
+            errors[layer.name] = "neither a layer profile nor a step profile is available"
             continue
-        if step_domain_id is not None:
-            mapping[layer.name] = {"id": step_domain_id, "source": "step_profile",
-                                   "error": None}
-            continue
-        mapping[layer.name] = {
-            "id": None,
-            "source": None,
-            "error": "neither a layer profile nor a step profile is available",
-        }
-
-    return domains, mapping
-
-
-def _domain_json(domain_id: str, source: str, region, round_digits: int) -> dict:
-    return {"id": domain_id, "source": source,
-            "polygons": region.polygons()}
+        profiles[register(profile)]["layers"].append(layer.name)
+    return profiles, step_id, errors
 
 
 def write_json(document: dict, path: str) -> None:
@@ -714,6 +664,9 @@ def layer_summary_lines(preview: StepPreview) -> str:
     """A one-line-per-layer text summary, used by the CLI and tests."""
     lines = []
     for layer in preview.layers:
+        if layer.drawing is not None:
+            lines.append(f"{layer.name:<26} {layer.type_name:<14} preview only, {layer.geometry.records} input features")
+            continue
         bounds = layer.bounds
         where = "" if bounds is None else \
             f" [{bounds[0]:.2f},{bounds[1]:.2f} .. {bounds[2]:.2f},{bounds[3]:.2f}]"

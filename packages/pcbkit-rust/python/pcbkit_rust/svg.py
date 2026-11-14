@@ -318,6 +318,12 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
             f'{z_attributes}'
             f'fill="{colour}" fill-opacity="{opacity:g}" style="color:{colour}"'
         )
+        if layer.drawing is not None:
+            out.append(f'<g {attributes}><defs><mask id="paint-L{index}" maskUnits="userSpaceOnUse" '
+                       f'x="{x0}" y="{y0}" width="{width}" height="{height}" style="mask-type:luminance" fill-opacity="1" stroke-opacity="1">'
+                       f'{layer.drawing.svg()}</mask></defs><rect x="{x0}" y="{y0}" width="{width}" '
+                       f'height="{height}" mask="url(#paint-L{index})"/></g>')
+            continue
         if not data:
             # Keep the element so the layer list matches the drawing, and so the
             # emptiness is visible rather than looking like a missing layer.
@@ -330,14 +336,14 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
         out.append(f'<path id="odb-profile" d="{path_data(profile.rings, digits)}" '
                    'fill="none" stroke="#c9d1d9" stroke-width="1" '
                    'vector-effect="non-scaling-stroke" pointer-events="none"/>')
-    out.append('<g id="odb-domains" fill="none" stroke="#56d6a0" '
+    out.append('<g id="odb-layer-profiles" fill="none" stroke="#56d6a0" '
                'stroke-dasharray="6 4" pointer-events="none">')
     for index, layer in enumerate(chosen):
         profile = layer.layer.profile if layer.layer.profile is not None else view.step.profile
-        if profile is not None and layer.layer.profile_error is None:
-            domain, _ = snap_to_grid(region_from_geometry(profile, view.expansion_options.tessellation), digits)
+        if layer.drawing is None and profile is not None and layer.layer.profile_error is None:
+            profile_region, _ = snap_to_grid(region_from_geometry(profile, view.expansion_options.tessellation), digits)
             out.append(f'<path data-name="{_escape(layer.name)}" '
-                       f'd="{path_data(domain.rings, digits)}" style="display:none" '
+                       f'd="{path_data(profile_region.rings, digits)}" style="display:none" '
                        'stroke-width="1.5" vector-effect="non-scaling-stroke"/>')
     out.append('</g><g id="odb-measure" pointer-events="none" '
                'stroke="#ffd166" fill="none" stroke-width="2" '
@@ -386,7 +392,7 @@ html,body{margin:0;height:100%;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,
 #stage{position:relative;flex:1;overflow:hidden;background:#0b0e11}
 #stage svg{width:100%;height:100%;display:block;cursor:grab}
 #stage svg.drag{cursor:grabbing}
-#stage .odb-layer,#odb-profile,#odb-domains,#odb-measure{pointer-events:none}
+#stage .odb-layer,#odb-profile,#odb-layer-profiles,#odb-measure{pointer-events:none}
 #status{position:absolute;left:0;right:0;bottom:0;padding:3px 10px;display:flex;gap:14px;
   background:#0b0e11cc;border-top:1px solid #232a31;color:#7d8590;font-size:11px;pointer-events:none}
 #status b{color:#c9d1d9;font-weight:500}
@@ -396,7 +402,7 @@ html,body{margin:0;height:100%;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,
 #info table{border-collapse:collapse}
 #info td{padding:1px 0}
 #info td:first-child{color:#6e7681;padding-right:10px}
-body.wire .odb-layer path{fill:none;stroke:currentColor;stroke-width:1px;vector-effect:non-scaling-stroke}
+body.wire .odb-layer > path{fill:none;stroke:currentColor;stroke-width:1px;vector-effect:non-scaling-stroke}
 #empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   color:#484f58;pointer-events:none}
 #searchbar{padding:8px 10px;border-bottom:1px solid #232a31}
@@ -611,11 +617,11 @@ _JS = r"""
     el.replaceChildren();
     var heading=document.createElement('h2'); heading.textContent=row.dataset.name; el.appendChild(heading);
     var table=document.createElement('table'); el.appendChild(table);
-    var values=[['类型',row.dataset.type],['实体环',row.dataset.rings],['面积',row.dataset.area+' mm²'],
+    var values=[['类型',row.dataset.type],['实体环',row.dataset.rings],['面积',row.dataset.context === 'MISC' ? '仅预览' : row.dataset.area+' mm²'],
       ['Z',row.dataset.zStart === undefined ? '非板内层' : row.dataset.zStart+' .. '+row.dataset.zEnd+' mm'+
        (row.dataset.zKnown === 'false' ? ' (部分厚度为估计)' : '')],
       ['厚度来源',row.dataset.thicknessSource],['原始极性',row.dataset.polarity],
-      ['计算域',row.dataset.domainSource],['形态',row.dataset.form],['钻孔跨度',row.dataset.span],
+      ['轮廓',row.dataset.profileSource],['形态',row.dataset.form],['钻孔跨度',row.dataset.span],
       ['输入图元',row.dataset.features]];
     values.forEach(function(pair){var tr=table.insertRow(); pair.forEach(function(v){tr.insertCell().textContent=v || '—';});});
     var histogram=document.getElementById('hist-'+row.dataset.row);
@@ -623,7 +629,7 @@ _JS = r"""
     infoName = name;
     } else el.scrollTop = 0;
     el.style.display = document.getElementById('propertiesbtn').classList.contains('on') ? 'block' : 'none';
-    updateDomain();
+    updateProfile();
   }
 
   rows.forEach(function(row){
@@ -656,15 +662,15 @@ _JS = r"""
   document.getElementById('isolate').onclick = function(){ bulk('isolate'); };
   document.getElementById('invert').onclick  = function(){ bulk('invert'); };
 
-  var domainPaths = Array.from(document.querySelectorAll('#odb-domains path'));
-  function updateDomain(){
-    var on = document.getElementById('domainbtn').classList.contains('on');
-    domainPaths.forEach(function(p){
+  var profilePaths = Array.from(document.querySelectorAll('#odb-layer-profiles path'));
+  function updateProfile(){
+    var on = document.getElementById('profilebtn').classList.contains('on');
+    profilePaths.forEach(function(p){
       var display = p.dataset.name === selected && on ? '' : 'none';
       if(p.style.display !== display) p.style.display = display;
     });
   }
-  document.getElementById('domainbtn').onclick=function(){this.classList.toggle('on');updateDomain();};
+  document.getElementById('profilebtn').onclick=function(){this.classList.toggle('on');updateProfile();};
   document.getElementById('profilebtn').onclick=function(){
     var on=this.classList.toggle('on'); var p=document.getElementById('odb-profile'); if(p)p.style.display=on?'':'none';
   };
@@ -792,7 +798,7 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
             f'data-context="{layer.layer.ref.context.value}" '
             f'data-polarity="{layer.layer.ref.polarity.value}" '
             f'data-form="{layer.layer.ref.form.value}" '
-            f'data-domain-source="{_escape(profile_source)}" '
+            f'data-profile-source="{_escape(profile_source)}" '
             f'data-thickness-source="{_escape(extent.source if extent else "")}" '
             f'data-span="{_escape(layer.layer.ref.start_name or "")} .. '
             f'{_escape(layer.layer.ref.end_name or "")}" '
@@ -809,7 +815,7 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
             f'<span class="chip" style="background:{colour}"></span>'
             f'<span class="nm">{_escape(layer.name)}</span>'
             f'<span class="ty">{layer.type_name}</span>'
-            f'<span class="ct">{len(layer.rings)}</span>'
+            f'<span class="ct">{"预览" if layer.drawing is not None else len(layer.rings)}</span>'
             f'</div>'
         )
     return "".join(rows)
@@ -1005,7 +1011,7 @@ def _render_html(view: StepPreview, opts: SvgOptions,
       <button id="fit" title="fit to window (f)">fit</button>
       <button id="fit-layer" title="缩放到选中层">定位层</button>
       <button id="profilebtn" class="on" title="原始 step profile">板框</button>
-      <button id="domainbtn" title="选中层的计算域（绿色虚线）">层域</button>
+      <button id="profilebtn" title="选中层的轮廓（绿色虚线）">层轮廓</button>
       <button id="matrixbtn">层叠矩阵</button>
       <button id="propertiesbtn" class="on" title="显示或隐藏选中层属性和输入图元统计">属性</button>
       <button id="measurebtn" title="依次点击两点；测量规整后的毫米坐标">测距</button>
