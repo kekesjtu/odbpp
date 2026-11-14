@@ -187,6 +187,39 @@ impl NativeProfile {
     fn __bool__(&self) -> bool {
         !self.data.contours.is_empty()
     }
+    #[pyo3(signature=(board,sagitta=0.005,maximum=4096))]
+    fn layer_region(
+        &self,
+        py: Python<'_>,
+        board: Option<&NativeProfile>,
+        sagitta: f64,
+        maximum: usize,
+    ) -> PyResult<NativeRegion> {
+        py.detach(|| -> parser::Result<_> {
+            let mut rings = self.data.region(sagitta, maximum)?;
+            if let Some(board) = board {
+                let holes = Surface {
+                    contours: board
+                        .data
+                        .contours
+                        .iter()
+                        .filter(|c| c.hole)
+                        .cloned()
+                        .map(|mut c| {
+                            c.hole = false;
+                            c
+                        })
+                        .collect(),
+                };
+                let holes = holes.region(sagitta, maximum)?;
+                if !holes.is_empty() {
+                    rings = boolean::operate("difference", &rings, &holes, boolean::SCALE)?;
+                }
+            }
+            Ok(NativeRegion::from(rings))
+        })
+        .map_err(value_error)
+    }
     #[pyo3(signature=(sagitta=0.005,maximum=4096))]
     fn region(&self, py: Python<'_>, sagitta: f64, maximum: usize) -> PyResult<NativeRegion> {
         py.detach(|| self.data.region(sagitta, maximum))
@@ -432,7 +465,7 @@ impl Composer {
         &mut self,
         py: Python<'_>,
         features: Option<&NativeFeatures>,
-        profile: Option<&NativeProfile>,
+        profile: Option<&NativeRegion>,
         invert: bool,
         seed: bool,
         digits: u32,
@@ -442,7 +475,8 @@ impl Composer {
                 profile
                     .ok_or("layer has no usable base profile")?
                     .data
-                    .region(self.engine.sagitta, self.engine.maximum)?
+                    .as_ref()
+                    .clone()
             } else {
                 vec![]
             };
@@ -467,14 +501,14 @@ impl Composer {
         &mut self,
         py: Python<'_>,
         features: Option<&NativeFeatures>,
-        profile: Option<&NativeProfile>,
+        profile: Option<&NativeRegion>,
         invert: bool,
         seed: bool,
     ) -> PyResult<NativeDrawing> {
         py.detach(|| {
             self.engine.drawing(
                 features.map(|f| f.data.as_ref()),
-                profile.map(|p| p.data.as_ref()),
+                profile.map(|p| p.data.as_slice()),
                 invert,
                 seed,
             )

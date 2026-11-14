@@ -5,7 +5,7 @@
 ```text
 ODB++ 单板目录或压缩包
   └─ pcbkit-rust ──> 中间 JSON ──> pcbeq-rust ──> MaterialMap JSON
-        └─ SVG / HTML / PNG 预览       └─ 工程图表与运行诊断
+        └─ SVG / HTML / PNG 预览             └─ 工程图表与运行诊断
 ```
 
 `pcbkit-rust` 解释 ODB++ 的单位、图元、极性和叠层，输出毫米坐标下的正向实体多边形及逐层几何。`pcbeq-rust` 规划近似 region 与局部网格，采样材料图案，为每个完整单元计算物性。
@@ -14,14 +14,13 @@ ODB++ 单板目录或压缩包
 
 ## 从轮廓到有效计算域
 
-| 名称 | 含义 |
-| --- | --- |
-| 整板轮廓（step profile） | ODB++ `steps/<step>/profile` 定义的整板外边界、岛和内孔边界 |
-| 层轮廓（layer profile） | 可选的 `steps/<step>/layers/<layer>/profile`，描述该层铺设到哪里 |
-| 层实体范围 | 由层轮廓确定的二维实体区域，扣除轮廓定义的内孔。缺少层轮廓时取整板轮廓围成的实体范围 |
-| 层有效计算域 | 层实体范围与整板实体范围的交集，作为该层建模和材料采样的面积范围 |
+| 名称                     | 含义                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| 整板轮廓（step profile） | ODB++ `steps/<step>/profile` 定义的整板外边界、岛和内孔边界                                            |
+| 层轮廓（layer profile）  | 可选的 `steps/<step>/layers/<layer>/profile`，描述该层铺设到哪里                                       |
+| 层实体范围(有效计算域)   | 有层轮廓时，由层岛扣除层孔与 step 孔的并集得到；缺少层轮廓时取整板轮廓围成的实体范围。层可伸出 step 岛 |
 
-例如刚挠板的某层只覆盖刚性区，该层轮廓只围住刚性区。中间 JSON 的 `profiles` 保存按几何去重的整板与层轮廓多边形，`profiles[].layers` 记录层归属，step 的 `profile_id` 指定整板轮廓。铜图案和钻孔投影描述有效计算域内的材料分布。选择轮廓和解释层厚的规则见[逐层轮廓与叠层](decisions/pcbkit/layer-profiles-and-stackup.md)。
+例如刚挠板的某层只覆盖刚性区，该层轮廓只围住刚性区；某层也可伸出整板轮廓，伸出部分同样属于该层实体。中间 JSON 的 `profiles` 保存按规整几何去重的轮廓多边形，层范围包含继承的 step 孔。`profiles[].layers` 列出所属 BOARD 层，`step.profile_id` 指定整板轮廓。铜图案和钻孔投影描述有效计算域内的材料分布。选择轮廓和解释层厚的规则见[逐层轮廓与叠层](decisions/pcbkit/layer-profiles-and-stackup.md)。
 
 ## 等效器的数据流
 
@@ -31,18 +30,16 @@ ODB++ 单板目录或压缩包
   └─ 材料图案与钻孔跨度 ──> 按 region 采样 ──> 单元物性 ──> MaterialMap
 ```
 
-各有效 profile 独立规划二维矩形，与引用物理层的 Z 区间共同定义三维 region。相同有效几何复用同一分区，不同几何不要求跨层对齐。几何规划使用矢量范围、拓扑和物理尺寸。网格确定后，材料分支为各 region 生成光栅，再按网格统计样本。调整采样密度不会移动 region 或网格。具体约束见[几何规划](decisions/pcbeq/geometry-planning.md)和[材料采样](decisions/pcbeq/material-sampling.md)。
+各有效 profile 独立规划二维矩形，与引用物理层的 Z 区间共同定义三维 region。相同有效几何复用同一 region 划分方案。几何规划使用矢量范围、拓扑和物理尺寸。网格确定后，材料分支为各 region 生成光栅，再按网格统计样本。调整采样密度不会移动 region 或网格。具体约束见[几何规划](decisions/pcbeq/geometry-planning.md)和[材料采样](decisions/pcbeq/material-sampling.md)。
 
 ## 分发与语言职责
 
-| 分发包 | 职责与语言边界 |
-| --- | --- |
-| `pcbkit-rust` | 包内 Python 负责目录与压缩包适配、元数据输入、Pydantic 契约边界与 SVG/HTML/PNG 预览；Rust 负责 features/profile 记录解析、符号展开、图元放置、极性合成与输出几何规整 |
-| `pcbeq-rust` | 独立 Rust CLI 从 JSON 读取校验到 MaterialMap 和数值诊断发布，可单文件分发。可选 Python 工具通过子进程调用 CLI，并从正式 MaterialMap 渲染图表 |
+| 分发包        | 职责与语言边界                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pcbkit-rust` | 包内 Python 负责输入调度、Pydantic 契约校验与预览，Rust 负责 features/profile 解析、符号展开、整层合成与几何规整                                                         |
+| `pcbeq-rust`  | 独立 Rust CLI 从 JSON 读取校验到 MaterialMap 和数值诊断发布，可单文件分发。可选 Python 工具通过子进程调用 CLI，并从正式 MaterialMap 渲染图表 |
 
-MISC 层只用于预览，不进入中间 JSON。Rust 将其展开成有序绘图指令，保留极性、符号放置和线宽，不构造整层 MultiPolygon；Python 在绘图边界生成 SVG/HTML/PNG。
-
-解析器的记录、符号缓存与中间几何保存在 Rust 内部。PyO3 以原生句柄传递已解析文件和最终 Region；整层展开与合成在一次调用内完成，不把逐图元坐标交回 Python。Python 仅在 JSON 契约交付和绘图边界读取最终坐标。
+MISC 不进入中间 JSON，由 Rust 生成独立有序绘图指令供 Python 预览。BOARD 图元及中间几何保存在 Rust 内部，Python 在 JSON 契约与绘图边界读取最终结果。
 
 解析器的 wheel / sdist 使用 Maturin 构建 PyO3 扩展。等效器由 Cargo 构建 `pcbeq` 可执行文件，计算不依赖 Python；其 Python 管线和绘图单独构建纯 Python wheel / sdist，通过 `PATH`、`PCBEQ_EXE` 或显式路径定位可执行文件。计算参数及默认值由 Rust CLI 解释，绘图可以独立重跑。uv workspace 锁定 Python 依赖，Cargo workspace 管理 Rust 依赖，两个产品通过文件契约独立运行。
 

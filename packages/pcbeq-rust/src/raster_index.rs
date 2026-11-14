@@ -60,18 +60,16 @@ impl Index {
 }
 pub struct Materials {
     coverage: Vec<Edge>,
-    profile: Vec<Edge>,
     black: Vec<Index>,
 }
 impl Materials {
-    pub fn new(coverage: Vec<Edge>, profile: Vec<Edge>, black: &[&[Polygon]]) -> Self {
+    pub fn new(coverage: Vec<Edge>, black: &[&[Polygon]]) -> Self {
         Self {
             coverage,
-            profile,
             black: black.iter().map(|p| Index::new(p)).collect(),
         }
     }
-    pub fn render(&self, x: Axis, y: Axis) -> Result<(Vec<u8>, usize)> {
+    pub fn render(&self, x: Axis, y: Axis) -> Result<Vec<u8>> {
         let bounds = [
             x.0 + (0.5 - 1e-9) * x.1,
             y.0 + (0.5 - 1e-9) * y.1,
@@ -80,7 +78,6 @@ impl Materials {
         ];
         PreparedRaster::new(
             self.coverage.clone(),
-            self.profile.clone(),
             self.black.iter().map(|i| i.edges(bounds)).collect(),
         )?
         .render_base(x, y)

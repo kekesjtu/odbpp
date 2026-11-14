@@ -151,10 +151,8 @@ LAYER_PROFILE_INVALID = "layer_profile.invalid"
 TOOLS_NO_UNITS = "tools.no_units"
 TOOLS_DUPLICATE_NUM = "tools.duplicate_num"
 
-# stackup / Z intervals (requirements.md parser constraint 3: a dielectric is perforated by the
-# drills whose Z interval overlaps it)
-STACKUP_DIELECTRIC_SPAN_UNKNOWN = "stackup.dielectric_span_unknown"
-STACKUP_DRILL_SPAN_UNKNOWN = "stackup.drill_span_unknown"
+# Stackup: matrix drill endpoints and attribute thickness.
+STACKUP_DRILL_ENDPOINTS_UNKNOWN = "stackup.drill_endpoints_unknown"
 STACKUP_THICKNESS_UNKNOWN = "stackup.thickness_unknown"
 
 # geometry expansion (research 05 §12: sweeps, polarity, missing symbols)
@@ -204,13 +202,6 @@ GRID_CELL_WITHOUT_PIXEL = "grid.cell_without_pixel"
 # Per-layer evaluation.
 EQUIV_LAYER_FAILED = "equiv.layer_failed"
 EQUIV_LAYER_SKIPPED = "equiv.layer_skipped"
-EQUIV_DRILL_SPAN_UNKNOWN = "equiv.drill_span_unknown"
-#: A drill had no copper-plane span in the document, so it was matched to a
-#: layer by absolute Z alone (safe only when the layer thickness is known).
-EQUIV_DRILL_Z_FALLBACK = "equiv.drill_match_z_fallback"
-#: Topological copper span and absolute Z select different layers for one drill.
-#: Topology is authoritative; the disagreement signals an unreliable best-effort Z.
-EQUIV_DRILL_Z_MISMATCH = "equiv.drill_z_mismatch"
 EQUIV_LAYER_Z_UNKNOWN = "equiv.layer_z_unknown"
 EQUIV_LAYER_EMPTY = "equiv.layer_empty"
 

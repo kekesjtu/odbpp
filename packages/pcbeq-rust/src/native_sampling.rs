@@ -1,12 +1,12 @@
 //! Material sampling on independent region rasters in physical coordinates.
 use crate::{
     Result,
+    diagnostics::Diagnostics,
     document::{Layer, Polygon, Step},
     native_mesh::Mesh,
     planning::Geometry,
     raster_index, sampling,
 };
-use serde_json::{Value, json};
 pub fn edges(polygons: &[Polygon]) -> Vec<(f64, f64, f64, f64)> {
     polygons
         .iter()
@@ -20,9 +20,8 @@ pub fn edges(polygons: &[Polygon]) -> Vec<(f64, f64, f64, f64)> {
         .collect()
 }
 pub struct Drill<'a> {
-    pub layer: &'a Layer,
-    pub span: [usize; 2],
-    pub z: [f64; 2],
+    layer: &'a Layer,
+    endpoint_rows: [u64; 2],
 }
 pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
     if !step
@@ -38,28 +37,26 @@ pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
         .iter()
         .filter(|l| l.context == "BOARD" && l.kind == "DRILL")
     {
-        let span = layer.copper_span.ok_or(format!(
-            "drill layer {:?}: cannot resolve copper_span",
-            layer.name
-        ))?;
+        let (start, end) = layer
+            .start_layer
+            .as_ref()
+            .zip(layer.end_layer.as_ref())
+            .ok_or(format!(
+                "drill layer {:?}: missing start_layer/end_layer",
+                layer.name
+            ))?;
         let top = step
             .layers
             .iter()
-            .find(|l| l.copper_index == Some(span[0]))
-            .and_then(|l| l.z_mm.as_ref())
+            .find(|l| &l.name == start)
             .ok_or(format!(
-                "drill layer {:?}: endpoint copper layer missing z_mm",
+                "drill layer {:?}: missing start copper layer",
                 layer.name
             ))?;
-        let bottom = step
-            .layers
-            .iter()
-            .find(|l| l.copper_index == Some(span[1]))
-            .and_then(|l| l.z_mm.as_ref())
-            .ok_or(format!(
-                "drill layer {:?}: endpoint copper layer missing z_mm",
-                layer.name
-            ))?;
+        let bottom = step.layers.iter().find(|l| &l.name == end).ok_or(format!(
+            "drill layer {:?}: missing end copper layer",
+            layer.name
+        ))?;
         if layer.geometry_status != "ready" {
             return Err(format!(
                 "drill layer {:?}: geometry is {}",
@@ -68,27 +65,13 @@ pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
         }
         drills.push(Drill {
             layer,
-            span,
-            z: [top.start_mm, bottom.end_mm],
+            endpoint_rows: [top.row, bottom.row],
         });
     }
     Ok(drills)
 }
-pub fn matched(layer: &Layer, drill: &Drill<'_>) -> bool {
-    if let Some([a, b]) = layer.copper_span {
-        return a.max(drill.span[0]) < b.min(drill.span[1]);
-    }
-    matched_by_z(layer, drill)
-}
-pub fn matched_by_z(layer: &Layer, drill: &Drill<'_>) -> bool {
-    let Some(z) = &layer.z_mm else {
-        return false;
-    };
-    if z.end_mm - z.start_mm <= 1e-9 {
-        drill.z[0] - 1e-9 <= z.start_mm && z.start_mm <= drill.z[1] + 1e-9
-    } else {
-        drill.z[0] < z.end_mm - 1e-9 && z.start_mm < drill.z[1] - 1e-9
-    }
+fn matched(layer: &Layer, drill: &Drill<'_>) -> bool {
+    drill.endpoint_rows[0] < layer.row && layer.row < drill.endpoint_rows[1]
 }
 pub fn evaluate(
     step: &Step,
@@ -96,75 +79,66 @@ pub fn evaluate(
     drills: &[Drill<'_>],
     geometry: &Geometry,
     mesh: &Mesh,
-    profile_index: usize,
+    profile: usize,
     materials: [f64; 6],
-) -> Result<(Vec<Vec<[f64; 5]>>, Value)> {
-    let layer_profile = step
-        .profiles
-        .iter()
-        .find(|d| d.id == geometry.profile_ids[profile_index])
-        .ok_or("missing sample profile")?;
-    let profile = step
-        .profiles
-        .iter()
-        .find(|d| Some(&d.id) == step.profile_id.as_ref())
-        .ok_or("missing step profile")?;
-    let covering: Vec<_> = if layer.kind == "DIELECTRIC" {
-        drills.iter().filter(|d| matched(layer, d)).collect()
-    } else {
-        vec![]
-    };
-    let black: Vec<&[Polygon]> = if layer.copper() {
-        vec![&layer.polygons]
-    } else {
-        covering
+    diagnostics: &mut Diagnostics,
+) -> Result<Vec<Vec<[f64; 5]>>> {
+    let source = diagnostics.measure("sampling", || {
+        let layer_profile = step
+            .profiles
             .iter()
-            .map(|d| d.layer.polygons.as_slice())
-            .collect()
-    };
-    let source = raster_index::Materials::new(
-        edges(&layer_profile.polygons),
-        edges(&profile.polygons),
-        &black,
-    );
+            .find(|d| d.id == geometry.profile_ids[profile])
+            .ok_or("missing sample profile")?;
+        let covering: Vec<_> = if layer.kind == "DIELECTRIC" {
+            drills.iter().filter(|d| matched(layer, d)).collect()
+        } else {
+            vec![]
+        };
+        let black: Vec<&[Polygon]> = if layer.copper() {
+            vec![&layer.polygons]
+        } else {
+            covering
+                .iter()
+                .map(|d| d.layer.polygons.as_slice())
+                .collect()
+        };
+        Ok(raster_index::Materials::new(
+            edges(&layer_profile.polygons),
+            &black,
+        ))
+    })?;
     let mut regions = vec![vec![]; geometry.rectangles.len()];
-    let mut cells = 0;
-    let mut base_pixels = 0;
-    for &rid in &geometry.members[profile_index] {
+    for &rid in &geometry.members[profile] {
         let tile = &mesh.rasters[rid];
         // The renderer initializes profile-exterior pixels as the base phase.
-        let (pixels, outside) = source.render(tile.x, tile.y)?;
-        base_pixels += outside;
-        let values = sampling::integrate_pixels(
-            &pixels,
-            tile.x.2,
-            tile.y.2,
-            tile.windows.clone(),
-            materials,
-            mesh.minimum,
-        )?;
-        cells += values.len();
-        for (q, value) in values.into_iter().enumerate() {
-            let value = value.ok_or(format!("layer {:?} region {rid} cell {q}: insufficient raster samples or profile/geometry contradiction; increase px/py",layer.name))?;
-            let mut properties = value;
-            for (i, v) in properties.iter_mut().enumerate() {
-                let factor = if i < 3 { 1e6 } else { 1e4 };
-                let rounded = (*v * factor).round_ties_even() / factor;
-                if rounded > 0. {
-                    *v = rounded;
+        let pixels = diagnostics.measure("sampling", || source.render(tile.x, tile.y))?;
+        regions[rid] = diagnostics.measure("equivalence", || {
+            let values = sampling::integrate_pixels(
+                &pixels,
+                tile.x.2,
+                tile.y.2,
+                tile.windows.clone(),
+                materials,
+                mesh.minimum,
+            )?;
+            let mut checked = Vec::with_capacity(values.len());
+            for (q, value) in values.into_iter().enumerate() {
+                let mut properties = value.ok_or_else(|| format!(
+                    "layer {:?} region {rid} cell {q}: insufficient raster samples or profile/geometry contradiction; increase px/py", layer.name))?;
+                for (i, v) in properties.iter_mut().enumerate() {
+                    let factor = if i < 3 { 1e6 } else { 1e4 };
+                    let rounded = (*v * factor).round_ties_even() / factor;
+                    if rounded > 0. {
+                        *v = rounded;
+                    }
+                    if !v.is_finite() || *v <= 0. {
+                        return Err("non-finite/nonpositive material property".into());
+                    }
                 }
-                if !v.is_finite() || *v <= 0. {
-                    return Err("non-finite/nonpositive material property".into());
-                }
+                checked.push(properties);
             }
-            regions[rid].push(properties);
-        }
+            Ok(checked)
+        })?;
     }
-    let z = layer.z_mm.as_ref().ok_or("missing layer Z")?;
-    let report = json!({"name":layer.name,"type":layer.kind,"status":"equivalent","profile_id":layer_profile.id,
-        "cell_count":cells,
-        "outside_material":"base","outside_base_pixels":base_pixels,
-        "z_mm":{"start_mm":z.start_mm,"end_mm":z.end_mm,"thickness_known":z.thickness_known,"source":z.source},
-        "drill_overlays":covering.iter().map(|d|&d.layer.name).collect::<Vec<_>>()});
-    Ok((regions, report))
+    Ok(regions)
 }

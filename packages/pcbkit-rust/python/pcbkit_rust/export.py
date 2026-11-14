@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from typing import Iterator, Optional, Sequence
-from .clipper import Ring, region_from_geometry, snap_to_grid
+from .clipper import Ring, layer_profile_region, region_from_geometry, snap_to_grid
 from .diagnostics import (
     EXPORT_DEGENERATE_RING,
     EXPORT_LAYER_FAILED,
@@ -22,7 +22,7 @@ from .errors import LayerProfileError
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
 from .model import Job, Layer, LayerType, Step
-from .stackup import Stackup, describe_span
+from .stackup import Stackup
 from .intermediate import BoardDocument, LayerModel
 
 
@@ -177,12 +177,6 @@ class LayerPreview:
             return None
         return self.stackup.weight(self.layer)
 
-    def z_span(self) -> Optional[dict]:
-        """Which copper planes this layer sits between, or ``None``."""
-        if self.stackup is None:
-            return None
-        return describe_span(self.stackup, self.stackup.span_of(self.layer))
-
     def z_extent(self):
         """Absolute millimetre Z extent (:class:`~pcbkit.stackup.ZExtent`).
 
@@ -320,7 +314,7 @@ def iter_step_previews(
                 seed = layer.is_negative or layer.type is LayerType.DIELECTRIC
                 if layer.profile_error is not None:
                     step.base_geometry(layer)
-                drawing = expander.native.drawing(layer.features, step.base_geometry(layer) if seed else None,
+                drawing = expander.native.drawing(layer.features, layer_profile_region(step, layer, opts.tessellation) if seed else None,
                                                    layer.is_negative, seed)
                 collect_diagnostics(expander.native, diags)
                 yield LayerPreview(layer=layer, geometry=LayerGeometry(layer.name, Region(), layer.feature_count),
@@ -506,10 +500,10 @@ def _preview_digits(preview, round_digits: Optional[int]) -> int:
 def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> dict:
     """One authoritative layer record; numerical thickness is derived from Z."""
     ref = layer.ref
-    # DRILL depth is already defined by copper_span and the endpoint copper Z.
+    # DRILL dimensions are derived from its endpoint copper layers.
     # Keep the derived extent inside Stackup for previews, not in the interface.
     extent = None if stackup is None or layer.type is LayerType.DRILL else stackup.z_extent(layer)
-    span = None if stackup is None else stackup.span_of(layer)
+    endpoints = stackup.drill_endpoints(layer) if stackup is not None and layer.type is LayerType.DRILL else None
     thickness = None
     if stackup is not None and layer.type is not None and (
             layer.is_copper or layer.type.is_non_copper_material):
@@ -533,8 +527,8 @@ def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> di
         "context": ref.context.value, "row": ref.row,
         "form": ref.form.value, "form_source": ref.form_source.value,
         "thickness": thickness,
-        "copper_index": None if stackup is None else stackup.copper_index(layer.name),
-        "copper_span": None if span is None else span.as_dict(),
+        "start_layer": None if endpoints is None else endpoints[0].name,
+        "end_layer": None if endpoints is None else endpoints[1].name,
         "z_mm": None if extent is None else {
             "start_mm": _round(extent.start_mm, digits + 3),
             "end_mm": _round(extent.end_mm, digits + 3),
@@ -622,11 +616,13 @@ def _profiles_json(preview: StepPreview, round_digits: int) -> tuple[list[dict],
     profiles, regions, errors = [], [], {}
     cached = {}
 
-    def register(profile):
-        key = id(profile)
+    def register(profile, inherit_step_holes=False):
+        key = (id(profile), inherit_step_holes)
         if key in cached:
             return cached[key]
-        region, _ = snap_to_grid(region_from_geometry(profile, preview.expansion_options.tessellation), round_digits)
+        tessellation = preview.expansion_options.tessellation
+        region = profile.layer_region(preview.step.profile, tessellation.sagitta_mm, tessellation.max_segments) if inherit_step_holes else region_from_geometry(profile, tessellation)
+        region, _ = snap_to_grid(region, round_digits)
         for index, existing in enumerate(regions):
             if region.same_geometry(existing):
                 cached[key] = index
@@ -650,7 +646,7 @@ def _profiles_json(preview: StepPreview, round_digits: int) -> tuple[list[dict],
         if profile is None:
             errors[layer.name] = "neither a layer profile nor a step profile is available"
             continue
-        profiles[register(profile)]["layers"].append(layer.name)
+        profiles[register(profile, layer.profile is not None)]["layers"].append(layer.name)
     return profiles, step_id, errors
 
 

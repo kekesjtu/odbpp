@@ -20,9 +20,6 @@ fn ready() -> String {
 fn unknown() -> String {
     "unknown".into()
 }
-fn one() -> u64 {
-    1
-}
 fn resolution() -> f64 {
     0.0001
 }
@@ -52,8 +49,8 @@ pub struct Extent {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Thickness {
-    known: bool,
-    source: String,
+    pub known: bool,
+    pub source: String,
     input_value: Option<f64>,
     kind: Option<String>,
     unit: Option<String>,
@@ -70,8 +67,7 @@ pub struct Layer {
     pub kind: String,
     #[serde(default = "board")]
     pub context: String,
-    #[serde(default = "one")]
-    row: u64,
+    pub row: u64,
     #[serde(default = "rigid")]
     form: String,
     #[serde(default = "default_form")]
@@ -81,9 +77,9 @@ pub struct Layer {
     pub geometry_error: Option<String>,
     pub polygons: Vec<Polygon>,
     pub z_mm: Option<Extent>,
-    thickness: Option<Thickness>,
-    pub copper_index: Option<usize>,
-    pub copper_span: Option<[usize; 2]>,
+    pub thickness: Option<Thickness>,
+    pub start_layer: Option<String>,
+    pub end_layer: Option<String>,
 }
 impl Layer {
     pub fn copper(&self) -> bool {

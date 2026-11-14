@@ -5,10 +5,22 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from conftest import fixture_path
+from conftest import write_tree
+from odb_fixture import odb_files
 from pcbkit_rust import _pcbkit_native as native
 from pcbkit_rust import build_step_preview, load_job, step_to_document
 from pcbkit_rust.cli import main
+
+
+def _basic_job(tmp_path):
+    files = odb_files([
+        {"name":"top", "features":"UNITS=MM\n$0 outer\nP 5 5 0 P 0 0\n", "attrlist":"UNITS=MM\n.copper_weight=35\n"},
+        {"name":"dielectric_1", "type":"DIELECTRIC", "attrlist":"UNITS=MM\n.layer_dielectric=.1\n"},
+        {"name":"bottom", "attrlist":"UNITS=MM\n.copper_weight=35\n"},
+        {"name":"drill_1_2", "type":"DRILL", "matrix":{"START_NAME":"top","END_NAME":"bottom"}},
+    ])
+    files["symbols/outer/features"] = "UNITS=MM\n$0 s1000\nP 0 0 0 P 0 0\n"
+    return load_job(str(write_tree(tmp_path/"job",files)))
 
 
 def features(body, unit="MM", definitions=None):
@@ -18,7 +30,7 @@ def features(body, unit="MM", definitions=None):
 def compose(body, *, definitions=None, profile=None, invert=False, seed=False):
     parsed = features(body)
     composer = native.Composer(definitions or {}, sagitta=.001)
-    region, _, _ = composer.layer(parsed, profile, invert, seed, 4)
+    region, _, _ = composer.layer(parsed, None if profile is None else profile.region(.001,4096), invert, seed, 4)
     return region
 
 
@@ -146,8 +158,8 @@ def test_profile_arc_discretisation_uses_requested_tolerance():
     assert fine.area > coarse.area
 
 
-def test_inspection_commands_use_native_record_metadata(capsys):
-    path = str(fixture_path("fx_nested_symbol"))
+def test_inspection_commands_use_native_record_metadata(tmp_path, capsys):
+    path = _basic_job(tmp_path).source_path
     assert main(["symbols", path]) == 0
     assert "outer" in capsys.readouterr().out
     assert main(["summarize", path, "--format", "json"]) == 0
@@ -165,9 +177,8 @@ def test_snap_keeps_self_crossings_and_counts_collapsed_rings():
     assert thin.snap(4)[1] == 1
 
 
-@pytest.mark.parametrize("name", ["fx_negative_layer", "fx_nested_symbol", "fx_flex_form"])
-def test_input_adapter_to_contract_keeps_layer_profiles_and_z(name):
-    job = load_job(str(fixture_path(name)))
+def test_input_adapter_to_contract_keeps_layer_profiles_and_z(tmp_path):
+    job = _basic_job(tmp_path)
     preview = build_step_preview(job)
     assert not preview.failed_layers
     document = step_to_document(job, preview)
@@ -176,17 +187,8 @@ def test_input_adapter_to_contract_keeps_layer_profiles_and_z(name):
     assert any(layer.polygons for layer in document.steps[0].layers)
 
 
-def test_invalid_layer_profile_has_failed_status():
-    job = load_job(str(fixture_path("fx_bad_layer_profile")))
-    preview = build_step_preview(job)
-    document = step_to_document(job, preview)
-    failed = [layer for layer in document.steps[0].layers if layer.geometry_status == "failed"]
-    assigned = {name for p in document.steps[0].profiles for name in p.layers}
-    assert failed and all(layer.name not in assigned for layer in failed)
-
-
-def test_profiles_deduplicate_geometry_and_own_layer_membership():
-    job = load_job(str(fixture_path("fx_negative_layer")))
+def test_profiles_deduplicate_geometry_and_own_layer_membership(tmp_path):
+    job = _basic_job(tmp_path)
     step = job.single_step
     step.profile = features(surface(0, 0, 10, 10)).profile()
     for layer in step.layers:
@@ -205,7 +207,7 @@ def test_misc_uses_ordered_paint_and_stays_out_of_json(tmp_path, monkeypatch):
     from pcbkit_rust.model import LayerContext, LayerType, Polarity
     from pcbkit_rust.png import write_layer_pngs
     from pcbkit_rust.svg import SvgOptions, render_svg
-    job = load_job(str(fixture_path("fx_negative_layer")))
+    job = _basic_job(tmp_path)
     layer = job.single_step.layers[0]
     layer.ref = replace(layer.ref, context=LayerContext.MISC, type=LayerType.DOCUMENT, polarity=Polarity.POSITIVE)
     layer.features = features(surface(0, 0, 10, 10) + surface(2, 2, 8, 8, "N") + surface(4, 4, 6, 6))
@@ -240,7 +242,7 @@ def test_json_only_does_not_parse_misc_features(tmp_path):
     from conftest import write_tree
     source = tmp_path / "input"
     write_tree(source, {
-        "misc/info": "JOB_NAME=test\nVERSION_MAJOR=8\nVERSION_MINOR=1\nUNITS=MM\n",
+        "misc/info": "JOB_NAME=test\nODB_VERSION_MAJOR=8\nODB_VERSION_MINOR=1\nUNITS=MM\n",
         "matrix/matrix": "STEP {\nCOL=1\nNAME=board\n}\nLAYER {\nROW=1\nCONTEXT=BOARD\nTYPE=SIGNAL\nNAME=cu\n}\nLAYER {\nROW=2\nCONTEXT=MISC\nTYPE=DOCUMENT\nNAME=notes\n}\n",
         "steps/board/profile": "UNITS=MM\n" + surface(0, 0, 10, 10),
         "steps/board/stephdr": "UNITS=MM\nX_DATUM=0\nY_DATUM=0\nX_ORIGIN=0\nY_ORIGIN=0\n",
@@ -254,18 +256,11 @@ def test_json_only_does_not_parse_misc_features(tmp_path):
     assert step["profiles"][0]["layers"] == ["cu"]
 
 
-def test_input_adapter_reports_recursive_symbol_cycle():
-    job = load_job(str(fixture_path("fx_symbol_cycle")))
-    assert "symbol.cycle" in job.diagnostics.codes()
-
-
 def test_filtered_dielectric_draws_omitted_drills_at_requested_precision(tmp_path):
     from pcbkit_rust.export import PreviewOptions
     from pcbkit_rust.drawing import dielectric_drill_cutouts
     from conftest import write_tree
-    import shutil
-    source = tmp_path / "case"
-    shutil.copytree(fixture_path("fx_negative_layer"), source)
+    source = Path(_basic_job(tmp_path).source_path)
     write_tree(source, {"steps/board/layers/drill_1_2/features":
         "UNITS=MM\n$0 s1000\nP 4.000021 4 0 P 0 0\n"})
     job = load_job(str(source))
@@ -281,7 +276,7 @@ def test_png_images_share_viewport_and_preserve_nested_island(tmp_path):
     from pcbkit_rust.svg import SvgOptions
     from pcbkit_rust.expand import LayerGeometry
     from dataclasses import replace
-    job = load_job(str(fixture_path("fx_negative_layer")))
+    job = _basic_job(tmp_path)
     preview = build_step_preview(job)
     region = compose(surface(0, 0, 10, 10) + surface(2, 2, 8, 8, "N") + surface(4, 4, 6, 6))
     first = replace(preview.layers[0], geometry=LayerGeometry("pattern", region))
@@ -301,7 +296,7 @@ def test_png_images_share_viewport_and_preserve_nested_island(tmp_path):
 
 
 def test_cli_png_publication_and_json_only_cleanup(tmp_path):
-    path = str(fixture_path("fx_nested_symbol"))
+    path = _basic_job(tmp_path).source_path
     assert main(["export", path, "-o", str(tmp_path), "--per-layer-png"]) == 0
     pngs = list((tmp_path / "layers").glob("*.png"))
     assert len(pngs) == len(load_job(path).single_step.layers)

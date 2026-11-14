@@ -1,6 +1,7 @@
 //! Independent effective profiles; geometrically equal inputs share one plan.
 use crate::{
     Result,
+    diagnostics::Diagnostics,
     document::{self, Step},
     fast,
     options::Options,
@@ -17,81 +18,78 @@ pub struct Geometry {
     pub bounds: Rect,
 }
 
-pub fn plan(step: &Step, options: &Options) -> Result<Geometry> {
-    let profile = step.profile_id.as_ref().ok_or("missing step profile")?;
-    let board = step
-        .profiles
-        .iter()
-        .find(|d| &d.id == profile)
-        .ok_or("missing step profile")?;
-    let board = document::shape(&board.polygons)?;
-    let bounds = board.bounds()?;
-    let mut ids: Vec<_> = step
-        .layers
-        .iter()
-        .filter(|l| l.physical())
-        .filter_map(|l| step.profile_for_layer(&l.name).map(|p| p.id.clone()))
-        .collect();
-    ids.sort();
-    ids.dedup();
-    if ids.is_empty() {
-        return Err("no physical material layers".into());
-    }
+pub fn plan(step: &Step, options: &Options, diagnostics: &mut Diagnostics) -> Result<Geometry> {
+    let (bounds, ids) = diagnostics.measure("profiles", || {
+        let profile = step.profile_id.as_ref().ok_or("missing step profile")?;
+        let board = step
+            .profiles
+            .iter()
+            .find(|d| &d.id == profile)
+            .ok_or("missing step profile")?;
+        let board = document::shape(&board.polygons)?;
+        let bounds = board.bounds()?;
+        let mut ids: Vec<_> = step
+            .layers
+            .iter()
+            .filter(|l| l.physical())
+            .filter_map(|l| step.profile_for_layer(&l.name).map(|p| p.id.clone()))
+            .collect();
+        ids.sort();
+        ids.dedup();
+        if ids.is_empty() {
+            return Err("no physical material layers".into());
+        }
+        Ok((bounds, ids))
+    })?;
     let mut originals = vec![];
-    let mut plans: Vec<(Vec<usize>, Value)> = vec![];
+    let mut plans: Vec<(Vec<usize>, String)> = vec![];
     let mut rectangles = vec![];
     let mut members = vec![];
     let mut reports = BTreeMap::new();
-    let mut reused = 0;
+    let mut profile_aliases = BTreeMap::new();
     for id in &ids {
-        let authored = step
-            .profiles
-            .iter()
-            .find(|d| &d.id == id)
-            .ok_or("missing physical profile")?;
-        let original = document::shape(&authored.polygons)?.intersection(&board);
-        if original.empty() || original.area() <= 0. {
-            return Err(format!(
-                "profile {id:?} has no physical area within the step profile"
-            ));
-        }
-        let mut existing = None;
-        for (i, prior) in originals.iter().enumerate() {
-            if original.equals(prior) {
-                existing = Some(i);
-                break;
+        let (original, existing) = diagnostics.measure("profiles", || {
+            let authored = step
+                .profiles
+                .iter()
+                .find(|d| &d.id == id)
+                .ok_or("missing physical profile")?;
+            let original = document::shape(&authored.polygons)?;
+            if original.empty() || original.area() <= 0. {
+                return Err(format!("profile {id:?} has no physical area"));
             }
-        }
-        let (region_ids, mut report) = if let Some(i) = existing {
-            reused += 1;
-            let mut report = plans[i].1.clone();
-            report["reused_from"] = report["canonical_profile_id"].clone();
-            (plans[i].0.clone(), report)
+            let mut existing = None;
+            for (i, prior) in originals.iter().enumerate() {
+                if original.equals(prior) {
+                    existing = Some(i);
+                    break;
+                }
+            }
+            Ok((original, existing))
+        })?;
+        let (region_ids, canonical) = if let Some(i) = existing {
+            plans[i].clone()
         } else {
-            let plan = fast::approximate(&original, options.max_area_error_ratio)
-                .map_err(|e| format!("profile {id:?}: {e}"))?;
+            let plan = diagnostics.measure("rectification", || {
+                fast::approximate(&original, options.max_area_error_ratio)
+                    .map_err(|e| format!("profile {id:?}: {e}"))
+            })?;
             let region_ids: Vec<_> =
                 (rectangles.len()..rectangles.len() + plan.rectangles.len()).collect();
             rectangles.extend(plan.rectangles);
             let mut report = plan.audit;
-            report["canonical_profile_id"] = json!(id);
+            report.as_object_mut().unwrap().remove("ok");
+            report["regions"] = json!(region_ids);
             originals.push(original);
-            plans.push((region_ids.clone(), report.clone()));
-            (region_ids, report)
+            plans.push((region_ids.clone(), id.clone()));
+            reports.insert(id.clone(), report);
+            (region_ids, id.clone())
         };
-        report["region_ids"] = json!(region_ids);
+        profile_aliases.insert(id.clone(), canonical);
         members.push(region_ids);
-        reports.insert(id.clone(), report);
     }
-    let profile_regions: BTreeMap<_, _> = ids.iter().zip(&members).collect();
-    let report = json!({"ok":true,"strategy":"fast-greedy-independent-profiles",
-        "rectangle_count":rectangles.len(),"profile_count":ids.len(),"unique_profile_count":plans.len(),
-        "reused_profile_count":reused,"relative_area_budget":options.max_area_error_ratio,
-        "rectangles":rectangles.iter().map(|r|json!({"x0_mm":r[0],"y0_mm":r[1],"x1_mm":r[2],"y1_mm":r[3]})).collect::<Vec<_>>(),
-        "audit":{"profiles":reports,"profile_region_ids":profile_regions,
-            "relative_area_budget":options.max_area_error_ratio,
-            "cross_layer_alignment_required":false,"per_profile_non_overlapping":true,
-            "effective_profile_identity":"geo topological equality after board intersection"}});
+    let report = json!({"max_area_error_ratio":options.max_area_error_ratio,
+        "profile_aliases":profile_aliases,"profiles":reports});
     Ok(Geometry {
         rectangles,
         profile_ids: ids,

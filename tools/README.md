@@ -9,10 +9,10 @@
 | `sync_contract.py` | 同步本分支中间 JSON 模型与 schema |
 | `verify_distributions.py` | 独立安装与 sdist 重建验证 |
 | `benchmark_pcbeq.py` | 仅测 JSON 读取至 MaterialMap 关闭，不含图片 |
-| `audit_out.py` | 核查物性、局部网格、采样与实体域 |
+| `audit_out.py` | 独立核查实体域、拓扑、网格统计、Z 状态与物性有效性 |
 | `refresh_viewer_outputs.py` | 刷新解析器工程预览 CSS/JS |
 
-案例管道默认调用 `pcbkit-rust`、`pcbeq-rust`。目录与清单见[输出与发布](../docs/decisions/output-publication.md)。
+案例管道默认调用 `pcbkit-rust`、`pcbeq-rust`。输出目录与管理边界见[输出与发布](../docs/decisions/output-publication.md)。
 
 `run_pipeline.py` 和 `sync_out.py` 支持 `--per-layer-png`，将逐层 PNG 随解析器预览发布到 `pcbkit/layers/`。
 

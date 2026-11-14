@@ -89,22 +89,16 @@ pub fn pixel_index(value: f64, axis: Axis) -> usize {
 
 pub struct PreparedRaster {
     coverage: Scan,
-    step: Scan,
     black: Vec<Scan>,
 }
 impl PreparedRaster {
-    pub fn new(
-        coverage: Vec<Edge>,
-        step: Vec<Edge>,
-        black: Vec<Vec<Edge>>,
-    ) -> Result<Self, String> {
+    pub fn new(coverage: Vec<Edge>, black: Vec<Vec<Edge>>) -> Result<Self, String> {
         Ok(Self {
             coverage: Scan::new(coverage)?,
-            step: Scan::new(step)?,
             black: black.into_iter().map(Scan::new).collect::<Result<_, _>>()?,
         })
     }
-    pub fn render_base(&self, x: Axis, y: Axis) -> Result<(Vec<u8>, usize), String> {
+    pub fn render_base(&self, x: Axis, y: Axis) -> Result<Vec<u8>, String> {
         for a in [x, y] {
             if !a.0.is_finite() || !a.1.is_finite() || a.1 <= 0. || a.2 == 0 {
                 return Err("invalid raster axis".into());
@@ -116,14 +110,12 @@ impl PreparedRaster {
                 .ok_or("raster resource limit: 120000000 pixels")?;
         let (low, high) = (y.0 + 0.5 * y.1, y.0 + (y.2 as f64 - 0.5) * y.1);
         let mut coverage = self.coverage.window(low, high);
-        let mut step = self.step.window(low, high);
         let mut black: Vec<_> = self.black.iter().map(|s| s.window(low, high)).collect();
-        let mut outside = count;
         let pixels = {
             let mut pixels = vec![255; count];
             for row in 0..y.2 {
                 let yy = y.0 + (row as f64 + 0.5) * y.1;
-                let dom = intersection(&coverage.spans(yy), &step.spans(yy));
+                let dom = coverage.spans(yy);
                 let mut ink: Vec<Span> = black.iter_mut().flat_map(|scan| scan.spans(yy)).collect();
                 ink.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
                 let mut merged: Vec<Span> = vec![];
@@ -136,9 +128,6 @@ impl PreparedRaster {
                     }
                     merged.push((a, b));
                 }
-                for &(lo, hi) in &dom {
-                    outside -= pixel_index(hi, x) - pixel_index(lo, x);
-                }
                 for (lo, hi) in intersection(&dom, &merged) {
                     let (a, b) = (pixel_index(lo, x), pixel_index(hi, x));
                     if b > a {
@@ -148,6 +137,6 @@ impl PreparedRaster {
             }
             pixels
         };
-        Ok((pixels, outside))
+        Ok(pixels)
     }
 }

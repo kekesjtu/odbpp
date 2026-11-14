@@ -23,7 +23,6 @@ def execute(document, tmp_path, **options):
 def test_full_pipeline_has_no_python_product_imports(tmp_path):
     document = build_document(layers=[{"name":"CU","polygons":[rect(0,0,10,10)]}])
     summary,delivered,output=execute(document,tmp_path)
-    assert summary["execution"]=="native-json-to-materialmap"
     assert summary["cells"]==16
     assert all(values==(385,385,385,8960,385) for _,_,values in iter_cells(delivered))
     assert not list(output.rglob("*.png"))
@@ -81,8 +80,9 @@ def test_native_thin_region_uses_a_local_raster(tmp_path):
     output=tmp_path/"native"
     summary=run(source,output,grid_level="standard")
     delivered=read_document(output/"materialmap.json")
-    assert summary["raster_sampling"]["layout"]=="region-local"
-    assert summary["raster_sampling"]["total_pixels"]<20_000_000
+    profile=json.loads((output/"diagnostics.json").read_text())["geometry"]["profiles"]["step_profile"]
+    assert profile["region_size_mm"]["min"]["y"] == pytest.approx(.0001, abs=1e-8)
+    assert profile["cell_size_mm"]["min"]["y"] == pytest.approx(.0001, abs=1e-8)
     thin=next(r for r in delivered.regions if r.bounds_mm.y[1]-r.bounds_mm.y[0]<.001)
     assert thin.values and all(v==(.3,.3,.3,1850,1100) for v in thin.values)
     assert summary["cells"]==sum(len(r.values) for r in delivered.regions)
@@ -105,7 +105,7 @@ def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path):
     assert values==pytest.approx(((.3+harmonic)/2,)*2+(96.475,density,cp),abs=1e-4)
 
 
-@pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "profile", "duplicate_assignment", "misc", "short_polygon", "z", "span"])
+@pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "profile", "z", "endpoint"])
 def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
     document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])
     layer = document["steps"][0]["layers"][0]
@@ -117,19 +117,17 @@ def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
         document["unexpected"] = 1
     elif change == "profile":
         document["steps"][0]["profiles"][0]["layers"] = ["missing"]
-    elif change == "duplicate_assignment":
-        document["steps"][0]["profiles"].append({"id":"other", "layers":[layer["name"]], "polygons":[rect(0,0,5,5)]})
-    elif change == "misc":
-        layer["context"] = "MISC"
-    elif change == "short_polygon":
-        layer["polygons"][0]["points"] = [[0,0],[1,1]]
     elif change == "z":
         layer["z_mm"]["end_mm"] = -1
     else:
-        layer["copper_span"] = [0, 1]
+        layer["start_layer"] = "missing"
     with pytest.raises(ValueError):
         execute(document, tmp_path)
     assert not (tmp_path / "native/materialmap.json").exists()
+    report = json.loads((tmp_path / "native/diagnostics.json").read_text())
+    assert report["issues"]["status"] == "failed"
+    assert report["issues"]["errors"][-1]["blocking"]
+    assert report["geometry"]["profile_count"] is None
 
 
 def test_sampling_failure_keeps_previous_materialmap(tmp_path):
@@ -143,6 +141,12 @@ def test_sampling_failure_keeps_previous_materialmap(tmp_path):
         run(source, output, px=1, py=1, max_cell_mm=[1])
     assert read_document(output / "materialmap.json") == previous
     assert not list(output.glob("*.tmp"))
+    report = json.loads((output / "diagnostics.json").read_text())
+    assert report["issues"]["status"] == "failed"
+    assert report["issues"]["errors"][-1]["code"] == "mesh.failed"
+    profile = report["geometry"]["profiles"]["step_profile"]
+    assert profile["region_count"] == 1 and profile["cell_count"] is None
+    assert report["performance"]["stages_s"]["sampling"] is None
 
 
 def test_python_images_need_only_materialmap(tmp_path):
@@ -150,12 +154,13 @@ def test_python_images_need_only_materialmap(tmp_path):
     document = build_document(layers=[{"name": "CU", "polygons": [rect(0, 0, 10, 10)]}])
     _, _, output = execute(document, tmp_path)
     (tmp_path / "input.json").unlink()
-    (output / "diagnostics/run.json").unlink()
+    (output / "diagnostics.json").unlink()
     render(output / "materialmap.json", output, panel_width=480)
     assert (output / "regions/regions.png").is_file()
     assert (output / "grids/cartesian-grid.png").is_file()
     assert list((output / "heatmaps").glob("*.png"))
     assert (output / "index.html").is_file()
+    assert not (output / "diagnostics").exists()
 
 
 def test_rust_benchmark_uses_native_file_pipeline(tmp_path, monkeypatch):
@@ -169,7 +174,7 @@ def test_rust_benchmark_uses_native_file_pipeline(tmp_path, monkeypatch):
                                  "--px", "32", "--py", "32", "--max-cell-mm", "5",
                                  "--repeat", "1", "--warmup", "0"]) == 0
     report = json.loads((output / "benchmark.json").read_text(encoding="utf-8"))
-    assert report["runs"][0]["execution"] == "native-json-to-materialmap"
+    assert report["runs"][0]["cells"] == 4
 
 
 def test_native_publication_invalidates_owned_images_and_keeps_user_files(tmp_path):

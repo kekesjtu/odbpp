@@ -17,7 +17,12 @@ CASES = ROOT / 'cases'
 OUT = ROOT / 'out'
 
 def case_inputs():
-    found = [(p.name, p) for p in sorted(CASES.iterdir()) if p.is_dir() and (p / 'misc/info').is_file() or (p.is_file() and p.suffix.lower() in {'.zip', '.tgz'})]
+    found = []
+    for path in sorted(CASES.iterdir()):
+        if path.is_dir() and next(path.rglob('misc/info'), None) is not None:
+            found.append((path.name, path))
+        elif path.is_file() and path.suffix.lower() in {'.zip', '.tgz'}:
+            found.append((path.name, path))
     for variant in ('native', 'clean'):
         found += [(f'kicad-positive/{variant}/{p.stem}', p) for p in sorted((CASES / 'kicad-positive' / variant).glob('*.zip'))]
     if not found:
@@ -63,8 +68,9 @@ def existing_preview(directory, source, *, backend='rust', per_layer_png=False):
             base = directory / 'pcbkit'
             owned = json.loads((base / 'diagnostics/artifacts.json').read_text(encoding='utf-8'))['files']
             pngs = [name for name in owned if name.startswith('layers/') and name.endswith('.png')]
+            # Additional MISC images belong to the manifest, not the BOARD JSON catalogue.
             expected = sum(layer['geometry_status'] == 'ready' for layer in data['steps'][0]['layers'])
-            if len(pngs) != expected or any(not (base / name).is_file() for name in pngs):
+            if len(pngs) < expected or any(not (base / name).is_file() for name in pngs):
                 return None
         return (path, data)
     except (OSError, ValueError, KeyError, TypeError):
@@ -79,35 +85,42 @@ def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5, grid_leve
         if cache['json_sha256'] != hashlib.sha256(preview.read_bytes()).hexdigest():
             return None
         base = directory / 'pcbeq'
-        owned = json.loads((base / 'diagnostics/artifacts.json').read_text(encoding='utf-8'))['files']
-        owned += json.loads((base / 'diagnostics/image-artifacts.json').read_text(encoding='utf-8'))['files']
-        if not {'materialmap.json', 'index.html', 'regions/regions.png', 'grids/cartesian-grid.png'}.issubset(owned):
+        diagnostics = json.loads((base / 'diagnostics.json').read_text(encoding='utf-8'))
+        if diagnostics['issues']['status'] == 'failed':
             return None
+        owned = ['materialmap.json', 'diagnostics.json', 'index.html', 'regions/regions.png',
+                 'regions/regions.svg', 'grids/cartesian-grid.png', 'grids/cartesian-grid.svg']
+        from pcbeq_rust.materialmap import read_document
+        from pcbeq_rust.heatmap_data import unique_image_stem
+        names = dict.fromkeys(r.layer.name for r in read_document(base / 'materialmap.json').regions)
+        used = set()
+        owned += [f'heatmaps/{unique_image_stem(name, used)}.png' for name in names]
         if any((not (base / p).is_file() or not (base / p).stat().st_size for p in owned)):
             return None
-        report = json.loads((base / 'diagnostics/run.json').read_text(encoding='utf-8'))
-        return None if any((d['level'] == 'error' for d in report['diagnostics'])) else report
+        return base / 'materialmap.json'
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
 def render_index(rows):
     lines = ['<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>PCB 案例输出</title>', '<h1>PCB 案例输出</h1><table><tr><th>Case</th><th>产物</th><th>网格</th></tr>']
-    links = [('pcbkit/preview.html', '预览'), ('pcbkit/intermediate.json', 'JSON'), ('pcbeq/materialmap.json', 'MaterialMap'), ('pcbeq/index.html', '图片'), ('pcbeq/regions/regions.svg', 'regions'), ('pcbeq/grids/cartesian-grid.svg', 'grids')]
+    links = [('pcbkit/preview.html', '预览'), ('pcbkit/intermediate.json', 'JSON'), ('pcbeq/materialmap.json', 'MaterialMap'), ('pcbeq/diagnostics.json', '诊断'), ('pcbeq/index.html', '图片'), ('pcbeq/regions/regions.svg', 'regions'), ('pcbeq/grids/cartesian-grid.svg', 'grids')]
     for name, source, directory, data, report in rows:
         relative = escape(directory.relative_to(OUT).as_posix())
         items = ' · '.join((f'<a href="{relative}/{p}">{label}</a>' for p, label in links))
-        lines.append(f"<tr><td>{escape(name)}</td><td>{items}</td><td>{report['grid']['region_count']} regions / {report['grid']['cell_count']} cells</td></tr>")
+        lines.append(f"<tr><td>{escape(name)}</td><td>{items}</td><td>{len(report['regions'])} regions / {sum(len(r['values']) for r in report['regions'])} cells</td></tr>")
     return '\n'.join(lines + ['</table></html>'])
 
 def published_rows():
     """Index published outputs of this product line."""
     rows = []
-    paths = sorted((path for backend in ('rust',) for path in OUT.glob(f'**/{backend}/pcbeq/diagnostics/run.json')))
+    paths = sorted(OUT.glob('**/rust/pcbeq/diagnostics.json'))
     for path in paths:
-        directory = path.parents[2]
+        directory = path.parents[1]
+        if json.loads(path.read_text(encoding='utf-8'))['issues']['status'] == 'failed':
+            continue
         if not (directory / 'pcbeq/materialmap.json').is_file():
             continue
-        report = json.loads(path.read_text(encoding='utf-8'))
+        report = json.loads((directory / 'pcbeq/materialmap.json').read_text(encoding='utf-8'))
         rows.append((directory.relative_to(OUT).as_posix(), None, directory, None, report))
     return rows
 

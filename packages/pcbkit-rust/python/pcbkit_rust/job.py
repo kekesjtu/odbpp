@@ -12,7 +12,7 @@ cross-file concerns rather than per-file syntax:
   no downstream code sees a raw unit.
 
 It also applies the two robustness rules discovered by measuring the cases
-(``docs/research/case-inventory.md``):
+(``docs/research/odbpp_format/file-tree.md``):
 
 * **R1** -- entity lookup is case insensitive, because the matrix writes
   ``F.CU`` where the directory is ``f.cu``.
@@ -288,7 +288,7 @@ def _load_step(
             diags.warn(
                 LAYER_DIR_ORPHAN,
                 f"layer directory {dir_name!r} is not registered in the matrix; "
-                f"ignored (matrix is authoritative, requirements.md and case-inventory research)",
+                f"ignored (matrix is authoritative, requirements.md and ODB++ file-tree rules)",
                 f"{layers_rel}/{dir_name}",
             )
 

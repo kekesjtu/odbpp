@@ -38,7 +38,7 @@ from dataclasses import dataclass, field, replace
 import json
 from typing import Mapping, Optional, Sequence
 
-from .clipper import Ring, region_from_geometry, snap_to_grid
+from .clipper import Ring, layer_profile_region, region_from_geometry, snap_to_grid
 from .drawing import dielectric_drill_cutouts
 from .export import (
     LayerPreview,
@@ -341,7 +341,7 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
     for index, layer in enumerate(chosen):
         profile = layer.layer.profile if layer.layer.profile is not None else view.step.profile
         if layer.drawing is None and profile is not None and layer.layer.profile_error is None:
-            profile_region, _ = snap_to_grid(region_from_geometry(profile, view.expansion_options.tessellation), digits)
+            profile_region, _ = snap_to_grid(layer_profile_region(view.step, layer.layer, view.expansion_options.tessellation), digits)
             out.append(f'<path data-name="{_escape(layer.name)}" '
                        f'd="{path_data(profile_region.rings, digits)}" style="display:none" '
                        'stroke-width="1.5" vector-effect="non-scaling-stroke"/>')

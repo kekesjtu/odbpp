@@ -31,7 +31,7 @@ def test_standalone_exe_runs_without_python_or_geos(tmp_path):
                              "--max-cell-mm", "5", "--summary-json"],
                             cwd=isolated, env=environment, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["geometry_backend"] == "geo"
+    assert json.loads(result.stdout)["cells"] == 4
     data = json.loads((isolated / "result/materialmap.json").read_text())
     assert data["regions"][0]["values"][0] == [385, 385, 385, 8960, 385]
 
@@ -79,7 +79,7 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
         equivalent_args=["--px","97","--py","101","--max-cell-mm","10"])
     assert result["status"] == "success"
     for name in ("pcbkit/preview.svg","pcbkit/preview.html","pcbkit/intermediate.json",
-                 "pcbeq/materialmap.json","pcbeq/index.html","pcbeq/regions/regions.png",
+                 "pcbeq/materialmap.json","pcbeq/diagnostics.json","pcbeq/index.html","pcbeq/regions/regions.png",
                  "pcbeq/grids/cartesian-grid.png"):
         assert (tmp_path/name).stat().st_size>0
     assert list((tmp_path/"pcbeq/heatmaps").glob("*.png"))

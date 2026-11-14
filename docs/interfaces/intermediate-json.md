@@ -28,23 +28,23 @@ uv run python tools/sync_contract.py --check
 | 根 `resolution_mm` | 输出坐标规整网格，默认 0.0001 mm；与材料光栅无关 |
 | 根 `source` | 输入路径、job root、输入单位、产品名称及 ODB++ 版本；手工合成数据可省略 |
 | 根 `steps` | 恰好一个单板 step，不支持矩阵拼板和嵌套引用 |
-| step `profile_id` | `profiles` 中整板轮廓的引用 |
-| step `profiles` | `{id, polygons, layers}`。按规整后的几何去重；相同轮廓只导出一份 polygon 集合，`layers` 列出所属 BOARD 层名称 |
+| step `profile_id` | `profiles` 中整板实体范围的引用 |
+| step `profiles` | `{id, layers, polygons}`。按规整后几何去重的轮廓集合，包含继承的 step 孔；`layers` 列出所属 BOARD 层名称 |
 | step `layers` | 按 matrix row 排列的 BOARD 层目录；唯一存储层类型、上下文、Z、跨度、厚度来源与图案 |
+| layer `row` | 必填正整数，同一 step 内唯一；matrix 层序的权威来源，钻孔覆盖按端点铜层和介质的 row 判断 |
 | layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
-| layer `geometry_error` | 失败或轮廓不可用的原因；失败层必须提供，不静默继承 step profile |
+| layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
 | layer `z_mm` | `{start_mm, end_mm, thickness_known, source}`；实体物理层自身的位置；DRILL 不导出 |
 | layer `thickness` | 本层厚度可信状态与原始物理量来源；保留原始量追溯；数值厚度由 Z 差得到 |
-| layer `copper_index` | 铜层自顶向下的索引 |
-| layer `copper_span` | 介质或钻孔跨越的两个铜层索引；不重复保存端点名称 |
+| layer `start_layer/end_layer` | DRILL 起止铜层名称；引用同一 step 的 BOARD 铜层，按 row 自顶向下排列；其他层不保存端点 |
 | layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
 
-MISC 上下文的层不进入此接口，包括层目录、图案、轮廓归属与叠层信息。预览直接使用独立绘图指令，不从中间 JSON 恢复 MISC 图案。BOARD 层的图案仍是规整实体；介质图案保留完整基底。
+MISC 层不进入此接口，包括层目录、图案、轮廓归属与叠层信息。MISC 预览直接使用独立绘图指令，不从中间 JSON 恢复。
 
-轮廓按输出精度规整后以几何等价去重，涵盖整板轮廓、不同层的相同轮廓及与整板相同的层轮廓。环起点、方向、共线点及对象身份不决定是否重复。层归属只记录在 `profiles[].layers`，同层最多归属一个 profile；失效轮廓不回退，也不分配归属。整板 profile 即使没有所属层也保留供求交使用。
+同几何只导出一份 profile，包括整板与层轮廓之间的重复。环起点、绕序、共线点和对象身份不决定几何是否重复。层归属只保存在 `profiles[].layers`，同一层最多归属一个 profile；不可用轮廓不分配归属。
 
-轮廓、实体范围与有效计算域的区别见[项目架构](../architecture.md#从轮廓到有效计算域)。
+有层轮廓时，解析器从层岛中扣除层孔与 step 孔的并集；缺少层轮廓时使用完整 step 实体范围。`profiles` 交付最终实体多边形，消费者直接使用层域，不重复叠加 step 孔或按 step 岛裁剪，也不要求层域包含于整板域。轮廓、实体范围与有效计算域的区别见[项目架构](../architecture.md#从轮廓到有效计算域)。
 
 所有坐标使用输入 step 原点，不重新居中；XY 中 Y 向上；Z 从叠层顶面向下。
 `polygons[].points` 为二维数组，末尾不重复首点；岛顺时针，孔逆时针，嵌套岛保持独立正向环。
@@ -68,10 +68,10 @@ MISC 上下文的层不进入此接口，包括层目录、图案、轮廓归属
 原始值不会由等效器再次换算，也不会覆盖 Z。
 
 厚度缺失时允许零厚度 best-effort Z，并明确 false；不以严格正厚度约束拒绝这种合法解析状态。
-钻孔仅保存投影多边形和 `copper_span` 来描述几何与深度；层身份和解析状态仍保留。
+钻孔保存投影多边形和 `start_layer/end_layer` 来描述几何与深度；端点名称来自 matrix 的 START_NAME/END_NAME，引用解析后的实际层名。层身份和解析状态仍保留。
 需要绝对 Z 时，以起点铜层 `z_mm.start_mm` 和终点铜层 `z_mm.end_mm` 推导，不能生成独立实体厚度层。
-未知厚度下仍以 `copper_span` 确定钻孔拓扑，不能仅凭重合的估算 Z 视为贯穿全板。
-跨度端点须引用层目录中的实际铜层索引；需要介质采样时，无拓扑跨度或端点铜层缺少 Z 均明确报错。
+端点必须引用两个不同的 BOARD 铜层，且起点 row 小于终点 row。覆盖条件为 `起点铜层.row < 介质层.row < 终点铜层.row`，不依赖层厚或绝对 Z。最外侧铜层之外的介质不被覆盖。
+需要介质采样时，钻孔缺少拓扑跨度或无法定位端点铜层均明确报错。绝对 Z 仅用于三维尺寸；未知厚度或重合的估算 Z 不改变覆盖关系。
 无有效域、失败/未导出的待等效层、介质采样所需钻孔跨度未知仍阻止生成正式结果。
 铜层忽略 DRILL，仅铜层输入不要求钻孔跨度。
 原始层极性、轮廓基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，

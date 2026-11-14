@@ -36,22 +36,22 @@ impl Mask {
                 }
             }
             // Ring bounds keep even very small islands and holes represented.
-            for axis in 0..2 {
+            for (axis, coordinates) in axes.iter_mut().enumerate() {
                 let values = unique(
                     polygon
                         .points
                         .iter()
                         .map(|p| if axis == 0 { p.0 } else { p.1 }),
                 );
-                axes[axis].extend([values[0], *values.last().unwrap()]);
+                coordinates.extend([values[0], *values.last().unwrap()]);
             }
         }
         if !orthogonal {
             let longest = (bounds[2] - bounds[0]).max(bounds[3] - bounds[1]);
-            for axis in 0..2 {
+            for (axis, coordinates) in axes.iter_mut().enumerate() {
                 let span = bounds[axis + 2] - bounds[axis];
                 let count = ((span / longest * resolution as f64).ceil() as usize).max(1);
-                axes[axis]
+                coordinates
                     .extend((0..=count).map(|i| bounds[axis] + span * i as f64 / count as f64));
             }
         }
@@ -78,10 +78,8 @@ impl Mask {
             let yy = (y[row] + y[row + 1]) / 2.;
             let mut crossings: Vec<_> = edges
                 .iter()
-                .filter_map(|&(a, b)| {
-                    (yy >= a.1.min(b.1) && yy < a.1.max(b.1))
-                        .then(|| a.0 + (yy - a.1) / (b.1 - a.1) * (b.0 - a.0))
-                })
+                .filter(|&&(a, b)| yy >= a.1.min(b.1) && yy < a.1.max(b.1))
+                .map(|&(a, b)| a.0 + (yy - a.1) / (b.1 - a.1) * (b.0 - a.0))
                 .collect();
             crossings.sort_by(f64::total_cmp);
             let mut edge = 0;
@@ -139,8 +137,12 @@ impl Mask {
                 }
             }
             let mut stack: Vec<(usize, usize)> = vec![];
-            for col in 0..=width {
-                let top = if col == width { row + 1 } else { starts[col] };
+            for (col, top) in starts
+                .iter()
+                .copied()
+                .chain(std::iter::once(row + 1))
+                .enumerate()
+            {
                 let mut left = col;
                 while let Some(&(previous_left, previous_top)) = stack.last() {
                     if previous_top >= top {

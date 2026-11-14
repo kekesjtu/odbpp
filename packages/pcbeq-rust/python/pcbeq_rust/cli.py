@@ -39,9 +39,10 @@ def main(argv=None):
         if args.command == "run":
             result = run_command(source, output, calculation, program=args.pcbeq_exe)
             source = output / "materialmap.json"
-            print(f"wrote {source}: {result['cells']} cells, {result['regions']} regions; compute {result['durations_s']['total']:.6f} s")
-            for warning in result["warnings"]:
-                print(f"warning: {warning}", file=sys.stderr)
+            print(f"wrote {source}: {result['cells']} cells, {result['regions']} regions; compute {result['performance']['total_s']:.6f} s")
+            for kind, label in (("warnings", "warning"), ("errors", "error")):
+                for issue in result["issues"][kind]:
+                    print(f"{label}: {issue['code']}: {issue['message']} (layers: {issue.get('layers', [])})", file=sys.stderr)
         if any((args.heatmap, args.regions, args.grids, args.gallery)):
             from .map_images import render
             render(source, output, heatmap=args.heatmap, regions=args.regions,

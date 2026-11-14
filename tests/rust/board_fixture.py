@@ -12,28 +12,26 @@ def build_document(*, profile=None, layers=(), profiles=None, z=0.035) -> dict:
     """A minimal but valid ``current intermediate`` document."""
     profile = profile if profile is not None else rect(0, 0, 10, 10)
     profile_list = profiles or [{
-        "id": "step_profile",         "polygons": [profile],
+        "id": "step_profile",          "polygons": [profile],
     }]
-    profile_list = [dict(p) for p in profile_list]
-    for p in profile_list:
-        p["layers"] = []
+    profile_list = [dict(p, layers=[]) for p in profile_list]
     layer_docs = []
-    for spec in layers:
+    for position, spec in enumerate(layers, start=1):
         extent = spec.get("z_mm")
         if extent is None:
             extent = {"start_mm": 0.0, "end_mm": z, "thickness_known": True}
         row = {
             "name": spec["name"],
+            "row": spec.get("row", position),
             "type": spec.get("type", "SIGNAL"),
             "polygons": spec.get("polygons", []),
         }
         if row["type"] != "DRILL":
             row["z_mm"] = extent
-        for field in ("copper_index", "copper_span"):
+        for field in ("start_layer", "end_layer"):
             if field in spec:
                 row[field] = spec[field]
-        target = next(p for p in profile_list if p["id"] == spec.get("profile_id", "step_profile"))
-        target["layers"].append(spec["name"])
+        next(p for p in profile_list if p["id"] == spec.get("profile_id", "step_profile"))["layers"].append(spec["name"])
         layer_docs.append(row)
     return {"units": "mm",
             "steps": [{"name": "pcb", "profiles": profile_list,
@@ -44,12 +42,15 @@ def drill_document(**kwargs):
     document = build_document(**kwargs)
     layers = document["steps"][0]["layers"]
     for layer in layers:
-        if layer["type"] in ("DIELECTRIC", "DRILL"):
-            layer["copper_span"] = [0, 1]
-    layers[:0] = [
+        if layer["type"] == "DRILL":
+            layer.update(start_layer="ENDPOINT_TOP", end_layer="ENDPOINT_BOTTOM")
+    endpoints = [
         {"name": name, "type": "SIGNAL", "polygons": [],
-         "copper_index": index,
          "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": True}}
-        for index, name in enumerate(("ENDPOINT_TOP", "ENDPOINT_BOTTOM"))]
+        for name in ("ENDPOINT_TOP", "ENDPOINT_BOTTOM")]
+    layers.insert(0, endpoints[0])
+    layers.append(endpoints[1])
+    for position, layer in enumerate(layers, start=1):
+        layer["row"] = position
     document["steps"][0]["profiles"][0]["layers"].extend(["ENDPOINT_TOP", "ENDPOINT_BOTTOM"])
     return document

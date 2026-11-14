@@ -36,9 +36,9 @@ def test_native_area_budget_preserves_slopes_and_connections(tmp_path, points, r
     assert modeled.geom_type == "Polygon"
 
 
-def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent(tmp_path):
-    duplicate = rect(-1, -1, 11, 11)
-    duplicate["points"].reverse()
+def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_collinear_points(tmp_path):
+    duplicate = {"island": True,
+                 "points": [(6, 10), (6, 5), (10, 5), (10, 0), (5, 0), (0, 0), (0, 10)]}
     document = build_document(profiles=[
         {"id": "step_profile", "polygons": [{"island": True,
          "points": [(0, 0), (10, 0), (10, 5), (6, 5), (6, 10), (0, 10)]}]},
@@ -46,12 +46,14 @@ def test_equal_effective_profiles_share_one_plan_despite_vertex_order_and_extent
     ], layers=[{"name": "A", "polygons": []},
                {"name": "B", "profile_id": "duplicate", "polygons": []}])
     _, delivered, output = execute(document, tmp_path)
-    report = json.loads((output / "diagnostics/run.json").read_text())["rectification"]
-    assert report["unique_profile_count"] == 1
-    assert report["reused_profile_count"] == 1
-    assert report["rectangle_count"] == 2
-    ids = report["audit"]["profile_region_ids"]
-    assert ids["step_profile"] == ids["duplicate"]
+    report = json.loads((output / "diagnostics.json").read_text())["geometry"]
+    assert len(report["profiles"]) == 1
+    profile = next(iter(report["profiles"].values()))
+    assert report["profile_count"] == 1
+    assert profile["layers"] == ["A", "B"]
+    assert profile["layer_count"] == 2
+    assert profile["region_count"] == 2
+    assert profile["cell_count"] == sum(len(r.values) for r in delivered.regions if r.layer.name == "A")
     by_layer = {name: [(r.bounds_mm, r.grid_counts) for r in delivered.regions if r.layer.name == name]
                 for name in ("A", "B")}
     assert by_layer["A"] == by_layer["B"]
@@ -68,9 +70,22 @@ def test_distinct_profiles_do_not_split_each_others_regions(tmp_path):
     assert len(delivered.regions) == 2
     assert regions["ALL"].bounds_mm.x == (0, 10)
     assert regions["LEFT"].bounds_mm.x == (0, 3)
-    report = json.loads((output / "diagnostics/run.json").read_text())["rectification"]
-    assert report["unique_profile_count"] == 2
-    assert report["audit"]["cross_layer_alignment_required"] is False
+    report = json.loads((output / "diagnostics.json").read_text())["geometry"]
+    assert len(report["profiles"]) == 2
+
+
+def test_profiles_differing_only_outside_step_are_not_reused(tmp_path):
+    document = build_document(profiles=[
+        {"id": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
+        {"id": "extended", "polygons": [rect(-1, -1, 11, 11)]},
+    ], layers=[{"name": "BOARD"}, {"name": "EXTENDED", "profile_id": "extended"}])
+    _, delivered, output = execute(document, tmp_path)
+    regions = {r.layer.name: r for r in delivered.regions}
+    assert regions["BOARD"].bounds_mm.x == (0, 10)
+    assert regions["EXTENDED"].bounds_mm.x == (-1, 11)
+    report = json.loads((output / "diagnostics.json").read_text())
+    assert report["geometry"]["profile_count"] == 2
+    assert sorted(p["area"]["original_mm2"] for p in report["accuracy"]["profiles"].values()) == [100, 144]
 
 
 def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
@@ -83,18 +98,16 @@ def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
     run(source, output, px=100, py=100, max_cell_mm=[10])
     delivered = read_document(output / "materialmap.json")
     assert len(delivered.regions) == 1
-    report = json.loads((output / "diagnostics/run.json").read_text())
-    layer = report["layers"][0]
-    assert layer["outside_material"] == "base"
-    assert layer["outside_base_pixels"] > 0
-    phi = 1 - layer["outside_base_pixels"] / 10000
+    report = json.loads((output / "diagnostics.json").read_text())
+    # Only (0.05, 0.05) lies strictly outside; the two boundary centers belong to the profile.
+    phi = 1 - 1 / 10000
     values = delivered.regions[0].values[0]
     assert values[2] == pytest.approx(phi * 385 + (1 - phi) * .3, abs=1e-6)
     assert values[3] == pytest.approx(phi * 8960 + (1 - phi) * 1850, abs=1e-4)
-    geometry = report["rectification"]["audit"]["profiles"]["step_profile"]
-    assert geometry["lost_area_mm2"] == pytest.approx(0)
-    assert geometry["gained_area_mm2"] == pytest.approx(.02)
-    assert geometry["relative_area_error"] == pytest.approx(.02 / 99.98)
+    area = report["accuracy"]["profiles"]["step_profile"]["area"]
+    assert area["lost_mm2"] == pytest.approx(0)
+    assert area["gained_mm2"] == pytest.approx(.02)
+    assert area["relative_error"] == pytest.approx(.02 / 99.98)
 
 
 def test_profile_hole_witness_does_not_remove_its_nested_island(tmp_path):

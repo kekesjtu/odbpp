@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 
 from ._pcbkit_native import Composer, Region
 from .features import collect_diagnostics
+from .clipper import layer_profile_region
 from .geometry import TessellationOptions
 from .model import LayerType
 from .stackup import Stackup
@@ -62,7 +63,7 @@ def expand_layer(layer, step, *, expander, round_digits=4):
     # A declared but invalid profile fails this layer even if it starts empty.
     if layer.profile_error is not None:
         step.base_geometry(layer)
-    profile = step.base_geometry(layer) if seed else None
+    profile = layer_profile_region(step, layer, expander.options.tessellation) if seed else None
     try:
         region, runs, collapsed = expander.native.layer(layer.features, profile,
             layer.is_negative, seed, round_digits)

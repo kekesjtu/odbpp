@@ -1,6 +1,7 @@
 //! Complete native JSON -> MaterialMap path. No Python objects cross this boundary.
 use crate::{
     Result,
+    diagnostics::Diagnostics,
     document::{Board, Polygon},
     native_materials::Materials,
     native_mesh,
@@ -11,6 +12,7 @@ use crate::{
 };
 use serde_json::{Value, json};
 use std::{fs, path::Path, time::Instant};
+
 fn normalize(polygons: &mut [Polygon]) {
     for polygon in polygons {
         for point in &mut polygon.points {
@@ -23,154 +25,180 @@ fn normalize(polygons: &mut [Polygon]) {
         }
     }
 }
+
 pub fn run(source: &Path, output: &Path, options: Options) -> Result<Value> {
-    options.validate()?;
-    let source = source
-        .canonicalize()
-        .map_err(|e| format!("cannot read input: {e}"))?;
-    for name in ["materialmap.json", "diagnostics/run.json"] {
-        if output.join(name).canonicalize().ok().as_ref() == Some(&source) {
-            return Err("input must not be overwritten by outputs".into());
-        }
-    }
-    let start = Instant::now();
-    let bytes = fs::read(&source).map_err(|e| e.to_string())?;
-    let mut document: Board =
-        serde_json::from_slice(&bytes).map_err(|e| format!("invalid intermediate JSON: {e}"))?;
-    document.validate()?;
-    let read_end = Instant::now();
-    let mut config = options.materials.clone();
-    if let Some(path) = &options.materials_path {
-        let base: Value = serde_json::from_slice(
-            &fs::read(path).map_err(|e| format!("cannot read materials: {e}"))?,
-        )
-        .map_err(|e| e.to_string())?;
-        config = merge_config(base, config)?;
-    }
-    let mut materials = Materials::new(config)?;
-    let step = &mut document.steps[0];
-    for profile in &mut step.profiles {
-        normalize(&mut profile.polygons);
-    }
-    for layer in &mut step.layers {
-        normalize(&mut layer.polygons);
-    }
-    let geometry_start = Instant::now();
-    let geometry = planning::plan(step, &options)?;
-    let geometry_end = Instant::now();
-    let mesh = native_mesh::build(step, &geometry, &options)?;
-    let mesh_end = Instant::now();
-    let drills = native_sampling::drills(step)?;
-    let publication = crate::native_publication::Publication::new(output)?;
-    let mut writer = Writer::open(&publication.path, &step.name)?;
-    let mut layer_reports = vec![];
-    let mut sample_seconds = 0.;
-    let mut write_seconds = 0.;
-    let mut layers = 0;
-    for layer in &step.layers {
-        if !layer.physical() {
-            layer_reports.push(json!({"name":layer.name,"type":layer.kind,"status":"skipped", "reason":"only copper and dielectric layers are equivalented"}));
-            continue;
-        }
-        if layer.geometry_status != "ready" {
-            return Err(format!(
-                "layer {:?}: geometry is {}: {:?}",
-                layer.name, layer.geometry_status, layer.geometry_error
-            ));
-        }
-        if layer.z_mm.is_none() {
-            return Err(format!("layer {:?}: no absolute Z interval", layer.name));
-        }
-        let id = &step
-            .profile_for_layer(&layer.name)
-            .ok_or(format!("layer {:?}: no profile assignment", layer.name))?
-            .id;
-        let profile = geometry
-            .profile_ids
-            .iter()
-            .position(|key| key == id)
-            .ok_or("unplanned physical profile")?;
-        let pair = materials.resolve(
-            &layer.name,
-            if layer.copper() {
-                "copper"
-            } else {
-                "dielectric"
-            },
-        )?;
-        if layer.kind == "DIELECTRIC"
-            && !layer.z_mm.as_ref().unwrap().thickness_known
-            && !drills.is_empty()
-        {
-            if layer.copper_span.is_none() {
-                materials.warnings.push(format!("equiv.drill_z_fallback: layer {:?} has unknown thickness and no copper_span; drill coverage uses best-effort Z", layer.name));
-            } else {
-                if drills.iter().any(|d| {
-                    native_sampling::matched(layer, d) != native_sampling::matched_by_z(layer, d)
-                }) {
-                    materials.warnings.push(format!("equiv.drill_z_mismatch: layer {:?} copper_span differs from best-effort Z; copper-plane topology is used", layer.name));
+    // Refuse destructive output aliases before attempting even a failure report.
+    for input in [
+        Some(source),
+        options.materials_path.as_deref().map(Path::new),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Ok(input) = input.canonicalize() {
+            for name in crate::native_publication::OUTPUTS {
+                if let Ok(target) = output.join(name).canonicalize()
+                    && (input == target || input.starts_with(&target))
+                {
+                    return Err("input must not be overwritten by outputs".into());
                 }
             }
         }
-        let before = Instant::now();
-        let (values, report) =
-            native_sampling::evaluate(step, layer, &drills, &geometry, &mesh, profile, pair)?;
-        sample_seconds += before.elapsed().as_secs_f64();
-        let before = Instant::now();
-        writer.layer(layer, &geometry, &mesh, profile, &values)?;
-        write_seconds += before.elapsed().as_secs_f64();
-        layer_reports.push(report);
+    }
+    let mut diagnostics = Diagnostics::new();
+    let result = execute(source, output, options, &mut diagnostics);
+    if let Err(error) = &result {
+        diagnostics.finish(Some(error));
+        if let Err(write_error) = diagnostics.write(output) {
+            return Err(format!(
+                "{error}; cannot publish diagnostics: {write_error}"
+            ));
+        }
+    }
+    result
+}
+
+fn execute(
+    source: &Path,
+    output: &Path,
+    options: Options,
+    diagnostics: &mut Diagnostics,
+) -> Result<Value> {
+    let mut document: Board = diagnostics.measure("read_validate", || {
+        options.validate()?;
+        let bytes = fs::read(source).map_err(|e| format!("cannot read input: {e}"))?;
+        let document: Board = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("invalid intermediate JSON: {e}"))?;
+        document.validate()?;
+        Ok(document)
+    })?;
+    let mut materials = diagnostics.measure("prepare", || {
+        let mut config = options.materials.clone();
+        if let Some(path) = &options.materials_path {
+            let base = serde_json::from_slice(
+                &fs::read(path).map_err(|e| format!("cannot read materials: {e}"))?,
+            )
+            .map_err(|e| e.to_string())?;
+            config = merge_config(base, config)?;
+        }
+        let materials = Materials::new(config)?;
+        for profile in &mut document.steps[0].profiles {
+            normalize(&mut profile.polygons);
+        }
+        for layer in &mut document.steps[0].layers {
+            normalize(&mut layer.polygons);
+        }
+        Ok(materials)
+    })?;
+    let step = &document.steps[0];
+    diagnostics.measure("prepare", || {
+        for layer in step.layers.iter().filter(|l| l.physical()) {
+            if layer.geometry_status != "ready" {
+                return Err(format!(
+                    "layer {:?}: geometry is {}: {:?}",
+                    layer.name, layer.geometry_status, layer.geometry_error
+                ));
+            }
+            if layer.z_mm.is_none() {
+                return Err(format!("layer {:?}: no absolute Z interval", layer.name));
+            }
+            if step.profile_for_layer(&layer.name).is_none() {
+                return Err(format!("layer {:?}: no computational profile", layer.name));
+            }
+        }
+        Ok(())
+    })?;
+    for layer in step.layers.iter().filter(|l| l.physical()) {
+        let z = layer.z_mm.as_ref().unwrap();
+        let thickness_unknown = layer.thickness.as_ref().is_some_and(|t| !t.known);
+        if !z.thickness_known || thickness_unknown {
+            let code = if thickness_unknown {
+                "z.thickness_unknown"
+            } else {
+                "z.absolute_position_unknown"
+            };
+            diagnostics.value["issues"]["errors"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({
+                    "code":code,"message":if thickness_unknown { "layer thickness is uncertain" }
+                        else { "absolute Z interval is uncertain" },
+                    "layers":[layer.name],"blocking":false,
+                    "estimated_z_mm":{"start_mm":z.start_mm,"end_mm":z.end_mm,"source":z.source},
+                    "thickness_source":layer.thickness.as_ref().map(|t| &t.source)
+                }));
+        }
+    }
+    let geometry = planning::plan(step, &options, diagnostics)?;
+    diagnostics.geometry(step, &geometry);
+    let mesh = diagnostics.measure("mesh", || native_mesh::build(step, &geometry, &options))?;
+    diagnostics.mesh(&geometry, &mesh);
+    let drills = diagnostics.measure("prepare", || native_sampling::drills(step))?;
+    let publication = diagnostics.measure("write", || {
+        crate::native_publication::Publication::new(output)
+    })?;
+    let mut writer =
+        diagnostics.measure("write", || Writer::open(&publication.path, &step.name))?;
+    let mut layers = 0;
+    for layer in step.layers.iter().filter(|l| l.physical()) {
+        let profile = geometry
+            .profile_ids
+            .iter()
+            .position(|key| Some(key) == step.profile_for_layer(&layer.name).map(|p| &p.id))
+            .ok_or("unplanned physical profile")?;
+        let pair = diagnostics.measure("prepare", || {
+            materials.resolve(
+                &layer.name,
+                if layer.copper() {
+                    "copper"
+                } else {
+                    "dielectric"
+                },
+            )
+        })?;
+        diagnostics.value["issues"]["warnings"] = json!(materials.warnings);
+        let values = native_sampling::evaluate(
+            step,
+            layer,
+            &drills,
+            &geometry,
+            &mesh,
+            profile,
+            pair,
+            diagnostics,
+        )?;
+        diagnostics.measure("write", || {
+            writer.layer(layer, &geometry, &mesh, profile, &values)
+        })?;
         layers += 1;
     }
-    let before = Instant::now();
-    writer.finish()?;
-    write_seconds += before.elapsed().as_secs_f64();
-    let end = Instant::now();
-    let elapsed = end.duration_since(start).as_secs_f64();
-    let mut summary = json!({"durations_s":{"read_json":read_end.duration_since(start).as_secs_f64(),
-        "equivalence_and_write":end.duration_since(read_end).as_secs_f64(),"total":elapsed,
-        "geometry":geometry_end.duration_since(geometry_start).as_secs_f64(),
-        "mesh":mesh_end.duration_since(geometry_end).as_secs_f64(),"sampling":sample_seconds,"write":write_seconds},
-        "cells":writer.cells,"regions":writer.regions,"layers":layers,"raster":mesh.pixels,
-        "cells_per_s":writer.cells as f64/elapsed,"materialmap_bytes":fs::metadata(&writer.destination).map_err(|e|e.to_string())?.len(),
-        "warnings":materials.warnings,"numerical_backend":"rust","execution":"native-json-to-materialmap",
-        "geometry_backend":"geo","raster_sampling":mesh.raster_report});
-    let grid_regions:Vec<_>=geometry.rectangles.iter().zip(&mesh.axes).enumerate().map(|(i,(r,(x,y)))|
-        json!({"region_id":i,"bounds_mm":{"x":[r[0],r[2]],"y":[r[1],r[3]]},"grid_counts":{"x":x.len()-1,"y":y.len()-1,"z":1}})).collect();
-    let mut audit = json!({"numerical_backend":"rust","execution":"native-json-to-materialmap","step":step.name,
-        "cell_count":writer.cells,
-        "raster":{"board_bounds_mm":geometry.bounds,
-            "pixel_step_mm":[(geometry.bounds[2]-geometry.bounds[0])/mesh.pixels[0]as f64,(geometry.bounds[3]-geometry.bounds[1])/mesh.pixels[1]as f64]},
-        "grid":{"layout":"region-local-cartesian","conformity_required":false,
-            "region_count":geometry.rectangles.len(),"cell_count":mesh.cell_count,"regions":grid_regions,
-            "mesh_configuration":mesh.config,"size_constraints_mm":{"max":mesh.config["max_cell_mm"]}},
-        "rectification":geometry.report,"layers":layer_reports,"materials":{"defaults":crate::native_materials::defaults(),"by_layer":materials.by_layer},
-        "diagnostics":materials.warnings.iter().map(|w|json!({"level":"warning","code":w.split(':').next().unwrap_or("warning"),"message":w,"path":null})).collect::<Vec<_>>(),
-        "runtime":{"elapsed_s":elapsed},"performance":summary});
-    audit["raster"]
-        .as_object_mut()
-        .unwrap()
-        .extend(mesh.raster_report.as_object().unwrap().clone());
-    let diagnostics = publication.path.join("diagnostics");
-    fs::create_dir_all(&diagnostics).map_err(|e| e.to_string())?;
-    let temporary = diagnostics.join(format!(".run-{}.tmp", std::process::id()));
-    fs::write(
-        &temporary,
-        serde_json::to_vec_pretty(&audit).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    crate::native_output::replace(&temporary, &diagnostics.join("run.json"))?;
+    diagnostics.measure("write", || writer.finish())?;
+    let bytes = fs::metadata(&writer.destination)
+        .map_err(|e| e.to_string())?
+        .len();
+    diagnostics.stage = "publication";
     let publish_start = Instant::now();
-    publication.commit()?;
-    let publish_seconds = publish_start.elapsed().as_secs_f64();
-    for name in ["total", "equivalence_and_write", "write"] {
-        let current = summary["durations_s"][name].as_f64().unwrap();
-        summary["durations_s"][name] = json!(current + publish_seconds);
+    let published = publication.commit(|| {
+        diagnostics.add_time("publication", publish_start.elapsed().as_secs_f64());
+        diagnostics.finish(None);
+        diagnostics.write(&publication.path)
+    });
+    if published.is_err() {
+        // Include a failed publication and any rollback in the failure timing.
+        diagnostics.value["performance"]["stages_s"]["publication"] =
+            json!(publish_start.elapsed().as_secs_f64());
     }
-    summary["durations_s"]["publication"] = json!(publish_seconds);
-    summary["cells_per_s"] = json!(writer.cells as f64 / (elapsed + publish_seconds));
-    Ok(summary)
+    published?;
+    let total = diagnostics.value["performance"]["total_s"]
+        .as_f64()
+        .unwrap();
+    Ok(
+        json!({"performance":diagnostics.value["performance"],"issues":diagnostics.value["issues"],
+        "cells":writer.cells,"regions":writer.regions,"layers":layers,
+        "cells_per_s":writer.cells as f64/total,"materialmap_bytes":bytes}),
+    )
 }
+
 fn merge_config(mut base: Value, overrides: Value) -> Result<Value> {
     let object = base
         .as_object_mut()

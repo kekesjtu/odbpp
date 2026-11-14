@@ -1,11 +1,18 @@
-//! Transactional numerical publication and removal of previously owned pictures.
+//! Transactional publication of fixed product files and dedicated image directories.
 use crate::Result;
-use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
     fs,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
+
+pub const OUTPUTS: [&str; 6] = [
+    "regions",
+    "grids",
+    "heatmaps",
+    "index.html",
+    "materialmap.json",
+    "diagnostics.json",
+];
 
 pub struct Publication {
     pub path: PathBuf,
@@ -45,58 +52,28 @@ impl Publication {
             preserve: std::cell::Cell::new(false),
         })
     }
-    pub fn commit(&self) -> Result<()> {
-        let files = ["materialmap.json", "diagnostics/run.json"];
-        let manifest = "diagnostics/artifacts.json";
-        let mut names = files.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>();
-        names.insert(manifest.into());
-        for name in [manifest, "diagnostics/image-artifacts.json"] {
-            let path = self.directory.join(name);
-            if path.exists() {
-                let value: Value =
-                    serde_json::from_slice(&fs::read(path).map_err(|e| e.to_string())?)
-                        .map_err(|e| format!("invalid artifact manifest: {e}"))?;
-                let previous = value["files"]
-                    .as_array()
-                    .ok_or("invalid artifact manifest files")?;
-                for name in previous {
-                    names.insert(name.as_str().ok_or("invalid artifact filename")?.to_owned());
-                }
-                names.insert(name.into());
-            }
-        }
-        for name in &names {
-            let relative = Path::new(name);
-            if relative.as_os_str().is_empty()
-                || !relative
-                    .components()
-                    .all(|c| matches!(c, Component::Normal(_)))
-            {
-                return Err(format!("unsafe output manifest path: {name}"));
-            }
-            let mut target = self.directory.clone();
-            for part in relative.components() {
-                target.push(part);
-                if let Ok(meta) = fs::symlink_metadata(&target) {
-                    if meta.is_symlink() {
-                        return Err(format!("symlink in output path: {}", target.display()));
-                    }
+    pub fn commit(&self, finish_diagnostics: impl FnOnce() -> Result<()>) -> Result<()> {
+        for (index, name) in OUTPUTS.iter().enumerate() {
+            let target = self.directory.join(name);
+            if let Ok(meta) = fs::symlink_metadata(&target) {
+                if meta.is_symlink()
+                    || (index < 3 && !meta.is_dir())
+                    || (index >= 3 && !meta.is_file())
+                {
+                    return Err(format!("invalid output destination: {}", target.display()));
                 }
             }
-            if target.exists() && !target.is_file() {
-                return Err(format!("output destination is not a regular file: {name}"));
-            }
         }
-        fs::write(
-            self.path.join(manifest),
-            serde_json::to_vec_pretty(&json!({"files":files})).map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?;
         let backup = self.temporary.join("old");
         let mut moved = vec![];
         let mut installed = vec![];
         let result = (|| -> Result<()> {
-            for name in &names {
+            let mut finish_diagnostics = Some(finish_diagnostics);
+            for name in OUTPUTS {
+                if name == "diagnostics.json" {
+                    // MaterialMap is installed; stop numerical timing before serializing diagnostics.
+                    finish_diagnostics.take().unwrap()()?;
+                }
                 let target = self.directory.join(name);
                 if target.exists() {
                     let saved = backup.join(name);
@@ -105,7 +82,7 @@ impl Publication {
                     moved.push(name);
                 }
                 let source = self.path.join(name);
-                if source.is_file() {
+                if source.exists() {
                     fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
                     fs::rename(source, target).map_err(|e| e.to_string())?;
                     installed.push(name);
@@ -147,5 +124,51 @@ impl Drop for Publication {
         {
             let _ = fs::remove_dir_all(&self.temporary);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_failure_rolls_back_materialmap_and_image_directories() {
+        let serial = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("pcbeq-publication-{}-{serial}", std::process::id()));
+        let directory = root.join("out");
+        fs::create_dir_all(directory.join("regions")).unwrap();
+        fs::write(directory.join("materialmap.json"), "previous map").unwrap();
+        fs::write(directory.join("diagnostics.json"), "previous diagnostics").unwrap();
+        fs::write(directory.join("regions/region.png"), "previous image").unwrap();
+        let publication = Publication::new(&directory).unwrap();
+        fs::write(publication.path.join("materialmap.json"), "new map").unwrap();
+        let result = publication.commit(|| Err("diagnostic serialization failed".into()));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("diagnostic serialization failed")
+        );
+        assert_eq!(
+            fs::read_to_string(directory.join("materialmap.json")).unwrap(),
+            "previous map"
+        );
+        assert_eq!(
+            fs::read_to_string(directory.join("diagnostics.json")).unwrap(),
+            "previous diagnostics"
+        );
+        assert_eq!(
+            fs::read_to_string(directory.join("regions/region.png")).unwrap(),
+            "previous image"
+        );
+        drop(publication);
+        assert_eq!(
+            root.canonicalize().unwrap().parent(),
+            Some(std::env::temp_dir().canonicalize().unwrap().as_path())
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 }

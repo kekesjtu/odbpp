@@ -21,7 +21,7 @@
           "type": "string"
         },
         "row": {
-          "default": 1,
+          "description": "matrix ROW；同一 step 内唯一，表达层的上下次序。",
           "minimum": 1,
           "title": "Row",
           "type": "integer"
@@ -85,7 +85,7 @@
             }
           ],
           "default": null,
-          "description": "实体物理层自身的绝对 Z；DRILL 不保存此字段，由 copper_span 端点铜层推导。"
+          "description": "实体物理层自身的绝对 Z；DRILL 不保存此字段，由起止铜层推导。"
         },
         "thickness": {
           "anyOf": [
@@ -98,42 +98,39 @@
           ],
           "default": null
         },
-        "copper_index": {
+        "start_layer": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "minLength": 1,
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Copper Index"
+          "description": "DRILL 起始铜层名称。",
+          "title": "Start Layer"
         },
-        "copper_span": {
+        "end_layer": {
           "anyOf": [
             {
-              "items": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "maxItems": 2,
-              "minItems": 2,
-              "type": "array"
+              "minLength": 1,
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "自顶向下的两个铜层索引；不重复存储端点名称。",
-          "title": "Copper Span"
+          "description": "DRILL 终止铜层名称。",
+          "title": "End Layer"
         }
       },
       "required": [
         "name",
         "type",
+        "row",
         "polygons"
       ],
       "title": "LayerModel",
@@ -282,7 +279,7 @@
             }
           ],
           "default": null,
-          "description": "整板轮廓在 profiles 中的引用。",
+          "description": "整板轮廓在 profiles 中的引用；不能以铜图案替代。",
           "title": "Profile Id"
         },
         "profiles": {
@@ -293,7 +290,7 @@
           "type": "array"
         },
         "layers": {
-          "description": "BOARD 层目录，包含失败及未导出层，按 matrix row 排列。",
+          "description": "BOARD 层目录；包含失败及未导出层，按 matrix row 排列。",
           "items": {
             "$ref": "#/$defs/LayerModel"
           },

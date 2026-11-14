@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub(super) fn require(ok: bool, message: impl Into<String>) -> Result<()> {
     if ok { Ok(()) } else { Err(message.into()) }
@@ -53,13 +53,18 @@ impl Board {
             "profile_id must reference an existing profile",
         )?;
         let mut names = HashSet::new();
-        let mut copper = HashSet::new();
+        let mut rows = HashSet::new();
+        let mut copper = HashMap::new();
         for l in &step.layers {
             require(
                 !l.name.is_empty() && names.insert(l.name.as_str()),
                 "empty/duplicate layer name",
             )?;
             require(!l.kind.is_empty() && l.row > 0, "invalid layer type/row")?;
+            require(
+                rows.insert(l.row),
+                format!("layer {:?}: duplicate matrix row {}", l.name, l.row),
+            )?;
             require(l.context == "BOARD", "invalid layer context")?;
             require(
                 matches!(l.form.as_str(), "RIGID" | "FLEX"),
@@ -93,12 +98,8 @@ impl Board {
                     "invalid absolute Z interval",
                 )?;
             }
-            if let Some(i) = l.copper_index {
-                require(
-                    l.copper() && l.context == "BOARD",
-                    "copper_index requires BOARD copper layer",
-                )?;
-                require(copper.insert(i), "duplicate copper_index")?;
+            if l.copper() && l.context == "BOARD" {
+                copper.insert(l.name.as_str(), l.row);
             }
             if let Some(t) = &l.thickness {
                 t.validate()?;
@@ -118,12 +119,27 @@ impl Board {
             }
         }
         for l in &step.layers {
-            if let Some([a, b]) = l.copper_span {
-                require(a < b, "copper_span endpoints must increase")?;
+            require(
+                l.kind == "DRILL" || (l.start_layer.is_none() && l.end_layer.is_none()),
+                format!(
+                    "layer {:?}: start_layer/end_layer require a DRILL layer",
+                    l.name
+                ),
+            )?;
+            for endpoint in [&l.start_layer, &l.end_layer].into_iter().flatten() {
                 require(
-                    copper.contains(&a) && copper.contains(&b),
+                    copper.contains_key(endpoint.as_str()),
                     format!(
-                        "layer {:?}: copper_span endpoints must reference existing copper_index values",
+                        "layer {:?}: endpoint {endpoint:?} must reference an existing BOARD copper layer",
+                        l.name
+                    ),
+                )?;
+            }
+            if let (Some(a), Some(b)) = (&l.start_layer, &l.end_layer) {
+                require(
+                    copper[a.as_str()] < copper[b.as_str()],
+                    format!(
+                        "layer {:?}: drill endpoints must follow matrix rows",
                         l.name
                     ),
                 )?;

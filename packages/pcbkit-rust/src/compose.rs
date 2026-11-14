@@ -320,7 +320,7 @@ impl Engine {
     pub fn drawing(
         &mut self,
         file: Option<&Features>,
-        profile: Option<&crate::parser::Surface>,
+        profile: Option<&[Ring]>,
         invert: bool,
         seed: bool,
     ) -> Result<crate::drawing::Drawing> {
@@ -329,7 +329,7 @@ impl Engine {
         if seed {
             let rings = profile
                 .ok_or("drawing has no usable base profile")?
-                .region(self.sagitta, self.maximum)?;
+                .to_vec();
             operations.push(Paint {
                 positive: true,
                 width: 0.,
