@@ -42,4 +42,4 @@ Clipper 坐标量化为 1e-6 mm，最终输出采用用户指定的小数分辨�
 
 这些假设的实证状态与输入案例关联，合成覆盖不替代生产样本验证。
 范围中明确排除的 T / B 记录仍以 `features.unsupported_record` 报告。
-规范页码与输入观察见 [格式调研](../../research/format-and-units.md)。
+单位规范页码见[单位体系与作用域](../../research/odbpp_format/units.md)，材料厚度语义见[层厚度](../../research/odbpp_format/layer-thickness.md)。

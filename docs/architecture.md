@@ -14,12 +14,11 @@ ODB++ 单板目录或压缩包
 
 ## 从轮廓到有效计算域
 
-| 名称 | 含义 |
-| --- | --- |
-| 整板轮廓（step profile） | ODB++ `steps/<step>/profile` 定义的整板外边界、岛和内孔边界 |
-| 层轮廓（layer profile） | 可选的 `steps/<step>/layers/<layer>/profile`，描述该层铺设到哪里 |
-| 层实体范围 | 有层轮廓时，由层岛扣除层孔与 step 孔的并集得到；缺少层轮廓时取整板轮廓围成的实体范围。层可伸出 step 岛 |
-| 层有效计算域 | 该层的完整实体范围，作为建模和材料采样的面积范围，不与整板实体范围求交 |
+| 名称                     | 含义                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| 整板轮廓（step profile） | ODB++ `steps/<step>/profile` 定义的整板外边界、岛和内孔边界                                            |
+| 层轮廓（layer profile）  | 可选的 `steps/<step>/layers/<layer>/profile`，描述该层铺设到哪里                                       |
+| 层实体范围(有效计算域)   | 有层轮廓时，由层岛扣除层孔与 step 孔的并集得到；缺少层轮廓时取整板轮廓围成的实体范围。层可伸出 step 岛 |
 
 例如刚挠板的某层只覆盖刚性区，该层轮廓只围住刚性区；某层也可伸出整板轮廓，伸出部分同样属于该层实体。中间 JSON 的 `domains` 存的是按轮廓规则规整后的实体多边形，层域包含继承的 step 孔。铜图案和钻孔投影描述有效计算域内的材料分布。选择轮廓和解释层厚的规则见[逐层轮廓与叠层](decisions/pcbkit/layer-domains-and-stackup.md)。
 
@@ -31,14 +30,14 @@ ODB++ 单板目录或压缩包
   └─ 材料图案与钻孔跨度 ──> 按 region 采样 ──> 单元物性 ──> MaterialMap
 ```
 
-各有效 profile 独立规划二维矩形，与引用物理层的 Z 区间共同定义三维 region。相同有效几何复用同一分区，不同几何不要求跨层对齐。几何规划使用矢量范围、拓扑和物理尺寸。网格确定后，材料分支为各 region 生成光栅，再按网格统计样本。调整采样密度不会移动 region 或网格。具体约束见[几何规划](decisions/pcbeq/geometry-planning.md)和[材料采样](decisions/pcbeq/material-sampling.md)。
+各有效 profile 独立规划二维矩形，与引用物理层的 Z 区间共同定义三维 region。相同有效几何复用同一 region 划分方案。几何规划使用矢量范围、拓扑和物理尺寸。网格确定后，材料分支为各 region 生成光栅，再按网格统计样本。调整采样密度不会移动 region 或网格。具体约束见[几何规划](decisions/pcbeq/geometry-planning.md)和[材料采样](decisions/pcbeq/material-sampling.md)。
 
 ## 分发与语言职责
 
-| 分发包 | 职责与语言边界 |
-| --- | --- |
-| `pcbkit-rust` | 包内 Python 负责输入调度、Pydantic 契约校验与预览，Rust 负责几何离散、整数布尔和扫掠 |
-| `pcbeq-rust` | 独立 Rust CLI 从 JSON 读取校验到 MaterialMap 和数值诊断发布，可单文件分发。可选 Python 工具通过子进程调用 CLI，并从正式 MaterialMap 渲染图表 |
+| 分发包        | 职责与语言边界                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pcbkit-rust` | 包内 Python 负责输入调度、Pydantic 契约校验与预览，Rust 负责几何离散、整数布尔和扫掠                                                         |
+| `pcbeq-rust`  | 独立 Rust CLI 从 JSON 读取校验到 MaterialMap 和数值诊断发布，可单文件分发。可选 Python 工具通过子进程调用 CLI，并从正式 MaterialMap 渲染图表 |
 
 解析器的 wheel / sdist 使用 Maturin 构建 PyO3 扩展。等效器由 Cargo 构建 `pcbeq` 可执行文件，计算不依赖 Python；其 Python 管线和绘图单独构建纯 Python wheel / sdist，通过 `PATH`、`PCBEQ_EXE` 或显式路径定位可执行文件。计算参数及默认值由 Rust CLI 解释，绘图可以独立重跑。uv workspace 锁定 Python 依赖，Cargo workspace 管理 Rust 依赖，两个产品通过文件契约独立运行。
 
