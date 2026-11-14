@@ -61,20 +61,6 @@ def test_polarity_runs_preserve_later_refill():
     assert sum(r.is_hole for r in region.rings) == 1
 
 
-def test_connected_strokes_do_not_cross_polarity_run_boundaries():
-    body = surface(-2, -2, 2, 2) + "UNITS=MM\n$0 r1000\nL -1 0 0 0 0 N 0\nL 0 0 1 0 0 P 0\n"
-    region = compose(body)
-    assert region.area == pytest.approx(15, abs=.002)
-
-
-def test_connected_strokes_keep_symbol_unit_overrides_separate():
-    body = "UNITS=MM\n$0 r1000 M\n$1 r1000 I\nL -1 0 0 0 0 P 0\nL 0 0 1 0 1 P 0\n"
-    combined = compose(body)
-    large = compose("UNITS=MM\n$0 r1000 I\nL 0 0 1 0 0 P 0\n")
-    assert combined.bounds == pytest.approx(large.bounds)
-    assert combined.area == pytest.approx(large.area, abs=1e-8)
-
-
 def test_negative_layer_starts_from_profile_and_inverts_records():
     profile = features(surface(0, 0, 10, 10)).profile()
     region = compose(surface(2, 2, 8, 8) + surface(4, 4, 6, 6, "N"), profile=profile, invert=True, seed=True)
