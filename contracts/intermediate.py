@@ -5,6 +5,7 @@ existing dataclasses/arrays. No format versions or compatibility migrations.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated, Literal, Mapping, Any
 
@@ -184,13 +185,37 @@ def read_document(path: str | Path) -> BoardDocument:
     return BoardDocument.model_validate_json(Path(path).read_bytes())
 
 
+def _is_leaf(value: Any) -> bool:
+    """Scalars and coordinate arrays stay on one line; records and members keep their lines."""
+    if isinstance(value, dict):
+        return not value
+    if not isinstance(value, list):
+        return True
+    return all(not isinstance(v, (dict, list))
+               or (isinstance(v, list) and not any(isinstance(c, (dict, list)) for c in v))
+               for v in value)
+
+
+def _render(value: Any, depth: int) -> str:
+    """Indent structure, never coordinates: a case holds millions of numbers."""
+    if _is_leaf(value):
+        return json.dumps(value, ensure_ascii=False)
+    pad = " " * (depth + 1)
+    if isinstance(value, list):
+        items = ",\n".join(pad + _render(v, depth + 1) for v in value)
+        return "[\n" + items + "\n" + " " * depth + "]"
+    items = ",\n".join(f'{pad}{json.dumps(k, ensure_ascii=False)}: {_render(v, depth + 1)}'
+                       for k, v in value.items())
+    return "{\n" + items + "\n" + " " * depth + "}"
+
+
 def write_document(document: BoardDocument, path: str | Path) -> None:
-    Path(path).write_text(document.model_dump_json(indent=1, exclude_none=True) + "\n", encoding="utf-8", newline="\n")
+    text = _render(document.model_dump(exclude_none=True), 0) + "\n"
+    Path(path).write_text(text, encoding="utf-8", newline="\n")
 
 
 def write_schema(path: str | Path) -> None:
     """Generate the unversioned, human-readable JSON Schema from this contract."""
-    import json
     schema = BoardDocument.model_json_schema()
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     Path(path).write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
