@@ -1,7 +1,7 @@
 # 参考案例与覆盖范围
 
 本表描述四份固定本地参考输入；小型 EDA 案例另见 [KiCad 案例集](kicad-test-cases.md)。
-真实样本位于 `cases/`，来源与原始字节独立保存，手写夹具位于 `tests/fixtures/`。
+真实样本位于 `cases/`，来源与原始字节独立保存。
 
 ## 规模与来源
 
@@ -40,10 +40,3 @@
 被引用定义包含 `sc_join0201_hd`、`special_0.670x0.950_nt2520` 等，内部仅用标准符号，适合验证严格命名和惰性读取。
 
 四例的 matrix 层极性均为 `POSITIVE`，普查中的 `P`、`L`、`A`、`S` 记录也均为正极性。kitchen-sink 和刚挠板含 `OB ... H` 孔环，刚挠板的自定义符号中还包含圆弧。
-
-## 手写夹具与自动测试
-
-[手写夹具](../../tests/fixtures/README.md)提供负片层、负极性记录、未登记层目录、递归嵌套、循环引用、resize、无效层轮廓及显式 `FORM` 的独立复现输入。
-其中 [`fx_negative_layer`](../../tests/fixtures/README.md#fx_negative_layer--polarity-and-matrix-authority) 的 `tenting_front` 目录未在 matrix 登记，解析器报告 `matrix.orphan_layer_dir` 并跳过该目录。
-
-`main` 的 [Rust CLI 测试](../../tests/rust/test_rust_cli.py)使用本地 `minimal-test-odb` 检查管道产物和同步工具的缓存复用。样本缺失时跳过这两项。当前 `main` 的测试未引用上述手写 ODB++ 夹具，其余三份参考输入供本地核对。

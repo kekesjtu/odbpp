@@ -10,6 +10,7 @@ from shapely.ops import unary_union
 
 from board_fixture import build_document, drill_document, hole, rect
 from conftest import write_tree
+from odb_fixture import odb_files, profile_text
 from pcbkit_rust.export import PreviewOptions, build_step_preview, step_to_json
 from pcbkit_rust.geometry import TessellationOptions
 from pcbkit_rust.job import load_job
@@ -19,33 +20,16 @@ from pcbeq_rust.runner import run
 from tools.audit_out import audit_outputs, physical_shape
 
 
-def profile_text(polygons):
-    lines = ["UNITS=MM", "F 1", "S P 0"]
-    for polygon in polygons:
-        points = list(reversed(polygon["points"])) if polygon["island"] else polygon["points"]
-        start, *rest = points
-        lines.append(f"OB {start[0]} {start[1]} {'I' if polygon['island'] else 'H'}")
-        lines.extend(f"OS {x} {y}" for x, y in [*rest, start])
-        lines.append("OE")
-    return "\n".join([*lines, "SE", ""])
-
-
 def profile_job(tmp_path, step_polygons, layer_polygons):
-    files = {
-        "misc/info": "JOB_NAME=profiles\nODB_VERSION_MAJOR=8\nODB_VERSION_MINOR=1\nUNITS=MM\n",
-        "matrix/matrix": "STEP {\nCOL=1\nNAME=board\n}\n" + "\n".join(
-            f"LAYER {{\nROW={row}\nNAME={name}\nCONTEXT=BOARD\nTYPE={kind}\nPOLARITY={polarity}\nFORM=RIGID\n}}"
-            for row, name, kind, polarity in [(1, "FR", "DIELECTRIC", "POSITIVE"),
-                                             (2, "CU", "SIGNAL", "NEGATIVE")]),
-        "steps/board/stephdr": "UNITS=MM\nX_DATUM=0\nY_DATUM=0\nX_ORIGIN=0\nY_ORIGIN=0\n",
-        "steps/board/profile": profile_text(step_polygons),
-    }
-    for name, thickness in [("FR", ".layer_dielectric=0.1"), ("CU", ".copper_weight=35")]:
-        prefix = f"steps/board/layers/{name}"
-        files[prefix + "/features"] = "UNITS=MM\nF 0\n"
-        files[prefix + "/attrlist"] = f"UNITS=MM\n{thickness}\n"
+    layers = [
+        {"name": "FR", "type": "DIELECTRIC", "attrlist": "UNITS=MM\n.layer_dielectric=0.1\n"},
+        {"name": "CU", "matrix": {"POLARITY": "NEGATIVE"}, "attrlist": "UNITS=MM\n.copper_weight=35\n"},
+    ]
+    for layer in layers:
         if layer_polygons is not None:
-            files[prefix + "/profile"] = profile_text(layer_polygons)
+            layer["profile"] = profile_text(layer_polygons)
+    files = odb_files(layers)
+    files["steps/board/profile"] = profile_text(step_polygons)
     return load_job(str(write_tree(tmp_path / "job", files)))
 
 

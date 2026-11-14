@@ -32,4 +32,3 @@ KiCad 两种单位导出均可能写 `.copper_weight=1.0`；按规范 MM 表示 
 
 本地案例目录中的 README 和脚本维护指定工具链的再导出流程；CLI 使用 `pcb export odb --precision 6 --compression zip`，生成后核对 misc/info 的 v8.1 声明。
 这组 ZIP 用于在 `main` 上核对 KiCad 输入的正常解析和等效路径，当前默认 pytest 不读取这组 ZIP。`reference` 分支的 `tests/integration/test_kicad_positive_cases.py` 使用本地 ZIP 核对 Python 解析器，无需安装 KiCad。
-负极性、递归和无效层轮廓等场景可通过[手写夹具](../../tests/fixtures/README.md)独立复现。`main` 的样本自动测试范围见[参考案例清单](case-inventory.md#手写夹具与自动测试)。
