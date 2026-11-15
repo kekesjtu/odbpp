@@ -22,7 +22,7 @@ step 岛仅在缺省层轮廓时提供替代范围。层岛不要求包含于 st
 ## 叠层与厚度决策
 
 Z 使用毫米，自叠层顶面向下。matrix row 给出层次，钻孔以 `start_layer/end_layer` 直接引用起止 BOARD 铜层。介质只需自身 row，不保存相邻铜层关系。钻孔覆盖与预览扣孔仅比较介质 row 和端点铜层 row，不依赖层厚或绝对 Z。
-板内实体层给出 best-effort 的绝对 Z 起止与来源。数值厚度由 Z 差得到。
+板内实体层给出绝对 Z 起点与本层厚度，任一侧不是实测即写 `null`，不交付估算值。
 
 | 来源 | 解释 |
 | --- | --- |
@@ -30,11 +30,9 @@ Z 使用毫米，自叠层顶面向下。matrix row 给出层次，钻孔以 `st
 | MM `.copper_weight` | µm 铜厚度 |
 | INCH `.copper_weight` | oz/ft² 面密度，按默认铜密度 8.96 g/cm³ 换算厚度 |
 
-原始量使用 `input_value/kind/unit` 追溯；英制铜重记录 `thickness_source=assumed_density` 和所用密度。
-非规范厚度来源通过 `spec_deviation` 标识。
-
-`thickness.known` 表示本层有可靠厚度来源；`z_mm.thickness_known` 同时表示本层厚度与累计位置可信。
-结构层厚度未知时，后续位置携带未知状态；装饰层厚度未知时标记自身未知，铜面位置的累计可信性独立维护。
-MaterialMap 对联合可信状态为 false 的两个 Z 端点使用 null；中间 JSON 与运行诊断保留估算值。
+`start_mm` 是本层顶面位置，`thickness_mm` 是本层自身厚度；`null` 分别表示累计位置不可信与厚度未被格式声明。
+两个值互相独立：本层厚度可以已知而累计位置未知。`0.0` 是合法实测值，与 `null` 不同。
+结构层厚度未知时，后续位置携带未知状态；装饰层厚度未知时只标记自身，铜面位置的累计可信性独立维护。
+MaterialMap 对任一侧为 null 的层使用 null Z 端点；中间 JSON 不保留估算值。
 
 DRILL 作为跨层图案交付投影和起止铜层名称。字段定义见[中间 JSON](../../interfaces/intermediate-json.md)，覆盖规则见[材料采样](../pcbeq/material-sampling.md)。

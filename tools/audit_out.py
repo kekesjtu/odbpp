@@ -108,15 +108,13 @@ def audit_outputs(out_dir: Path = ROOT / 'out'):
         errors = {name: issue for issue in meta['issues']['errors'] for name in issue.get('layers', [])}
         for region in materialmap.regions:
             source = layers[region.layer.name]
-            z = source['z_mm']
-            known = z['thickness_known'] and (source.get('thickness') or {}).get('known', True)
-            expected_z = (z['start_mm'], z['end_mm']) if known else (None, None)
-            assert region.bounds_mm.z == expected_z
-            if not known:
+            z = source['z_mm'] or {}
+            start, thickness = z.get('start_mm'), z.get('thickness_mm')
+            measured = start is not None and thickness is not None
+            assert region.bounds_mm.z == ((start, start + thickness) if measured else (None, None))
+            if not measured:
                 issue = errors[region.layer.name]
-                assert not issue['blocking']
-                estimate = issue['estimated_z_mm']
-                assert (estimate['start_mm'], estimate['end_mm']) == (z['start_mm'], z['end_mm'])
+                assert not issue['blocking'] and issue['code'].startswith('z.')
             assert all(math.isfinite(v) and v > 0 for values in region.values for v in values)
         records.append({'case': directory.relative_to(out_dir).as_posix(),
                         'physical_regions': len(materialmap.regions),

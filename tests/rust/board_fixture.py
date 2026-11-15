@@ -19,7 +19,7 @@ def build_document(*, profile=None, layers=(), profiles=None, z=0.035) -> dict:
     for position, spec in enumerate(layers, start=1):
         extent = spec.get("z_mm")
         if extent is None:
-            extent = {"start_mm": 0.0, "end_mm": z, "thickness_known": True}
+            extent = {"start_mm": 0.0, "thickness_mm": z}
         row = {
             "name": spec["name"],
             "row": spec.get("row", position),
@@ -46,7 +46,7 @@ def drill_document(**kwargs):
             layer.update(start_layer="ENDPOINT_TOP", end_layer="ENDPOINT_BOTTOM")
     endpoints = [
         {"name": name, "type": "SIGNAL", "polygons": [],
-         "z_mm": {"start_mm": 0.0, "end_mm": 0.035, "thickness_known": True}}
+         "z_mm": {"start_mm": 0.0, "thickness_mm": 0.035}}
         for name in ("ENDPOINT_TOP", "ENDPOINT_BOTTOM")]
     layers.insert(0, endpoints[0])
     layers.append(endpoints[1])

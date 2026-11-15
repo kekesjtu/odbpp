@@ -90,12 +90,12 @@ def test_drill_tools_use_size_units_and_tool_declared_plating(tmp_path, units, s
         assert tool.type.is_plated == (number == 1)
 
 
-@pytest.mark.parametrize("units,weight,copper_mm,dielectric,dielectric_mm,kind", [
-    ("MM", 35, .035, .2, .2, "thickness_um"),
-    ("INCH", 1, 28.349523125 / (30.48 ** 2) / 8.96 * 10, .01, .254, "areal_density_oz_ft2"),
+@pytest.mark.parametrize("units,weight,copper_mm,dielectric,dielectric_mm", [
+    ("MM", 35, .035, .2, .2),
+    ("INCH", 1, 28.349523125 / (30.48 ** 2) / 8.96 * 10, .01, .254),
 ])
-def test_attribute_file_units_determine_thickness_and_export_provenance(
-    tmp_path, units, weight, copper_mm, dielectric, dielectric_mm, kind
+def test_attribute_file_units_determine_exported_millimetres(
+    tmp_path, units, weight, copper_mm, dielectric, dielectric_mm
 ):
     files = odb_files([
         {"name": "TOP", "attrlist": f"UNITS={units}\n.copper_weight={weight}\n"},
@@ -105,22 +105,13 @@ def test_attribute_file_units_determine_thickness_and_export_provenance(
     ], units="INCH" if units == "MM" else "MM")
     job = load_job(str(write_tree(tmp_path / "job", files)))
     layers = exported_layers(job)
-    assert layers["TOP"]["z_mm"]["end_mm"] == pytest.approx(copper_mm, abs=1e-7)
-    assert layers["FR"]["z_mm"]["start_mm"] == pytest.approx(copper_mm, abs=1e-7)
-    assert layers["FR"]["z_mm"]["end_mm"] == pytest.approx(copper_mm + dielectric_mm, abs=1e-7)
-    assert layers["BOTTOM"]["z_mm"]["start_mm"] == pytest.approx(copper_mm + dielectric_mm, abs=1e-7)
-    assert layers["BOTTOM"]["z_mm"]["end_mm"] == pytest.approx(copper_mm + dielectric_mm + .018, abs=1e-7)
-    assert all(layers[name]["z_mm"]["thickness_known"] for name in ("TOP", "FR", "BOTTOM"))
-    thickness = layers["TOP"]["thickness"]
-    assert thickness["known"] and thickness["kind"] == kind
-    assert thickness["input_value"] == weight
-    assert layers["FR"]["thickness"]["unit"] == ("mm" if units == "MM" else "inch")
-    if units == "INCH":
-        assert thickness["unit"] == "oz/ft2"
-        assert thickness["thickness_source"] == "assumed_density"
-        assert thickness["assumed_density_g_cm3"] == 8.96
-    else:
-        assert thickness["unit"] == "um" and thickness["thickness_source"] == "attribute"
+    assert layers["TOP"]["z_mm"] == pytest.approx(
+        {"start_mm": 0.0, "thickness_mm": copper_mm}, abs=1e-7)
+    assert layers["FR"]["z_mm"] == pytest.approx(
+        {"start_mm": copper_mm, "thickness_mm": dielectric_mm}, abs=1e-7)
+    assert layers["BOTTOM"]["z_mm"] == pytest.approx(
+        {"start_mm": copper_mm + dielectric_mm, "thickness_mm": .018}, abs=1e-7)
+    assert "thickness" not in layers["TOP"]
     assert "z_mm" not in layers["D"]
     assert (layers["D"]["start_layer"], layers["D"]["end_layer"]) == ("TOP", "BOTTOM")
 
@@ -136,9 +127,9 @@ def test_unknown_structural_thickness_propagates_z_uncertainty_but_decoration_do
     ])
     job = load_job(str(write_tree(tmp_path / "job", files)))
     layers = exported_layers(job)
-    assert not layers["GAP"]["z_mm"]["thickness_known"]
-    bottom = layers["BOTTOM"]
-    assert bottom["thickness"]["known"]
-    assert bottom["z_mm"]["thickness_known"] == position_known
-    assert bottom["z_mm"]["start_mm"] == pytest.approx(.035)
-    assert bottom["z_mm"]["end_mm"] == pytest.approx(.053)
+    assert layers["GAP"]["z_mm"]["thickness_mm"] is None
+    bottom = layers["BOTTOM"]["z_mm"]
+    assert bottom["thickness_mm"] == pytest.approx(.018)
+    assert (bottom["start_mm"] is None) is (not position_known)
+    if position_known:
+        assert bottom["start_mm"] == pytest.approx(.035)

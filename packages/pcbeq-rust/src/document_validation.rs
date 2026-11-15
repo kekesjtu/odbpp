@@ -94,15 +94,12 @@ impl Board {
             if let Some(z) = &l.z_mm {
                 require(l.kind != "DRILL", "DRILL must not carry z_mm")?;
                 require(
-                    z.start_mm >= 0. && z.end_mm >= z.start_mm && !z.source.is_empty(),
-                    "invalid absolute Z interval",
+                    z.start_mm.is_none_or(|v| v >= 0.) && z.thickness_mm.is_none_or(|v| v >= 0.),
+                    "invalid absolute Z extent",
                 )?;
             }
             if l.copper() && l.context == "BOARD" {
                 copper.insert(l.name.as_str(), l.row);
-            }
-            if let Some(t) = &l.thickness {
-                t.validate()?;
             }
         }
         let mut assigned = HashSet::new();
@@ -146,46 +143,5 @@ impl Board {
             }
         }
         Ok(())
-    }
-}
-impl Thickness {
-    fn validate(&self) -> Result<()> {
-        require(!self.source.is_empty(), "empty thickness source")?;
-        let _ = (self.known, self.spec_deviation);
-        require(
-            self.assumed_density_g_cm3.is_none_or(|v| v > 0.),
-            "invalid assumed copper density",
-        )?;
-        if let Some(kind) = self.kind.as_deref() {
-            require(
-                self.input_value.is_some(),
-                "thickness provenance requires input_value",
-            )?;
-            require(
-                match kind {
-                    "areal_density_oz_ft2" => {
-                        self.unit.as_deref() == Some("oz/ft2")
-                            && self.thickness_source.as_deref() == Some("assumed_density")
-                            && self.assumed_density_g_cm3.is_some()
-                    }
-                    "thickness_um" => self.unit.as_deref() == Some("um"),
-                    "thickness" => matches!(self.unit.as_deref(), Some("mm" | "inch")),
-                    _ => false,
-                },
-                "invalid thickness physical provenance",
-            )?;
-        }
-        require(
-            self.unit
-                .as_deref()
-                .is_none_or(|u| matches!(u, "mm" | "inch" | "um" | "oz/ft2")),
-            "invalid thickness unit",
-        )?;
-        require(
-            self.thickness_source
-                .as_deref()
-                .is_none_or(|u| matches!(u, "attribute" | "assumed_density")),
-            "invalid thickness_source",
-        )
     }
 }

@@ -498,41 +498,22 @@ def _preview_digits(preview, round_digits: Optional[int]) -> int:
 
 
 def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> dict:
-    """One authoritative layer record; numerical thickness is derived from Z."""
+    """One authoritative layer record; Z reports each known half by itself."""
     ref = layer.ref
     # DRILL dimensions are derived from its endpoint copper layers.
     # Keep the derived extent inside Stackup for previews, not in the interface.
     extent = None if stackup is None or layer.type is LayerType.DRILL else stackup.z_extent(layer)
     endpoints = stackup.drill_endpoints(layer) if stackup is not None and layer.type is LayerType.DRILL else None
-    thickness = None
-    if stackup is not None and layer.type is not None and (
-            layer.is_copper or layer.type.is_non_copper_material):
-        _value, known, source = stackup._material_thickness(layer)
-        thickness = {"known": known, "source": source}
-        weight = stackup.weight(layer) if layer.is_copper else None
-        stated = stackup.thickness(layer) if weight is None else None
-        if weight is not None:
-            thickness.update(input_value=weight.raw, kind=weight.kind.value,
-                             unit="um" if not weight.is_thickness_derived else "oz/ft2",
-                             thickness_source="assumed_density" if weight.is_thickness_derived else "attribute")
-            if weight.is_thickness_derived:
-                thickness["assumed_density_g_cm3"] = weight.density_g_cm3
-        elif stated is not None:
-            thickness.update(input_value=stated.raw, kind="thickness",
-                             unit="mm" if stated.unit_system == "MM" else "inch",
-                             thickness_source="attribute", spec_deviation=stated.spec_deviation)
     return {
         "name": layer.name,
         "type": layer.type.value if layer.type is not None else "UNKNOWN",
         "context": ref.context.value, "row": ref.row,
         "form": ref.form.value, "form_source": ref.form_source.value,
-        "thickness": thickness,
         "start_layer": None if endpoints is None else endpoints[0].name,
         "end_layer": None if endpoints is None else endpoints[1].name,
         "z_mm": None if extent is None else {
-            "start_mm": _round(extent.start_mm, digits + 3),
-            "end_mm": _round(extent.end_mm, digits + 3),
-            "thickness_known": extent.thickness_known, "source": extent.source,
+            "start_mm": _round(extent.start_mm, digits + 3) if extent.position_known else None,
+            "thickness_mm": _round(extent.thickness_mm, digits + 3) if extent.thickness_stated else None,
         },
     }
 

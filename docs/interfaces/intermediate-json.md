@@ -35,8 +35,7 @@ uv run python tools/sync_contract.py --check
 | layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
 | layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
-| layer `z_mm` | `{start_mm, end_mm, thickness_known, source}`；实体物理层自身的位置；DRILL 不导出 |
-| layer `thickness` | 本层厚度可信状态与原始物理量来源；保留原始量追溯；数值厚度由 Z 差得到 |
+| layer `z_mm` | `{start_mm, thickness_mm}`；实体物理层自身的绝对 Z；值可为 `null`，DRILL 不导出 |
 | layer `start_layer/end_layer` | DRILL 起止铜层名称；引用同一 step 的 BOARD 铜层，按 row 自顶向下排列；其他层不保存端点 |
 | layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
 
@@ -56,22 +55,23 @@ MISC 层不进入此接口，包括层目录、图案、轮廓归属与叠层信
 
 ## 厚度与钻孔
 
-数值建模厚度仅由 `z_mm.end_mm - z_mm.start_mm` 得到。
-`thickness.known` 表示本层是否有有效厚度来源；`z_mm.thickness_known` 沿用绝对叠层的
-联合可信状态，若上方结构层厚度未知，即使本层厚度明确，也可能为 false。
-因此两个布尔值表达不同问题；等效结果继续记录联合状态，避免把估算位置当实测。
+`z_mm` 用两个可为 `null` 的字段表达两个独立事实：`start_mm` 是本层顶面的绝对 Z
+（自叠层顶面向下，mm），`thickness_mm` 是本层自身厚度。任一侧不是实测就写 `null`，
+不写估算值，因此读到的数字一律是测量结果。
 
-`thickness` 中 `input_value/kind/unit` 是原始量追溯，属于统一 mm 几何的显式例外。
-介质输入为 `kind=thickness`，单位 mm/inch；公制铜重为 `kind=thickness_um, unit=um`；
-英制为 `kind=areal_density_oz_ft2, unit=oz/ft2`，必须带
-`thickness_source=assumed_density` 与 `assumed_density_g_cm3=8.96`。
-原始值不会由等效器再次换算，也不会覆盖 Z。
+- `start_mm=null`：上方有结构层未声明厚度，累计位置不可信。
+- `thickness_mm=null`：本层自身厚度未被格式声明。
+- 两者都为 `null`：位置与厚度均不可知。
 
-厚度缺失时允许零厚度 best-effort Z，并明确 false；不以严格正厚度约束拒绝这种合法解析状态。
+`0.0` 是合法实测值（真实零厚度），与 `null` 含义不同。任一侧未知时 MaterialMap
+使用 `[null,null]`，仍交付完整 XY 网格与物性，不据此计算可信体积或质量；
+等效器分别记录 `z.absolute_position_unknown` 与 `z.thickness_unknown` 非阻断错误。
+厚度缺失不阻断等效；需要绝对 Z 时，以起点铜层 `start_mm` 与终点铜层
+`start_mm + thickness_mm` 推导，不能生成独立实体厚度层。
+
 钻孔保存投影多边形和 `start_layer/end_layer` 来描述几何与深度；端点名称来自 matrix 的 START_NAME/END_NAME，引用解析后的实际层名。层身份和解析状态仍保留。
-需要绝对 Z 时，以起点铜层 `z_mm.start_mm` 和终点铜层 `z_mm.end_mm` 推导，不能生成独立实体厚度层。
 端点必须引用两个不同的 BOARD 铜层，且起点 row 小于终点 row。覆盖条件为 `起点铜层.row < 介质层.row < 终点铜层.row`，不依赖层厚或绝对 Z。最外侧铜层之外的介质不被覆盖。
-需要介质采样时，钻孔缺少拓扑跨度或无法定位端点铜层均明确报错。绝对 Z 仅用于三维尺寸；未知厚度或重合的估算 Z 不改变覆盖关系。
+需要介质采样时，钻孔缺少拓扑跨度或无法定位端点铜层均明确报错。绝对 Z 仅用于三维尺寸；未知位置或重合的厚度不改变覆盖关系。
 无有效域、失败/未导出的待等效层、介质采样所需钻孔跨度未知仍阻止生成正式结果。
 铜层忽略 DRILL，仅铜层输入不要求钻孔跨度。
 原始层极性、轮廓基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，

@@ -110,24 +110,22 @@ fn execute(
     })?;
     for layer in step.layers.iter().filter(|l| l.physical()) {
         let z = layer.z_mm.as_ref().unwrap();
-        let thickness_unknown = layer.thickness.as_ref().is_some_and(|t| !t.known);
-        if !z.thickness_known || thickness_unknown {
-            let code = if thickness_unknown {
-                "z.thickness_unknown"
-            } else {
-                "z.absolute_position_unknown"
-            };
-            diagnostics.value["issues"]["errors"]
-                .as_array_mut()
-                .unwrap()
-                .push(json!({
-                    "code":code,"message":if thickness_unknown { "layer thickness is uncertain" }
-                        else { "absolute Z interval is uncertain" },
-                    "layers":[layer.name],"blocking":false,
-                    "estimated_z_mm":{"start_mm":z.start_mm,"end_mm":z.end_mm,"source":z.source},
-                    "thickness_source":layer.thickness.as_ref().map(|t| &t.source)
-                }));
-        }
+        // The layer's own thickness and the cumulative position above it are
+        // separate facts; a null says which one is missing.
+        let (code, message) = if z.thickness_mm.is_none() {
+            ("z.thickness_unknown", "layer thickness is not stated")
+        } else if z.start_mm.is_none() {
+            (
+                "z.absolute_position_unknown",
+                "absolute Z interval is uncertain",
+            )
+        } else {
+            continue;
+        };
+        diagnostics.value["issues"]["errors"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"code":code,"message":message,"layers":[layer.name],"blocking":false}));
     }
     let geometry = planning::plan(step, &options, diagnostics)?;
     diagnostics.geometry(step, &geometry);

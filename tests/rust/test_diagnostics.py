@@ -67,19 +67,14 @@ def test_explicit_values_equal_to_builtins_do_not_warn_and_partial_defaults_are_
 def test_unknown_thickness_and_propagated_z_are_nonblocking_errors(tmp_path):
     document = build_document(layers=[{"name": "A"}, {"name": "B"}])
     a, b = document["steps"][0]["layers"]
-    a["thickness"] = {"known": False, "source": "unknown"}
-    b["thickness"] = {"known": True, "source": "attr.thickness", "input_value": .035,
-                      "kind": "thickness", "unit": "mm"}
-    for layer in (a, b):
-        layer["z_mm"].update(start_mm=1, end_mm=1.035, thickness_known=False, source="estimated")
+    a["z_mm"] = {"start_mm": 1.0, "thickness_mm": None}
+    b["z_mm"] = {"start_mm": None, "thickness_mm": 0.035}
     summary, report, output = execute(tmp_path, document)
     errors = {e["code"]: e for e in report["issues"]["errors"]}
     assert report["issues"]["status"] == "completed_with_errors"
     assert errors["z.thickness_unknown"]["layers"] == ["A"]
     assert errors["z.absolute_position_unknown"]["layers"] == ["B"]
     assert all(not error["blocking"] for error in errors.values())
-    assert errors["z.thickness_unknown"]["estimated_z_mm"] == {
-        "start_mm": 1, "end_mm": 1.035, "source": "estimated"}
     delivered = read_document(output / "materialmap.json")
     assert all(r.bounds_mm.z == (None, None) and r.values for r in delivered.regions)
     assert summary["cells"] == 24

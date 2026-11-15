@@ -30,62 +30,36 @@ class ZExtent:
     opposite of the model's Y axis.  The origin is the top surface, so a copper
     layer's ``start_mm`` is where its copper begins, not where its centre is.
 
-    ``thickness_known`` is false when the layer's own thickness is not stated by
-    the format or when it rests on a structural layer above whose thickness is
-    not stated; the position is then a best estimate rather than a measurement,
-    and saying so is the point.  A decorative layer with an assumed zero
-    thickness is therefore unknown itself without making the copper planes below
-    it unknown.
+    The walk needs a number for every layer to place the layers below it, so
+    both values are best-effort.  Two flags say which half is a measurement:
+    ``thickness_stated`` (this layer's own thickness came from the format) and
+    ``position_known`` (every structural layer above states its thickness).
+    The interface publishes exactly those two facts, as nulls.  A decorative
+    layer with an assumed zero thickness therefore reports an unknown thickness
+    without making the copper planes below it unknown.
     """
 
     start_mm: float
-    end_mm: float
-    thickness_known: bool
+    thickness_mm: float
+    thickness_stated: bool
+    position_known: bool
     source: str
 
     @property
-    def thickness_mm(self) -> float:
-        return self.end_mm - self.start_mm
+    def end_mm(self) -> float:
+        return self.start_mm + self.thickness_mm
 
-    def as_dict(self) -> dict:
-        return {
-            "start_mm": self.start_mm,
-            "end_mm": self.end_mm,
-            "thickness_mm": self.thickness_mm,
-            "thickness_known": self.thickness_known,
-            "source": self.source,
-        }
+    @property
+    def thickness_known(self) -> bool:
+        return self.thickness_stated and self.position_known
 
 
 @dataclass(frozen=True)
 class Thickness:
-    """A normalised layer thickness: millimetres plus where the number came from.
-
-    ``source`` is the attribute name, ``scope`` the unit scope that was applied,
-    and ``raw`` the authored string.  Keeping all four is what lets a consumer
-    audit the conversion instead of trusting it -- the failure this exists to
-    prevent is a millimetre label on an inch-derived number.
-    """
+    """A normalised ``.layer_dielectric`` thickness in millimetres and its source."""
 
     thickness_mm: float
-    raw: float
     source: str
-    scope: str
-    unit_system: str
-    #: True when the field is being read on a layer class the spec does not
-    #: define it for (requirements.md non-copper thickness rule: ``.layer_dielectric`` is a non-copper field).
-    spec_deviation: bool = False
-
-    def as_dict(self) -> dict:
-        out = {
-            "value_mm": self.thickness_mm,
-            "raw": self.raw,
-            "source": self.source,
-            "attribute_units": self.unit_system,
-        }
-        if self.spec_deviation:
-            out["spec_deviation"] = True
-        return out
 
 
 class Stackup:
@@ -188,18 +162,10 @@ class Stackup:
                 ATTR_LAYER_DIELECTRIC_ON_COPPER,
                 f"copper layer {layer.name!r} declares .layer_dielectric="
                 f"{raw!r}; spec p.231 / requirements.md non-copper thickness rule define that field for "
-                f"non-copper layers, so the value is emitted but flagged "
-                f"spec_deviation=true",
+                f"non-copper layers",
                 layer.dir_name or None,
             )
-        return Thickness(
-            thickness_mm=scope.coord_mm(value),
-            raw=value,
-            source=".layer_dielectric",
-            scope=scope.origin or "<job default>",
-            unit_system=scope.system.value,
-            spec_deviation=deviation,
-        )
+        return Thickness(thickness_mm=scope.coord_mm(value), source=".layer_dielectric")
 
     def weight(self, layer: Layer) -> Optional[CopperWeight]:
         """Interpreted ``.copper_weight``; ``None`` when absent or unusable.
@@ -284,22 +250,21 @@ class Stackup:
                 continue
             value, stated, source = self._material_thickness(layer)
             start = z
-            end = z + value
-            z = end
-            known = stated and position_known
+            z += value
+            out[layer.name] = ZExtent(start, value, stated, position_known, source)
             # Only a structural gap makes the plane positions below it uncertain.
             if not stated and self._is_structural(layer):
                 position_known = False
-            out[layer.name] = ZExtent(start, end, known, source)
 
         for layer in self.drill_layers():
             endpoints = self.drill_endpoints(layer)
             if endpoints is None:
                 continue
             top, bottom = endpoints
+            span_known = out[bottom.name].thickness_known
             out[layer.name] = ZExtent(
-                out[top.name].start_mm, out[bottom.name].end_mm,
-                out[bottom.name].thickness_known,
+                out[top.name].start_mm, out[bottom.name].end_mm - out[top.name].start_mm,
+                span_known, span_known,
                 f"drill endpoints {top.name}..{bottom.name}",
             )
         return out

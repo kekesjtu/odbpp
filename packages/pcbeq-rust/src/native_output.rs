@@ -60,10 +60,10 @@ impl Writer {
         values: &[Vec<[f64; 5]>],
     ) -> Result<()> {
         let z = layer.z_mm.as_ref().ok_or("missing absolute Z")?;
-        let extent = if z.thickness_known && layer.thickness.as_ref().is_none_or(|t| t.known) {
-            [Some(z.start_mm), Some(z.end_mm)]
-        } else {
-            [None, None]
+        // A region only carries a Z interval when both halves are measurements.
+        let extent = match (z.start_mm, z.thickness_mm) {
+            (Some(start), Some(thickness)) => [Some(start), Some(start + thickness)],
+            _ => [None, None],
         };
         for &rid in &geometry.members[profile] {
             let r = geometry.rectangles[rid];

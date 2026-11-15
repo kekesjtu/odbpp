@@ -87,17 +87,6 @@
           "default": null,
           "description": "实体物理层自身的绝对 Z；DRILL 不保存此字段，由起止铜层推导。"
         },
-        "thickness": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ThicknessModel"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "start_layer": {
           "anyOf": [
             {
@@ -306,139 +295,39 @@
       "title": "StepModel",
       "type": "object"
     },
-    "ThicknessModel": {
-      "additionalProperties": false,
-      "properties": {
-        "known": {
-          "description": "仅本层厚度是否有有效来源，不受上方未知厚度影响。",
-          "title": "Known",
-          "type": "boolean"
-        },
-        "source": {
-          "minLength": 1,
-          "title": "Source",
-          "type": "string"
-        },
-        "input_value": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Input Value"
-        },
-        "kind": {
-          "anyOf": [
-            {
-              "enum": [
-                "thickness",
-                "thickness_um",
-                "areal_density_oz_ft2"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Kind"
-        },
-        "unit": {
-          "anyOf": [
-            {
-              "enum": [
-                "mm",
-                "inch",
-                "um",
-                "oz/ft2"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Unit"
-        },
-        "thickness_source": {
-          "anyOf": [
-            {
-              "enum": [
-                "attribute",
-                "assumed_density"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Thickness Source"
-        },
-        "assumed_density_g_cm3": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Assumed Density G Cm3"
-        },
-        "spec_deviation": {
-          "default": false,
-          "title": "Spec Deviation",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "known",
-        "source"
-      ],
-      "title": "ThicknessModel",
-      "type": "object"
-    },
     "ZExtentModel": {
       "additionalProperties": false,
+      "description": "A physical layer's own position on the absolute Z axis.\n\n``null`` expresses \"not measured\" instead of a boolean flag, so no estimate\ncan be read as a measurement: a null ``start_mm`` says the layers above do\nnot all state their thickness, a null ``thickness_mm`` says this layer's\nown thickness was never stated. ``0.0`` stays a real measurement, and the\ntwo sides are independent -- a known thickness does not imply a known\nposition.",
       "properties": {
         "start_mm": {
-          "minimum": 0,
-          "title": "Start Mm",
-          "type": "number"
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "本层顶面绝对 Z，自叠层顶面向下；null 表示累计位置不可信。",
+          "title": "Start Mm"
         },
-        "end_mm": {
-          "minimum": 0,
-          "title": "End Mm",
-          "type": "number"
-        },
-        "thickness_known": {
-          "description": "本层厚度与累计绝对 Z 联合可信；未知时仍输出 best-effort Z。",
-          "title": "Thickness Known",
-          "type": "boolean"
-        },
-        "source": {
-          "default": "unknown",
-          "description": "实体物理层绝对 Z 的来源。",
-          "minLength": 1,
-          "title": "Source",
-          "type": "string"
+        "thickness_mm": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "本层自身厚度；null 表示格式未声明。",
+          "title": "Thickness Mm"
         }
       },
-      "required": [
-        "start_mm",
-        "end_mm",
-        "thickness_known"
-      ],
       "title": "ZExtentModel",
       "type": "object"
     }

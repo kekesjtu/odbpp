@@ -118,7 +118,7 @@ def test_invalid_input_is_rejected_before_publishing(tmp_path, change):
     elif change == "profile":
         document["steps"][0]["profiles"][0]["layers"] = ["missing"]
     elif change == "z":
-        layer["z_mm"]["end_mm"] = -1
+        layer["z_mm"]["thickness_mm"] = -1
     else:
         layer["start_layer"] = "missing"
     with pytest.raises(ValueError):

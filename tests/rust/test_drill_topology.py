@@ -36,8 +36,8 @@ def test_native_drill_coverage_uses_rows_and_endpoint_names(tmp_path, z_mode):
             continue
         low = layer["row"] if z_mode == "disjoint" else 0
         high = low + 1 if z_mode in ("disjoint", "overlapping") else low
-        layer["z_mm"] = {"start_mm": low, "end_mm": high,
-                         "thickness_known": z_mode != "unknown_zero"}
+        layer["z_mm"] = {"start_mm": low,
+                         "thickness_mm": None if z_mode == "unknown_zero" else high - low}
     # Array order is not physical order; row is authoritative.
     layers.reverse()
     source = tmp_path / "input.json"
@@ -135,7 +135,7 @@ def test_diagnostics_group_layers_and_support_independent_audit(tmp_path):
         {"id": "duplicate", "polygons": [rect(0, 0, 10, 10)]},
     ], layers=[{"name": "ALL"}, {"name": "LEFT", "profile_id": "left"},
                {"name": "COPY", "profile_id": "duplicate",
-                "z_mm": {"start_mm": 1, "end_mm": 2, "thickness_known": False}}])
+                "z_mm": {"start_mm": 1, "thickness_mm": None}}])
     source = tmp_path / "case/rust/pcbkit/intermediate.json"
     source.parent.mkdir(parents=True)
     source.write_text(json.dumps(document), encoding="utf-8")
@@ -151,5 +151,5 @@ def test_diagnostics_group_layers_and_support_independent_audit(tmp_path):
         region = next(r for r in delivered.regions if r.layer.name == name)
         assert region.bounds_mm.x == (0, expected_width)
     issue = next(e for e in report["issues"]["errors"] if e["layers"] == ["COPY"])
-    assert issue["estimated_z_mm"]["start_mm"] == 1
+    assert issue["code"] == "z.thickness_unknown"
     assert audit_outputs(tmp_path)[0]["material_rows"] == 3

@@ -36,10 +36,11 @@
 `status` 为 `completed`、`completed_with_warnings`、`completed_with_errors` 或 `failed`。`warnings`、`errors` 均为数组，无问题时为空。非阻断错误优先于告警决定状态。
 
 - `materials.default_used`：任一材料字段采用内置项目默认值时告警。条目记录 `code`、`message`、`layers`、`phase` 和 `default_values`。`phase` 为 `copper` 或 `base`，`default_values` 给出实际采用内置值的字段与数值；同相且默认字段和值相同的条目跨层合并。用户显式提供与内置值相同的数值不触发告警。
-- `z.thickness_unknown`：本层 `thickness.known=false`，记录非阻断错误。
-- `z.absolute_position_unknown`：Z 区间不可信、本层没有明确的厚度未知标记时，记录非阻断错误；本层厚度可以已知而累计位置未知。
+- `z.thickness_unknown`：本层 `z_mm.thickness_mm=null`，记录非阻断错误。
+- `z.absolute_position_unknown`：`z_mm.start_mm=null` 且本层厚度已知，记录非阻断错误。
 
-Z 错误记录 `code`、`message`、`layers`、`blocking=false`、`estimated_z_mm` 与 `thickness_source`。估算 Z 包含 `start_mm`、`end_mm`、`source`，不可当作可靠三维尺寸。MaterialMap 对不可信 Z 使用 `[null,null]`，仍交付完整 XY 网格与物性，不据此计算可信体积或质量。
+Z 错误记录 `code`、`message`、`layers`、`blocking=false`。同一层两者均为 `null` 时记 `z.thickness_unknown`。
+MaterialMap 对任一未知侧使用 `[null,null]`，仍交付完整 XY 网格与物性，不据此计算可信体积或质量。
 
 输入无效、缺少必要几何、无法满足近似约束、采样不足或发布失败属于阻断错误。条目记录阶段对应的稳定代码 `<stage>.failed`、`stage`、`message` 和 `blocking=true`；消息保留可用的层、profile、region 或单元位置。
 

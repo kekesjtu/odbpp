@@ -11,13 +11,11 @@ def _format(value: float) -> str:
     return f"{value:.4g}"
 
 
-def format_z(z_start_mm: Optional[float], z_end_mm: Optional[float],
-             thickness_known: bool) -> str:
-    """Absolute Z with an explicit indication of unknown thickness."""
+def format_z(z_start_mm: Optional[float], z_end_mm: Optional[float]) -> str:
+    """Absolute Z, or an explicit marker when the layer reports no measurement."""
     if z_start_mm is None or z_end_mm is None:
         return "z ?"
-    text = f"z {_format(z_start_mm)}..{_format(z_end_mm)} mm"
-    return text if thickness_known else text + " ?"
+    return f"z {_format(z_start_mm)}..{_format(z_end_mm)} mm"
 
 
 def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
@@ -63,10 +61,10 @@ def render_layer_heatmap(series: LayerSeries, data: MaterialMapData,
     text_style = dict(fontfamily=family, color="#263445")
     figure.text(left / width, 1 - 0.14 / height, "\n".join(title_lines),
                 va="top", fontsize=font + 4, weight="bold", **text_style)
-    z = format_z(series.z_start_mm, series.z_end_mm, series.thickness_known)
+    z = format_z(series.z_start_mm, series.z_end_mm)
     z += f"   |   {series.layer_type}   |   {len(series):,} cells"
-    if not series.thickness_known:
-        z += "   |   thickness unknown"
+    if series.z_start_mm is None:
+        z += "   |   Z not measured"
     figure.text(left / width, 1 - (0.6 + 0.3 * (len(title_lines) - 1)) / height, z,
                 va="top", fontsize=font - 1, **text_style)
 

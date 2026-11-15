@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Annotated, Literal, Mapping, Any
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, StrictInt, model_serializer, model_validator
 
 Number = FiniteFloat
 # A compact coordinate pair, not a separate Pydantic object per vertex. Both
@@ -34,41 +34,22 @@ class ProfileModel(ContractModel):
 
 
 class ZExtentModel(ContractModel):
-    start_mm: Number = Field(ge=0)
-    end_mm: Number = Field(ge=0)
-    thickness_known: bool = Field(description="本层厚度与累计绝对 Z 联合可信；未知时仍输出 best-effort Z。")
-    source: str = Field(default="unknown", min_length=1, description="实体物理层绝对 Z 的来源。")
+    """A physical layer's own position on the absolute Z axis.
 
-    @model_validator(mode="after")
-    def ordered(self):
-        if self.end_mm < self.start_mm:
-            raise ValueError("end_mm must be >= start_mm")
-        return self
+    ``null`` expresses "not measured" instead of a boolean flag, so no estimate
+    can be read as a measurement: a null ``start_mm`` says the layers above do
+    not all state their thickness, a null ``thickness_mm`` says this layer's
+    own thickness was never stated. ``0.0`` stays a real measurement, and the
+    two sides are independent -- a known thickness does not imply a known
+    position.
+    """
+    start_mm: Number | None = Field(default=None, ge=0, description="本层顶面绝对 Z，自叠层顶面向下；null 表示累计位置不可信。")
+    thickness_mm: Number | None = Field(default=None, ge=0, description="本层自身厚度；null 表示格式未声明。")
 
-
-class ThicknessModel(ContractModel):
-    known: bool = Field(description="仅本层厚度是否有有效来源，不受上方未知厚度影响。")
-    source: str = Field(min_length=1)
-    # Raw provenance is deliberately NOT a second normalised thickness value.
-    input_value: Number | None = None
-    kind: Literal["thickness", "thickness_um", "areal_density_oz_ft2"] | None = None
-    unit: Literal["mm", "inch", "um", "oz/ft2"] | None = None
-    thickness_source: Literal["attribute", "assumed_density"] | None = None
-    assumed_density_g_cm3: Number | None = Field(default=None, gt=0)
-    spec_deviation: bool = False
-
-    @model_validator(mode="after")
-    def provenance(self):
-        if self.kind == "areal_density_oz_ft2":
-            if self.unit != "oz/ft2" or self.thickness_source != "assumed_density" or self.assumed_density_g_cm3 is None:
-                raise ValueError("imperial copper weight requires oz/ft2, assumed_density and assumed_density_g_cm3")
-        if self.kind == "thickness_um" and self.unit != "um":
-            raise ValueError("metric copper weight requires unit um")
-        if self.kind == "thickness" and self.unit not in ("mm", "inch"):
-            raise ValueError("dielectric thickness requires unit mm or inch")
-        if self.kind is not None and self.input_value is None:
-            raise ValueError("thickness provenance requires input_value")
-        return self
+    @model_serializer(mode="plain")
+    def explicit_unknown(self):
+        """Always emit both keys: an absent key cannot be told from a null one."""
+        return {"start_mm": self.start_mm, "thickness_mm": self.thickness_mm}
 
 
 class LayerModel(ContractModel):
@@ -82,7 +63,6 @@ class LayerModel(ContractModel):
     geometry_error: str | None = None
     polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")
     z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由起止铜层推导。")
-    thickness: ThicknessModel | None = None
     start_layer: str | None = Field(default=None, min_length=1, description="DRILL 起始铜层名称。")
     end_layer: str | None = Field(default=None, min_length=1, description="DRILL 终止铜层名称。")
 

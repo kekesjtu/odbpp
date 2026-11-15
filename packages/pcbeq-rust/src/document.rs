@@ -17,9 +17,6 @@ fn default_form() -> String {
 fn ready() -> String {
     "ready".into()
 }
-fn unknown() -> String {
-    "unknown".into()
-}
 fn resolution() -> f64 {
     0.0001
 }
@@ -40,24 +37,10 @@ pub struct Profile {
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct Extent {
-    pub start_mm: f64,
-    pub end_mm: f64,
-    pub thickness_known: bool,
-    #[serde(default = "unknown")]
-    pub source: String,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Thickness {
-    pub known: bool,
-    pub source: String,
-    input_value: Option<f64>,
-    kind: Option<String>,
-    unit: Option<String>,
-    thickness_source: Option<String>,
-    assumed_density_g_cm3: Option<f64>,
     #[serde(default)]
-    spec_deviation: bool,
+    pub start_mm: Option<f64>,
+    #[serde(default)]
+    pub thickness_mm: Option<f64>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -77,7 +60,6 @@ pub struct Layer {
     pub geometry_error: Option<String>,
     pub polygons: Vec<Polygon>,
     pub z_mm: Option<Extent>,
-    pub thickness: Option<Thickness>,
     pub start_layer: Option<String>,
     pub end_layer: Option<String>,
 }

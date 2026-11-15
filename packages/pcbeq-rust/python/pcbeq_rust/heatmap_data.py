@@ -71,7 +71,6 @@ class LayerSeries:
     layer_type: str = ""
     z_start_mm: Optional[float] = None
     z_end_mm: Optional[float] = None
-    thickness_known: bool = False
     kx: array = field(default_factory=lambda: array("d"))
     ky: array = field(default_factory=lambda: array("d"))
     kz: array = field(default_factory=lambda: array("d"))
@@ -132,7 +131,7 @@ def read_materialmap(path: str) -> MaterialMapData:
         if name not in layers:
             a,b = region.bounds_mm.z
             layers[name] = LayerSeries(name=name, layer_type=region.layer.type,
-                z_start_mm=a, z_end_mm=b, thickness_known=a is not None and b is not None)
+                z_start_mm=a, z_end_mm=b)
         series = layers[name]
         series.rectangles.append(bounds)
         series.kx.append(values[0]); series.ky.append(values[1]); series.kz.append(values[2])
