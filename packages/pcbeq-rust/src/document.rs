@@ -72,23 +72,10 @@ impl Step {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Product {
-    name: Option<String>,
-    odb_version: String,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Source {
-    path: String,
-    job_root: String,
-    input_units: String,
-    product: Product,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Board {
     units: String,
-    source: Option<Source>,
+    #[serde(default)]
+    path: Option<String>,
     #[serde(default = "resolution")]
     resolution_mm: f64,
     pub steps: Vec<Step>,

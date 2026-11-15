@@ -110,22 +110,10 @@ class StepModel(ContractModel):
         return self
 
 
-class ProductModel(ContractModel):
-    name: str | None = None
-    odb_version: str
-
-
-class SourceModel(ContractModel):
-    path: str
-    job_root: str
-    input_units: Literal["MM", "INCH"]
-    product: ProductModel
-
-
 class BoardDocument(ContractModel):
     """One physical step, positive polygons, mm XY and absolute downward Z."""
     units: Literal["mm"]
-    source: SourceModel | None = None
+    path: str | None = Field(default=None, description="输入源路径，用于核对文档来自哪一份输入；手工合成数据可省略。")
     resolution_mm: Number = Field(default=0.0001, gt=0,
                                   description="规整后坐标网格间距，单位 mm；非材料采样光栅。")
     steps: list[StepModel] = Field(min_length=1, max_length=1)

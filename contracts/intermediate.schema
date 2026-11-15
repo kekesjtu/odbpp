@@ -119,32 +119,6 @@
       "title": "PolygonModel",
       "type": "object"
     },
-    "ProductModel": {
-      "additionalProperties": false,
-      "properties": {
-        "name": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Name"
-        },
-        "odb_version": {
-          "title": "Odb Version",
-          "type": "string"
-        }
-      },
-      "required": [
-        "odb_version"
-      ],
-      "title": "ProductModel",
-      "type": "object"
-    },
     "ProfileModel": {
       "additionalProperties": false,
       "properties": {
@@ -175,38 +149,6 @@
         "polygons"
       ],
       "title": "ProfileModel",
-      "type": "object"
-    },
-    "SourceModel": {
-      "additionalProperties": false,
-      "properties": {
-        "path": {
-          "title": "Path",
-          "type": "string"
-        },
-        "job_root": {
-          "title": "Job Root",
-          "type": "string"
-        },
-        "input_units": {
-          "enum": [
-            "MM",
-            "INCH"
-          ],
-          "title": "Input Units",
-          "type": "string"
-        },
-        "product": {
-          "$ref": "#/$defs/ProductModel"
-        }
-      },
-      "required": [
-        "path",
-        "job_root",
-        "input_units",
-        "product"
-      ],
-      "title": "SourceModel",
       "type": "object"
     },
     "StepModel": {
@@ -299,16 +241,18 @@
       "title": "Units",
       "type": "string"
     },
-    "source": {
+    "path": {
       "anyOf": [
         {
-          "$ref": "#/$defs/SourceModel"
+          "type": "string"
         },
         {
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "description": "输入源路径，用于核对文档来自哪一份输入；手工合成数据可省略。",
+      "title": "Path"
     },
     "resolution_mm": {
       "default": 0.0001,

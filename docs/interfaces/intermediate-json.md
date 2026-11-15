@@ -26,7 +26,7 @@ uv run python tools/sync_contract.py --check
 |---|---|
 | 根 `units` | 固定 `mm`；不允许把 inch 几何交给等效器 |
 | 根 `resolution_mm` | 输出坐标规整网格，默认 0.0001 mm；与材料光栅无关 |
-| 根 `source` | 输入路径、job root、输入单位、产品名称及 ODB++ 版本；手工合成数据可省略 |
+| 根 `path` | 输入源路径，用于核对文档来自哪一份输入；手工合成数据可省略 |
 | 根 `steps` | 恰好一个单板 step，不支持矩阵拼板和嵌套引用 |
 | step `profile_id` | `profiles` 中整板实体范围的引用 |
 | step `profiles` | `{id, layers, polygons}`。按规整后几何去重的轮廓集合，包含继承的 step 孔；`layers` 列出所属 BOARD 层名称 |

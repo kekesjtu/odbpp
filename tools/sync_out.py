@@ -58,7 +58,7 @@ def existing_preview(directory, source, *, backend='rust', per_layer_png=False):
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
         cache = json.loads((directory / 'pipeline/cache.json').read_text(encoding='utf-8'))
-        if Path(data['source']['path']).resolve() != source.resolve() or len(data['steps']) != 1:
+        if Path(data['path']).resolve() != source.resolve() or len(data['steps']) != 1:
             return None
         if cache['parser'] != fingerprint('pcbkit-rust') or cache['source_mtime_ns'] != source_mtime(source):
             return None

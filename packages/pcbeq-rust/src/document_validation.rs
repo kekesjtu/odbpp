@@ -25,18 +25,10 @@ impl Board {
             self.steps.len() == 1,
             "exactly one physical step is required",
         )?;
-        if let Some(s) = &self.source {
-            require(
-                matches!(s.input_units.as_str(), "MM" | "INCH"),
-                "invalid source input_units",
-            )?;
-            let _ = (
-                &s.path,
-                &s.job_root,
-                &s.product.name,
-                &s.product.odb_version,
-            );
-        }
+        require(
+            self.path.as_deref().is_none_or(|path| !path.is_empty()),
+            "empty source path",
+        )?;
         let step = &self.steps[0];
         require(!step.name.is_empty(), "step name is empty")?;
         let mut profiles = HashSet::new();

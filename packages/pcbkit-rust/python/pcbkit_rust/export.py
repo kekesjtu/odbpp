@@ -512,9 +512,7 @@ def step_to_document(job: Job, preview: StepPreview, *,
               if layer.layer.ref.context.value == "BOARD"]
     return BoardDocument.model_validate({
         "units": "mm", "resolution_mm": 10 ** -digits,
-        "source": {"path": job.source_path, "job_root": job.root,
-                   "input_units": preview.units_in,
-                   "product": {"name": job.info.job_name or None, "odb_version": job.info.version}},
+        "path": job.source_path,
         "steps": [{"name": preview.step.name,
                    "profile_id": profile_id,
                    "profiles": profiles, "layers": layers}],
