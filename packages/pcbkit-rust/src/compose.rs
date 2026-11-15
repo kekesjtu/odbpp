@@ -133,7 +133,10 @@ impl Engine {
             }
             if let Some(file) = self.definitions.get(&name).cloned() {
                 self.stack.push(name);
-                let composed = self.compose(&file, vec![], false);
+                let composed = self.compose(&file, vec![], false).and_then(|rings| {
+                    // Cached footprints must be resolved before resize or sweep.
+                    boolean::operate("union", &rings, &[], boolean::SCALE)
+                });
                 self.stack.pop();
                 Some(Symbol {
                     rings: Arc::new(composed?),
@@ -188,6 +191,11 @@ impl Engine {
             _ => Ok(vec![]),
         }
     }
+    /// Expand one polarity run into raw rings.
+    ///
+    /// Positive artwork may remain overlapping until a boolean consumer needs
+    /// a resolved region. Layer output is normalised by `boolean::snap`; cached
+    /// symbol footprints and drawing operations are normalised separately.
     fn run(&mut self, records: &[Record], file: &Features) -> Result<Vec<Ring>> {
         let mut rings = vec![];
         // Ordered groups keep both execution and floating-point output deterministic.
@@ -311,11 +319,7 @@ impl Engine {
                 }
             }
         }
-        if rings.len() <= 1 {
-            Ok(rings)
-        } else {
-            boolean::operate("union", &rings, &[], boolean::SCALE)
-        }
+        Ok(rings)
     }
     pub fn drawing(
         &mut self,
@@ -363,7 +367,10 @@ impl Engine {
                         }
                     }
                 }
-                let rings = self.run(std::slice::from_ref(record), file)?;
+                let mut rings = self.run(std::slice::from_ref(record), file)?;
+                if rings.len() > 1 {
+                    rings = boolean::operate("union", &rings, &[], boolean::SCALE)?;
+                }
                 if !rings.is_empty() {
                     operations.push(Paint {
                         positive,
@@ -376,6 +383,8 @@ impl Engine {
         }
         Ok(Drawing::new(operations))
     }
+    /// Concatenate the polarity runs of one layer onto *base*; see [`Self::run`]
+    /// for why positive runs are not unioned here.
     pub fn compose(
         &mut self,
         file: &Features,
@@ -392,13 +401,10 @@ impl Engine {
             let run = self.run(&file.records[start..end], file)?;
             if !run.is_empty() {
                 if positive != invert {
-                    if base.is_empty() {
-                        base = run;
-                    } else {
-                        base.extend(run);
-                        base = boolean::operate("union", &base, &[], boolean::SCALE)?;
-                    }
+                    base.extend(run);
                 } else if !base.is_empty() {
+                    // A difference resolves both sides through the fill rule,
+                    // so the accumulated positive runs need no union first.
                     base = boolean::operate("difference", &base, &run, boolean::SCALE)?;
                 }
             }

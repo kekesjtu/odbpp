@@ -96,10 +96,21 @@ def test_cycles_and_depth_fail_with_symbol_names():
 
 
 @pytest.mark.parametrize("clockwise", ["Y", "N"])
-def test_closed_arc_sweep_preserves_annular_hole(clockwise):
-    region = compose(f"UNITS=MM\n$0 r1000\nA 5 0 5 0 0 0 0 P 0 {clockwise}\n")
-    assert region.area == pytest.approx(10 * 3.141592653589793, rel=.005)
-    assert len(region) == 2 and sum(r.is_hole for r in region.rings) == 1
+@pytest.mark.parametrize("count", [1, 256])
+def test_closed_arc_sweep_preserves_annular_hole(clockwise, count):
+    arcs = "".join(f"A {12*i+5} 0 {12*i+5} 0 {12*i} 0 0 P 0 {clockwise}\n"
+                   for i in range(count))
+    region = compose("UNITS=MM\n$0 r1000\n" + arcs)
+    assert region.area == pytest.approx(count * 10 * 3.141592653589793, rel=.005)
+    assert len(region) == 2 * count and sum(r.is_hole for r in region.rings) == count
+
+
+def test_bucketed_round_strokes_merge_overlapping_paths():
+    lines = "".join(f"L {i/2} 0 {i/2+1} 0 0 P 0\n" for i in range(256))
+    region = compose("UNITS=MM\n$0 r1000\n" + lines)
+    assert len(region) == 1 and not region.rings[0].is_hole
+    assert region.area == pytest.approx(128.5 + 3.141592653589793 / 4, rel=.001)
+    assert region.bounds == pytest.approx((-.5, -.5, 129, .5), abs=.001)
 
 
 def test_square_sweep_keeps_aperture_axis_aligned():
@@ -114,6 +125,22 @@ def test_resize_uses_size_units_and_emits_diagnostic():
     region, _, _ = composer.layer(f, None, False, False, 4)
     assert region.bounds == pytest.approx((-.55, -.55, .55, .55))
     assert "geometry.resize_unverified" in composer.diagnostics_json()
+
+
+def test_custom_symbol_negative_resize_preserves_union_and_cached_footprint():
+    definition = features(surface(0, 0, 1, 1) + surface(.9, 0, 1.9, 1))
+    composer = native.Composer({"overlapping": definition}, sagitta=.001)
+    pads = features("UNITS=MM\n$0 overlapping\nP 0 0 -1 0 -200 P 0 0\n")
+    region, _, _ = composer.layer(pads, None, False, False, 4)
+    assert len(region) == 1 and not region.rings[0].is_hole
+    assert region.area == pytest.approx(1.36)
+    assert region.bounds == pytest.approx((.1, .1, 1.8, .9))
+
+    # A second placement reuses the original union, without the previous resize.
+    pads = features("UNITS=MM\n$0 overlapping\nP 0 0 0 P 0 0\n")
+    region, _, _ = composer.layer(pads, None, False, False, 4)
+    assert len(region) == 1 and region.area == pytest.approx(1.9)
+    assert region.bounds == pytest.approx((0, 0, 1.9, 1))
 
 
 @pytest.mark.parametrize("body,message", [

@@ -114,6 +114,56 @@ pub fn snap(rings: &[Ring], scale: f64) -> Result<(Vec<Ring>, usize), String> {
     Ok((resolve(&kept, &vec![], ClipType::Union, scale)?, collapsed))
 }
 
+/// Stroked paths per spatial bucket. Clipper's offset plus union grows faster
+/// than linearly in the number of paths, so a large group is offset in buckets
+/// and merged once; the region is the same, only the merge order changes.
+const STROKE_BUCKET_TARGET: usize = 4;
+/// Below this size bucketing cannot pay for the extra merge.
+const STROKE_BUCKET_MIN_PATHS: usize = 256;
+const STROKE_BUCKET_MAX_SIDE: usize = 64;
+
+/// Split paths into a uniform grid of buckets, keyed by path bounding-box centre.
+/// A path belongs to exactly one bucket, so the union over buckets is unchanged.
+fn bucket<'a>(lines: &'a [Vec<Point>]) -> Vec<Vec<&'a [Point]>> {
+    let count = lines.len();
+    let side = if count < STROKE_BUCKET_MIN_PATHS {
+        1
+    } else {
+        ((count as f64 / STROKE_BUCKET_TARGET as f64).sqrt().ceil() as usize)
+            .clamp(2, STROKE_BUCKET_MAX_SIDE)
+    };
+    if side < 2 {
+        return vec![lines.iter().map(Vec::as_slice).collect()];
+    }
+    let centre = |points: &Vec<Point>| -> Point {
+        let (mut min_x, mut min_y) = (f64::MAX, f64::MAX);
+        let (mut max_x, mut max_y) = (f64::MIN, f64::MIN);
+        for &(x, y) in points {
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+        }
+        ((min_x + max_x) / 2., (min_y + max_y) / 2.)
+    };
+    let centres: Vec<Point> = lines.iter().map(centre).collect();
+    let bounds = centres.iter().fold(
+        (f64::MAX, f64::MAX, f64::MIN, f64::MIN),
+        |(min_x, min_y, max_x, max_y), &(x, y)| {
+            (min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y))
+        },
+    );
+    let width = (bounds.2 - bounds.0).max(f64::MIN_POSITIVE);
+    let height = (bounds.3 - bounds.1).max(f64::MIN_POSITIVE);
+    let mut buckets = vec![vec![]; side * side];
+    for (points, &(x, y)) in lines.iter().zip(&centres) {
+        let column = (((x - bounds.0) / width) * side as f64) as usize;
+        let row = (((y - bounds.1) / height) * side as f64) as usize;
+        buckets[row.min(side - 1) * side + column.min(side - 1)].push(points.as_slice());
+    }
+    buckets
+}
+
 pub fn stroke(lines: &[Vec<Point>], radius: f64, sagitta: f64) -> Result<Vec<Ring>, String> {
     if !radius.is_finite() || !sagitta.is_finite() || sagitta <= 0. {
         return Err("invalid stroke radius or sagitta".into());
@@ -121,28 +171,43 @@ pub fn stroke(lines: &[Vec<Point>], radius: f64, sagitta: f64) -> Result<Vec<Rin
     if radius <= 0. {
         return Ok(vec![]);
     }
-    let mut offsetter = ClipperOffset::new_default();
-    offsetter.set_arc_tolerance((sagitta * SCALE).max(1.));
-    for points in lines {
-        let closed =
-            points.len() >= 4 && path(&[points[0], points[points.len() - 1]], SCALE)?.len() == 1;
-        let p = path(points, SCALE)?;
-        if p.len() < if closed { 3 } else { 2 } {
+    let delta = (radius * SCALE).round_ties_even();
+    let tolerance = (sagitta * SCALE).max(1.);
+    let mut merged = vec![];
+    let mut groups = 0;
+    for bucket in bucket(lines) {
+        if bucket.is_empty() {
             continue;
         }
-        offsetter.add_paths(
-            &vec![p],
-            JoinType::Round,
-            if closed {
-                EndType::Joined
-            } else {
-                EndType::Round
-            },
-        );
+        groups += 1;
+        let mut offsetter = ClipperOffset::new_default();
+        offsetter.set_arc_tolerance(tolerance);
+        for points in bucket {
+            let closed = points.len() >= 4
+                && path(&[points[0], points[points.len() - 1]], SCALE)?.len() == 1;
+            let p = path(points, SCALE)?;
+            if p.len() < if closed { 3 } else { 2 } {
+                continue;
+            }
+            offsetter.add_paths(
+                &vec![p],
+                JoinType::Round,
+                if closed {
+                    EndType::Joined
+                } else {
+                    EndType::Round
+                },
+            );
+        }
+        let mut solution = vec![];
+        offsetter.execute(delta, &mut solution);
+        merged.extend(resolve(&solution, &vec![], ClipType::Union, SCALE)?);
     }
-    let mut result = vec![];
-    offsetter.execute((radius * SCALE).round_ties_even(), &mut result);
-    resolve(&result, &vec![], ClipType::Union, SCALE)
+    if groups <= 1 {
+        Ok(merged)
+    } else {
+        resolve(&paths(&merged, SCALE)?, &vec![], ClipType::Union, SCALE)
+    }
 }
 
 pub fn offset(rings: &[Ring], delta: f64, sagitta: f64) -> Result<Vec<Ring>, String> {
