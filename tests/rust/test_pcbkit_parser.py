@@ -283,6 +283,55 @@ def test_json_only_does_not_parse_misc_features(tmp_path):
     assert step["profiles"][0]["layers"] == ["cu"]
 
 
+@pytest.mark.parametrize("polarity", ["POSITIVE", "NEGATIVE"])
+@pytest.mark.parametrize("features_present", [True, False], ids=["empty-features", "missing-features"])
+def test_dielectric_without_artwork_exports_profile_and_renders_substrate(tmp_path, polarity, features_present):
+    from pcbkit_rust.drawing import dielectric_drill_cutouts
+
+    files = odb_files([{"name": "FR", "type": "DIELECTRIC",
+                        "matrix": {"POLARITY": polarity},
+                        "attrlist": "UNITS=MM\n.layer_dielectric=.1\n"}])
+    if not features_present:
+        del files["steps/board/layers/fr/features"]
+    source = write_tree(tmp_path / "job", files)
+    job = load_job(str(source))
+    preview = build_step_preview(job)
+    step = step_to_document(job, preview).steps[0]
+    assert step.layers[0].geometry_status == "ready"
+    assert step.layers[0].polygons == []
+    assert step.profiles[0].layers == ["FR"] and step.profiles[0].polygons
+    assert not job.diagnostics.errors
+    assert "geometry.empty_result" not in job.diagnostics.codes()
+    drawn = dielectric_drill_cutouts(preview)
+    assert drawn.layers[0].area_mm2 == pytest.approx(100)
+    assert preview.layers[0].is_empty
+    output = tmp_path / "result"
+    assert main(["export", str(source), "-o", str(output), "--per-layer-png"]) == 0
+    data = json.loads((output / "intermediate.json").read_text())["steps"][0]
+    assert data["layers"][0]["polygons"] == []
+    with Image.open(output / "layers/001-FR.png") as image:
+        assert image.getpixel((image.width // 2, image.height // 2)) != (255, 255, 255)
+
+
+@pytest.mark.parametrize("polarity,artwork_area,drawing_area", [
+    ("POSITIVE", 32, 96), ("NEGATIVE", 4, 68),
+])
+def test_dielectric_artwork_is_composed_without_a_profile_seed(tmp_path, polarity, artwork_area, drawing_area):
+    from pcbkit_rust.drawing import dielectric_drill_cutouts
+
+    files = odb_files([{"name": "FR", "type": "DIELECTRIC",
+                        "matrix": {"POLARITY": polarity},
+                        "features": "UNITS=MM\n" + surface(2, 2, 8, 8) + surface(4, 4, 6, 6, "N")}])
+    job = load_job(str(write_tree(tmp_path / "job", files)))
+    preview = build_step_preview(job)
+    assert preview.layers[0].area_mm2 == pytest.approx(artwork_area)
+    assert not preview.layers[0].geometry.used_base
+    assert step_to_document(job, preview).steps[0].layers[0].polygons
+    drawn = dielectric_drill_cutouts(preview)
+    assert drawn.layers[0].area_mm2 == pytest.approx(drawing_area)
+    assert preview.layers[0].area_mm2 == pytest.approx(artwork_area)
+
+
 def test_filtered_dielectric_draws_omitted_drills_at_requested_precision(tmp_path):
     from pcbkit_rust.export import PreviewOptions
     from pcbkit_rust.drawing import dielectric_drill_cutouts
@@ -293,7 +342,9 @@ def test_filtered_dielectric_draws_omitted_drills_at_requested_precision(tmp_pat
     job = load_job(str(source))
     preview = build_step_preview(job, options=PreviewOptions(layers=["dielectric_1"], round_digits=6))
     drawn = dielectric_drill_cutouts(preview)
+    assert step_to_document(job, preview).steps[0].layers[1].polygons == []
     assert drawn.drawing_only
+    assert drawn.layers[0].area_mm2 == pytest.approx(99)
     holes = [ring for ring in drawn.layers[0].rings if ring.is_hole]
     assert any(ring.bounds[0] == pytest.approx(3.500021, abs=1e-7) for ring in holes)
 

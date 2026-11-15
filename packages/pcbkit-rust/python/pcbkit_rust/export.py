@@ -247,6 +247,13 @@ class StepPreview:
     def non_empty(self) -> list[LayerPreview]:
         return [l for l in self.layers if not l.is_empty]
 
+    def has_geometry(self) -> bool:
+        """Empty dielectric artwork still has a physical profile to export."""
+        return bool(self.non_empty()) or any(
+            layer_profile_region(self.step, layer.layer, self.expansion_options.tessellation)
+            for layer in self.layers if layer.type_name == "DIELECTRIC"
+        )
+
 
 # ---------------------------------------------------------------------------
 # composition
@@ -448,14 +455,7 @@ def build_step_preview(
     unavailable = [l.name for l in selected if l.name.casefold() not in produced]
 
     empty = [l.name for l in layers if l.is_empty]
-    if not any(not l.is_empty for l in layers):
-        diags.error(
-            EXPORT_NO_GEOMETRY,
-            f"every selected layer of step {step.name!r} composed to an empty "
-            f"region ({len(selected)} layer(s) selected)",
-        )
-
-    return StepPreview(
+    preview = StepPreview(
         step=step,
         layers=layers,
         units_in=job.units.system.value,
@@ -470,6 +470,13 @@ def build_step_preview(
         source_symbols=job.symbols,
         expansion_options=opts.expand_options(),
     )
+    if not preview.has_geometry():
+        diags.error(
+            EXPORT_NO_GEOMETRY,
+            f"every selected layer of step {step.name!r} composed to an empty "
+            f"region ({len(selected)} layer(s) selected)",
+        )
+    return preview
 
 
 # ---------------------------------------------------------------------------

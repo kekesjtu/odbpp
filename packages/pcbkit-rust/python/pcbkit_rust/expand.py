@@ -58,17 +58,19 @@ class Expander:
         return self._stackups[step.name]
 
 
-def expand_layer(layer, step, *, expander, round_digits=4):
-    seed = layer.is_negative or layer.type is LayerType.DIELECTRIC
+def expand_layer(layer, step, *, expander, round_digits=4, with_dielectric_base=False):
+    """Compose artwork; dielectric substrate is requested only for rendering."""
+    dielectric = layer.type is LayerType.DIELECTRIC
+    seed = with_dielectric_base if dielectric else layer.is_negative
     # A declared but invalid profile fails this layer even if it starts empty.
     if layer.profile_error is not None:
         step.base_geometry(layer)
-    profile = layer_profile_region(step, layer, expander.options.tessellation) if seed else None
+    profile = layer_profile_region(step, layer, expander.options.tessellation) if seed or dielectric else None
     try:
         region, runs, collapsed = expander.native.layer(layer.features, profile,
             layer.is_negative, seed, round_digits)
     finally:
         collect_diagnostics(expander.native, expander.diagnostics)
-    if not region:
+    if not region and (not dielectric or layer.feature_count):
         expander.diagnostics.warn("geometry.empty_result", f"layer {layer.name!r} composed to an empty region", layer.dir_name or None)
     return LayerGeometry(layer.name, region, layer.feature_count, runs, seed and bool(profile), collapsed)

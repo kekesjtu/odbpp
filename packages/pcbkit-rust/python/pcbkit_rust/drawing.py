@@ -1,4 +1,4 @@
-"""Rendering-only dielectric cutouts; the shared JSON geometry stays untouched."""
+"""Rendering-only dielectric substrates and drill cutouts."""
 from dataclasses import replace
 
 from .clipper import difference, snap_to_grid, union
@@ -8,11 +8,12 @@ from .stackup import Stackup
 
 
 def dielectric_drill_cutouts(preview: StepPreview, layer_names: set[str] | None = None) -> StepPreview:
-    """Create a drawing copy, cutting only resolved drills crossing dielectric.
+    """Build dielectric substrates and cut resolved drills in a drawing copy.
 
-    Copper objects are returned unchanged. Profile holes and each layer's own
-    resolved artwork remain in the base. A filtered preview can still obtain a
-    drill from the loaded step, using the original symbols and expansion options.
+    Copper objects are returned unchanged. Dielectric profiles seed the drawing,
+    with their holes and the layer's artwork applied before drills. A filtered
+    preview can still obtain a drill from the loaded step, using the original
+    symbols and expansion options.
     Projection and union caches live only during this render, never across input.
     """
     if preview.drawing_only or not any(l.type_name == "DIELECTRIC" and l.layer.ref.context.value == "BOARD"
@@ -32,6 +33,8 @@ def dielectric_drill_cutouts(preview: StepPreview, layer_names: set[str] | None 
                 or (layer_names is not None and layer.name not in layer_names)):
             layers.append(layer)
             continue
+        geometry = expand_layer(layer.layer, preview.step, expander=expander,
+                                round_digits=digits, with_dielectric_base=True)
         names = []
         for drill in stackup.drills_through(layer.layer):
             if drill.name in failed:
@@ -41,9 +44,9 @@ def dielectric_drill_cutouts(preview: StepPreview, layer_names: set[str] | None 
             if drill.name not in projections:
                 # An omitted DRILL layer still affects a selected dielectric SVG.
                 try:
-                    geometry = expand_layer(drill, preview.step, expander=expander,
-                                            round_digits=digits)
-                    projections[drill.name] = geometry.region
+                    drill_geometry = expand_layer(drill, preview.step, expander=expander,
+                                                  round_digits=digits)
+                    projections[drill.name] = drill_geometry.region
                 except Exception as exc:  # same per-layer degradation as the preview builder
                     failed.add(drill.name)
                     preview.diagnostics.error("drawing.drill_failed",
@@ -52,19 +55,19 @@ def dielectric_drill_cutouts(preview: StepPreview, layer_names: set[str] | None 
             if projections[drill.name]:
                 names.append(drill.name)
         if not names:
-            layers.append(layer)
+            layers.append(replace(layer, geometry=geometry, drawing_only=True))
             continue
         key = tuple(names)
         if key not in unions:
             unions[key] = union(*(projections[name] for name in names))
-        base = layer.geometry.region
+        base = geometry.region
         region = difference(base, unions[key])
         removed = max(0.0, base.area - region.area)
         region, collapsed = snap_to_grid(region, digits)
         if collapsed:
             preview.diagnostics.warn("drawing.degenerate_ring",
                 f"dielectric {layer.name!r}: {collapsed} cutout ring(s) collapsed at {digits} decimal places")
-        geometry = replace(layer.geometry, region=region,
+        geometry = replace(geometry, region=region,
                            drills_subtracted=names, drill_cut_mm2=removed)
         layers.append(replace(layer, geometry=geometry, drawing_only=True))
     return replace(preview, layers=layers, drawing_only=True,

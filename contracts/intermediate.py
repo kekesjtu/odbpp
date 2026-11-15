@@ -59,7 +59,7 @@ class LayerModel(ContractModel):
     row: StrictInt = Field(ge=1, description="matrix ROW；同一 step 内唯一，表达层的上下次序。")
     geometry_status: Literal["ready", "failed", "omitted"] = "ready"
     geometry_error: str | None = None
-    polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")
+    polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质不填充轮廓基底，跨层 DRILL 投影保持独立。")
     z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由起止铜层推导。")
     start_layer: str | None = Field(default=None, min_length=1, description="DRILL 起始铜层名称。")
     end_layer: str | None = Field(default=None, min_length=1, description="DRILL 终止铜层名称。")

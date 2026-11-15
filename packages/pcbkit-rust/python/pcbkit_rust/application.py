@@ -256,7 +256,7 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
     # A preview with no geometry at all is almost always a wrong --layer or
     # --step rather than a genuinely empty board, so say so instead of writing
     # files that look broken.
-    if not preview.non_empty():
+    if not preview.has_geometry():
         print("error: every selected layer composed to nothing; nothing written",
               file=sys.stderr)
         for layer in preview.layers:

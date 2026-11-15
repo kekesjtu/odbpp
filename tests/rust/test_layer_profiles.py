@@ -65,8 +65,10 @@ def test_parser_resolves_holes_consistently_in_profiles_materials_and_svg(tmp_pa
     for layer in step["layers"]:
         assert layer["geometry_status"] == "ready"
         assert profiles[assigned[layer["name"]]].equals(expected)
-        # Both the dielectric sheet and negative copper start from this extent.
-        assert physical_shape(layer["polygons"]).equals(expected)
+        if layer["type"] == "DIELECTRIC":
+            assert layer["polygons"] == []
+        else:
+            assert physical_shape(layer["polygons"]).equals(expected)
         path = outlines.find(f"svg:path[@data-name='{layer['name']}']", ns)
         assert svg_shape(path.attrib["d"]).equals(expected)
 
@@ -79,7 +81,10 @@ def test_missing_layer_profile_defaults_to_complete_step_with_nested_island(tmp_
     assert len(step["profiles"]) == 1
     for layer in step["layers"]:
         assert layer["name"] in step["profiles"][0]["layers"]
-        assert physical_shape(layer["polygons"]).equals(expected)
+        if layer["type"] == "DIELECTRIC":
+            assert layer["polygons"] == []
+        else:
+            assert physical_shape(layer["polygons"]).equals(expected)
 
 
 def test_arc_holes_use_the_same_tessellation_in_materials_profiles_and_svg(tmp_path):
@@ -100,7 +105,10 @@ def test_arc_holes_use_the_same_tessellation_in_materials_profiles_and_svg(tmp_p
     outlines = ElementTree.fromstring(render_svg(preview)).find(".//svg:g[@id='odb-layer-profiles']", ns)
     for layer in step["layers"]:
         assert profiles[assigned[layer["name"]]].equals(expected)
-        assert physical_shape(layer["polygons"]).equals(expected)
+        if layer["type"] == "DIELECTRIC":
+            assert layer["polygons"] == []
+        else:
+            assert physical_shape(layer["polygons"]).equals(expected)
         path = outlines.find(f"svg:path[@data-name='{layer['name']}']", ns)
         assert svg_shape(path.attrib["d"]).equals(expected)
 

@@ -49,7 +49,7 @@
           "title": "Geometry Error"
         },
         "polygons": {
-          "description": "本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。",
+          "description": "本层图元规整后的正向几何；介质不填充轮廓基底，跨层 DRILL 投影保持独立。",
           "items": {
             "$ref": "#/$defs/PolygonModel"
           },
