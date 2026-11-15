@@ -3,6 +3,7 @@ from .archive import OdbArchive
 from .diagnostics import Diagnostic, Diagnostics
 from .errors import (
     ArchiveError,
+    LayerGeometryError,
     LayerProfileError,
     OdbError,
     ParseError,
@@ -36,4 +37,4 @@ from .units import UnitScope, UnitSystem, copper_weight
 from .units import DEFAULT_COPPER_DENSITY_G_CM3
 
 __version__ = "0.1.0"
-__all__ = ['OdbArchive', 'Diagnostic', 'Diagnostics', 'ArchiveError', 'LayerProfileError', 'OdbError', 'ParseError', 'Region', 'Ring', 'difference', 'intersection', 'union', 'ExpandOptions', 'Expander', 'LayerGeometry', 'expand_layer', 'PreviewOptions', 'StepPreview', 'build_step_preview', 'layer_to_json', 'regularise_preview', 'step_to_json', 'step_to_document', 'BoardDocument', 'read_document', 'write_document', 'LoadOptions', 'load_job', 'Stackup', 'ZExtent', 'layer_profile_region', 'Job', 'Layer', 'LayerRef', 'LayerType', 'Matrix', 'Polarity', 'Step', 'SymbolLibrary', 'describe_symbol', 'SvgOptions', 'render_html', 'render_svg', 'write_outputs', 'UnitScope', 'UnitSystem', 'copper_weight', 'DEFAULT_COPPER_DENSITY_G_CM3']
+__all__ = ['OdbArchive', 'Diagnostic', 'Diagnostics', 'ArchiveError', 'LayerGeometryError', 'LayerProfileError', 'OdbError', 'ParseError', 'Region', 'Ring', 'difference', 'intersection', 'union', 'ExpandOptions', 'Expander', 'LayerGeometry', 'expand_layer', 'PreviewOptions', 'StepPreview', 'build_step_preview', 'layer_to_json', 'regularise_preview', 'step_to_json', 'step_to_document', 'BoardDocument', 'read_document', 'write_document', 'LoadOptions', 'load_job', 'Stackup', 'ZExtent', 'layer_profile_region', 'Job', 'Layer', 'LayerRef', 'LayerType', 'Matrix', 'Polarity', 'Step', 'SymbolLibrary', 'describe_symbol', 'SvgOptions', 'render_html', 'render_svg', 'write_outputs', 'UnitScope', 'UnitSystem', 'copper_weight', 'DEFAULT_COPPER_DENSITY_G_CM3']

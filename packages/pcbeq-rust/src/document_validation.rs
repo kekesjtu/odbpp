@@ -66,19 +66,6 @@ impl Board {
                 format!("layer {:?}: duplicate matrix row {}", l.name, l.row),
             )?;
             require(l.context == "BOARD", "invalid layer context")?;
-            require(
-                matches!(l.geometry_status.as_str(), "ready" | "failed" | "omitted"),
-                "invalid geometry_status",
-            )?;
-            require(
-                l.geometry_status == "ready" || l.polygons.is_empty(),
-                "failed/omitted geometry must not carry polygons",
-            )?;
-            require(
-                l.geometry_status != "failed"
-                    || l.geometry_error.as_ref().is_some_and(|s| !s.is_empty()),
-                "failed geometry requires geometry_error",
-            )?;
             validate_polygons(&l.polygons)?;
             if let Some(z) = &l.z_mm {
                 require(l.kind != "DRILL", "DRILL must not carry z_mm")?;

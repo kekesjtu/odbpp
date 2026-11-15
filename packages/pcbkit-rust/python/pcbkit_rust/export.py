@@ -8,17 +8,15 @@ deduplicated and assigned to layers at the contract boundary.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Iterator, Optional, Sequence
-from .clipper import Ring, layer_profile_region, region_from_geometry, snap_to_grid
+from typing import Iterator, Optional
+from .clipper import Region, Ring, layer_profile_region, region_from_geometry, snap_to_grid
 from .diagnostics import (
     EXPORT_DEGENERATE_RING,
     EXPORT_LAYER_FAILED,
-    EXPORT_LAYER_SKIPPED,
     EXPORT_NO_GEOMETRY,
-    EXPORT_UNKNOWN_LAYER,
     Diagnostics,
 )
-from .errors import LayerProfileError
+from .errors import LayerGeometryError, LayerProfileError
 from .expand import ExpandOptions, Expander, LayerGeometry, expand_layer
 from .geometry import TessellationOptions
 from .model import Job, Layer, LayerType, Step
@@ -45,11 +43,6 @@ class PreviewOptions:
     """What to compose and how faithfully."""
 
     tessellation: TessellationOptions = field(default_factory=TessellationOptions)
-    #: Layer names to include (case-insensitive).  ``None`` means every layer.
-    layers: Optional[Sequence[str]] = None
-    #: Skip layers of these types, e.g. ``("DOCUMENT",)`` for fabrication
-    #: drawings whose hundreds of thousands of records dwarf everything else.
-    exclude_types: Sequence[str] = ()
     include_misc: bool = True
     #: Render a zero-width stroke (``r0``) as a hairline of this width.
     #:
@@ -198,15 +191,9 @@ class StepPreview:
     units_in: str
     diagnostics: Diagnostics
     #: Layers that composed successfully to zero area -- usually intentional, and
-    #: most often zero-width (``r0``) artwork.  Kept distinct from
-    #: ``failed_layers`` because "this layer is empty" and "this layer could not
-    #: be read" call for opposite responses from whoever is looking at the
-    #: preview.
+    #: most often zero-width (``r0``) artwork.  Every BOARD layer in the document
+    #: carries geometry, so this is a property of the board, not a gap.
     empty_layers: list[str] = field(default_factory=list)
-    #: Layers that could not be composed at all, e.g. an unusable layer profile
-    #: (requirements.md parser constraint 3).  Their absence from the drawing is a bug or a data
-    #: problem, not a property of the board.
-    failed_layers: list[str] = field(default_factory=list)
     #: The step's resolved layer stack (copper order, dielectric/drill Z spans,
     #: thicknesses).  ``None`` only for hand-built previews.
     stackup: Optional[Stackup] = None
@@ -259,37 +246,6 @@ class StepPreview:
 # composition
 # ---------------------------------------------------------------------------
 
-def _selected_layers(step: Step, options: PreviewOptions,
-                     diagnostics: Optional[Diagnostics] = None) -> list[Layer]:
-    """Layers chosen by ``options``, in matrix row order.
-
-    A ``--layer`` name that matches nothing is reported: silently exporting
-    nothing looks identical to a layer that is genuinely empty, and the two want
-    opposite responses.
-    """
-    layers = [l for l in step.layers if options.include_misc or l.ref.context.value == "BOARD"]
-
-    if options.layers:
-        wanted = {name.casefold() for name in options.layers}
-        found = {l.name.casefold() for l in layers}
-        if diagnostics is not None:
-            for name in options.layers:
-                if name.casefold() not in found:
-                    diagnostics.error(
-                        EXPORT_UNKNOWN_LAYER,
-                        f"no layer named {name!r} in step {step.name!r}; "
-                        f"available: {', '.join(sorted(l.name for l in layers))}",
-                    )
-        layers = [l for l in layers if l.name.casefold() in wanted]
-
-    if options.exclude_types:
-        excluded = {t.upper() for t in options.exclude_types}
-        layers = [l for l in layers
-                  if (l.type.value if l.type is not None else "UNKNOWN") not in excluded]
-
-    return layers
-
-
 def iter_step_previews(
     job: Job,
     step: Step,
@@ -303,6 +259,9 @@ def iter_step_previews(
     Streaming matters: the largest single layer in ``cases/`` yields 29,235
     polygons, and a caller that renders as it goes never holds more than one
     layer's worth of rings.
+
+    A layer that cannot be composed raises instead of being dropped: dropping
+    it would leave the document claiming to describe a board it does not.
     """
     opts = options or PreviewOptions()
     diags = diagnostics if diagnostics is not None else Diagnostics()
@@ -311,12 +270,19 @@ def iter_step_previews(
     # dielectric renderer. Cross-layer drills do not modify parser geometry.
     stackup = expander.stackup(step)
 
-    for layer in _selected_layers(step, opts, diags):
+    for layer in step.layers:
+        if layer.ref.context.value != "BOARD" and not opts.include_misc:
+            continue
         if layer.features is None and layer.profile is None and step.profile is None:
+            if layer.ref.context.value == "MISC":
+                continue
+            # A layer with no artwork is a layer whose pattern is empty, not a
+            # layer missing from the board.
+            yield LayerPreview(layer=layer, geometry=LayerGeometry(layer.name, Region(), 0),
+                               stackup=stackup, round_digits=opts.round_digits)
             continue
         try:
             if layer.ref.context.value == "MISC":
-                from ._pcbkit_native import Region
                 from .features import collect_diagnostics
                 seed = layer.is_negative or layer.type is LayerType.DIELECTRIC
                 if layer.profile_error is not None:
@@ -329,23 +295,17 @@ def iter_step_previews(
                 continue
             geometry = expand_layer(layer, step, expander=expander,
                                     round_digits=opts.round_digits)
-        except LayerProfileError as exc:
+        except Exception as exc:  # noqa: BLE001 - the first bad layer stops the run
             # requirements.md parser constraint 3: a layer profile that exists but is unusable is
-            # a hard error.  The loader has already reported *why* (as
-            # layer_profile.invalid, with the profile's own path); what is
-            # reported here is the consequence -- this layer is absent from the
-            # preview -- under its own code, so neither message is a restatement
-            # of the other.  One bad layer does not cost the whole preview.
-            diags.error(EXPORT_LAYER_SKIPPED,
-                        f"layer {layer.name!r} is not in the preview: {exc}",
-                        layer.dir_name or None)
-            continue
-        except Exception as exc:  # noqa: BLE001 - one bad layer must not kill the run
+            # a hard error, and so is any other failed composition.  The document
+            # describes one complete board, so it is not written at all rather
+            # than carrying a hole the consumer cannot see.
+            reason = (exc.reason if isinstance(exc, LayerProfileError)
+                      else f"{type(exc).__name__}: {exc}")
             diags.error(EXPORT_LAYER_FAILED,
-                        f"layer {layer.name!r} could not be composed: "
-                        f"{type(exc).__name__}: {exc}",
+                        f"layer {layer.name!r} could not be composed: {reason}",
                         layer.dir_name or None)
-            continue
+            raise LayerGeometryError(layer.name, reason) from exc
 
         # Quantise to the output grid and re-validate *before* the geometry is
         # called a result.  Areas and bounds below are recomputed from these
@@ -449,22 +409,12 @@ def build_step_preview(
     layers = list(iter_step_previews(job, step, options=opts,
                                      diagnostics=diags, expander=expander))
 
-    selected = _selected_layers(step, opts, diags)
-    produced = {l.name.casefold() for l in layers}
-    # Original spellings, not case-folded keys: these names are shown to a user.
-    unavailable = [l.name for l in selected if l.name.casefold() not in produced]
-
-    empty = [l.name for l in layers if l.is_empty]
     preview = StepPreview(
         step=step,
         layers=layers,
         units_in=job.units.system.value,
         diagnostics=diags,
-        empty_layers=empty,
-        # A layer that composed to nothing still produced a LayerPreview; one
-        # that raised did not.  That difference is what separates "empty" from
-        # "missing".
-        failed_layers=[name for name in unavailable if name not in empty],
+        empty_layers=[l.name for l in layers if l.is_empty],
         stackup=stackup,
         round_digits=opts.round_digits,
         source_symbols=job.symbols,
@@ -473,8 +423,8 @@ def build_step_preview(
     if not preview.has_geometry():
         diags.error(
             EXPORT_NO_GEOMETRY,
-            f"every selected layer of step {step.name!r} composed to an empty "
-            f"region ({len(selected)} layer(s) selected)",
+            f"every BOARD layer of step {step.name!r} composed to an empty "
+            f"region ({len(layers)} layer(s))",
         )
     return preview
 
@@ -530,7 +480,6 @@ def _layer_data(preview: LayerPreview, digits: int) -> dict:
         region, _ = snap_to_grid(region, digits)
     return {
         **_layer_metadata(preview.layer, preview.stackup, digits),
-        "geometry_status": "ready",
         "polygons": region.polygons(),
     }
 
@@ -548,39 +497,19 @@ def step_to_document(job: Job, preview: StepPreview, *,
                      round_digits: Optional[int] = None) -> BoardDocument:
     """Build the current Pydantic contract once at the export boundary.
 
-    Layer geometry may be filtered for a preview, but the entire layer catalog
-    remains visible. Failed and intentionally omitted geometry are explicit.
+    The catalogue is the board: every BOARD layer of the step appears exactly
+    once, with the geometry composed for it.  MISC drawings are preview-only.
     """
     if preview.drawing_only:
         raise ValueError("a drawing-only preview cannot be exported as intermediate JSON; use the uncut model")
     digits = _preview_digits(preview, round_digits)
     view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
-    profiles, profile_id, profile_errors = _profiles_json(view, digits)
-    composed = {l.name.casefold(): l for l in view.layers}
-    failed = {name.casefold() for name in view.failed_layers}
-    catalog = {l.name.casefold(): l for l in view.step.layers}
-    catalog.update({l.name.casefold(): l.layer for l in view.layers})
-    layers = []
-    for layer in sorted(catalog.values(), key=lambda l: l.ref.row):
-        if layer.ref.context.value != "BOARD":
-            continue
-        ready = composed.get(layer.name.casefold())
-        if ready is not None:
-            data = _layer_data(ready, digits)
-        else:
-            is_failed = layer.name.casefold() in failed or layer.profile_error is not None
-            data = {**_layer_metadata(layer, view.stackup, digits),
-                    "geometry_status": "failed" if is_failed else "omitted",
-                    "polygons": []}
-            if is_failed:
-                messages = [d.message for d in view.diagnostics
-                            if d.level == "error" and layer.name in d.message]
-                data["geometry_error"] = layer.profile_error or (messages[-1] if messages else "layer geometry could not be composed")
-        if layer.name in profile_errors and data.get("geometry_error") is None:
-            data["geometry_error"] = profile_errors[layer.name]
-        # Validate one layer at a time so the complete untyped coordinate tree
-        # does not coexist with a second full Pydantic coordinate tree.
-        layers.append(LayerModel.model_validate(data))
+    profiles, profile_id = _profiles_json(view, digits)
+    # Validate one layer at a time so the untyped coordinate tree and the
+    # validated one never both hold every polygon of the board.
+    layers = [LayerModel.model_validate(_layer_data(layer, digits))
+              for layer in sorted(view.layers, key=lambda l: l.layer.ref.row)
+              if layer.layer.ref.context.value == "BOARD"]
     return BoardDocument.model_validate({
         "units": "mm", "resolution_mm": 10 ** -digits,
         "source": {"path": job.source_path, "job_root": job.root,
@@ -598,9 +527,9 @@ def step_to_json(job: Job, preview: StepPreview, *,
     return step_to_document(job, preview, round_digits=round_digits).model_dump(mode="json", exclude_none=True)
 
 
-def _profiles_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], Optional[str], dict]:
+def _profiles_json(preview: StepPreview, round_digits: int) -> tuple[list[dict], Optional[str]]:
     """Export each quantised profile geometry once, with its layer membership."""
-    profiles, regions, errors = [], [], {}
+    profiles, regions = [], []
     cached = {}
 
     def register(profile, inherit_step_holes=False):
@@ -626,15 +555,16 @@ def _profiles_json(preview: StepPreview, round_digits: int) -> tuple[list[dict],
     for layer in preview.step.layers:
         if layer.ref.context.value != "BOARD":
             continue
-        if layer.profile_error is not None:
-            errors[layer.name] = f"layer profile could not be parsed: {layer.profile_error}"
-            continue
         profile = layer.profile if layer.profile is not None else preview.step.profile
         if profile is None:
-            errors[layer.name] = "neither a layer profile nor a step profile is available"
+            if layer.is_copper or layer.type is LayerType.DIELECTRIC:
+                raise LayerGeometryError(
+                    layer.name,
+                    "neither a layer profile nor a step profile is available",
+                )
             continue
         profiles[register(profile, layer.profile is not None)]["layers"].append(layer.name)
-    return profiles, step_id, errors
+    return profiles, step_id
 
 
 def write_json(document: dict, path: str) -> None:

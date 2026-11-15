@@ -26,28 +26,6 @@
           "title": "Row",
           "type": "integer"
         },
-        "geometry_status": {
-          "default": "ready",
-          "enum": [
-            "ready",
-            "failed",
-            "omitted"
-          ],
-          "title": "Geometry Status",
-          "type": "string"
-        },
-        "geometry_error": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Geometry Error"
-        },
         "polygons": {
           "description": "本层图元规整后的正向几何；介质不填充轮廓基底，跨层 DRILL 投影保持独立。",
           "items": {
@@ -260,7 +238,7 @@
           "type": "array"
         },
         "layers": {
-          "description": "BOARD 层目录；包含失败及未导出层，按 matrix row 排列。",
+          "description": "按 matrix row 排列的 BOARD 层目录；每个层都带本层几何。",
           "items": {
             "$ref": "#/$defs/LayerModel"
           },

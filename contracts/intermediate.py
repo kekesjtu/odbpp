@@ -57,8 +57,6 @@ class LayerModel(ContractModel):
     type: str = Field(min_length=1, description="ODB++ 层类型；等效器明确报告不支持的材料类型。")
     context: Literal["BOARD"] = "BOARD"
     row: StrictInt = Field(ge=1, description="matrix ROW；同一 step 内唯一，表达层的上下次序。")
-    geometry_status: Literal["ready", "failed", "omitted"] = "ready"
-    geometry_error: str | None = None
     polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质不填充轮廓基底，跨层 DRILL 投影保持独立。")
     z_mm: ZExtentModel | None = Field(default=None, description="实体物理层自身的绝对 Z；DRILL 不保存此字段，由起止铜层推导。")
     start_layer: str | None = Field(default=None, min_length=1, description="DRILL 起始铜层名称。")
@@ -70,10 +68,6 @@ class LayerModel(ContractModel):
             raise ValueError("DRILL must not carry z_mm; derive it from endpoint copper layers")
         if self.type != "DRILL" and (self.start_layer is not None or self.end_layer is not None):
             raise ValueError("start_layer/end_layer require a DRILL layer")
-        if self.geometry_status != "ready" and self.polygons:
-            raise ValueError("failed/omitted geometry must not carry polygons")
-        if self.geometry_status == "failed" and not self.geometry_error:
-            raise ValueError("failed geometry requires geometry_error")
         return self
 
 
@@ -81,7 +75,7 @@ class StepModel(ContractModel):
     name: str = Field(min_length=1)
     profile_id: str | None = Field(default=None, description="整板轮廓在 profiles 中的引用；不能以铜图案替代。")
     profiles: list[ProfileModel]
-    layers: list[LayerModel] = Field(description="BOARD 层目录；包含失败及未导出层，按 matrix row 排列。")
+    layers: list[LayerModel] = Field(description="按 matrix row 排列的 BOARD 层目录；每个层都带本层几何。")
 
     @model_validator(mode="after")
     def references(self):
@@ -148,8 +142,7 @@ class BoardDocument(ContractModel):
                          "polygons": [{"island": p.island, "points": p.points} for p in d.polygons]}
                         for d in step.profiles],
             "layers": [{"name": l.name, "type": l.type, "context": l.context,
-                        "row": l.row, "geometry_status": l.geometry_status,
-                        "geometry_error": l.geometry_error,
+                        "row": l.row,
                         "start_layer": l.start_layer, "end_layer": l.end_layer,
                         "z_mm": None if l.z_mm is None else l.z_mm.model_dump(),
                         "polygons": [{"island": p.island, "points": p.points} for p in l.polygons]}

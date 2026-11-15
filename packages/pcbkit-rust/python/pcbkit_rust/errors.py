@@ -70,3 +70,16 @@ class LayerProfileError(OdbError):
         self.layer = layer
         self.reason = reason
         super().__init__(f"layer {layer!r} has an unusable profile: {reason}")
+
+
+class LayerGeometryError(OdbError):
+    """A layer cannot be composed into a result region.
+
+    The document describes one complete board, so a run stops at the first layer
+    it cannot compose instead of publishing a document with a hole in it.
+    """
+
+    def __init__(self, layer: str, reason: str) -> None:
+        self.layer = layer
+        self.reason = reason
+        super().__init__(f"layer {layer!r} could not be composed: {reason}")

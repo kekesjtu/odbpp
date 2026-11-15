@@ -93,12 +93,6 @@ fn execute(
     let step = &document.steps[0];
     diagnostics.measure("prepare", || {
         for layer in step.layers.iter().filter(|l| l.physical()) {
-            if layer.geometry_status != "ready" {
-                return Err(format!(
-                    "layer {:?}: geometry is {}: {:?}",
-                    layer.name, layer.geometry_status, layer.geometry_error
-                ));
-            }
             if layer.z_mm.is_none() {
                 return Err(format!("layer {:?}: no absolute Z interval", layer.name));
             }

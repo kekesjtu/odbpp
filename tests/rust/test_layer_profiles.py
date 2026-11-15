@@ -63,7 +63,6 @@ def test_parser_resolves_holes_consistently_in_profiles_materials_and_svg(tmp_pa
     svg = ElementTree.fromstring(render_svg(preview))
     outlines = svg.find(".//svg:g[@id='odb-layer-profiles']", ns)
     for layer in step["layers"]:
-        assert layer["geometry_status"] == "ready"
         assert profiles[assigned[layer["name"]]].equals(expected)
         if layer["type"] == "DIELECTRIC":
             assert layer["polygons"] == []
@@ -113,13 +112,18 @@ def test_arc_holes_use_the_same_tessellation_in_materials_profiles_and_svg(tmp_p
         assert svg_shape(path.attrib["d"]).equals(expected)
 
 
-def test_invalid_explicit_layer_profile_does_not_default_to_step(tmp_path):
+def test_invalid_explicit_layer_profile_publishes_no_document(tmp_path):
+    from pcbkit_rust.cli import main
+    from pcbkit_rust.errors import LayerGeometryError
     job = profile_job(tmp_path, [rect(0, 0, 10, 10)], [])
-    step = step_to_json(job, build_step_preview(job))["steps"][0]
-    for layer in step["layers"]:
-        assert layer["geometry_status"] == "failed"
-        assert all(layer["name"] not in p["layers"] for p in step["profiles"])
-        assert layer["geometry_error"]
+    with pytest.raises(LayerGeometryError):
+        build_step_preview(job)
+    output = tmp_path / "out"
+    assert main(["export", str(tmp_path / "job"), "-o", str(output)]) == 2
+    assert not (output / "intermediate.json").exists()
+    report = json.loads((output / "diagnostics/run.json").read_text())
+    assert report["status"] == "failed"
+    assert any(item["level"] == "error" for item in report["diagnostics"])
 
 
 def test_parser_to_equivalence_keeps_holes_and_full_layer_extent(tmp_path):

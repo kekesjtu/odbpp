@@ -230,8 +230,6 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
 
     preview_options = PreviewOptions(
         tessellation=TessellationOptions(sagitta_mm=args.sagitta),
-        layers=args.layer,
-        exclude_types=args.exclude_type or (),
         include_misc=not args.only_json,
         minimum_stroke_mm=args.minimum_stroke,
         round_digits=args.digits,
@@ -248,16 +246,18 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
     out_dir = args.out or os.path.join(
         "out", os.path.basename(job.source_path.rstrip("/\\")) or "job")
 
-    if preview.failed_layers:
-        print(f"warning: {len(preview.failed_layers)} layer(s) could not be "
-              f"composed and are absent from the preview: "
-              f"{', '.join(preview.failed_layers)}", file=sys.stderr)
+    if diagnostics.errors:
+        print(f"error: {len(diagnostics.errors)} layer(s) could not be composed; "
+              f"no intermediate JSON was published", file=sys.stderr)
+        for item in diagnostics.errors:
+            print(f"  {item}", file=sys.stderr)
+        return 2
 
-    # A preview with no geometry at all is almost always a wrong --layer or
+    # Every BOARD layer composed to nothing. That is almost always a wrong
     # --step rather than a genuinely empty board, so say so instead of writing
     # files that look broken.
     if not preview.has_geometry():
-        print("error: every selected layer composed to nothing; nothing written",
+        print("error: every BOARD layer composed to nothing; nothing written",
               file=sys.stderr)
         for layer in preview.layers:
             print(f"  {layer.name}: {layer.geometry.records} records, "
@@ -276,7 +276,7 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
             per_layer_png=args.per_layer_png and not args.only_json,
             stem=step.name,
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, OdbError) as exc:
         print(f"error: cannot export intermediate JSON: {exc}", file=sys.stderr)
         return 2
 
@@ -289,23 +289,22 @@ def _export_to_stage(job: Job, args: argparse.Namespace,
         from .publication import public_path
         print(f"wrote {public_path(path, args)} ({os.path.getsize(path) / 1e6:.2f} MB)")
 
-    if args.no_diagnostics:
-        return 1 if diagnostics.errors else 0
-
-    errors = diagnostics.errors
-    if errors:
-        print(f"\n{len(errors)} error-level diagnostic(s):", file=sys.stderr)
-        for item in errors:
-            print(f"  {item}", file=sys.stderr)
-    return 1 if errors else 0
+    return 0
 
 
 def _run_export(job: Job, args: argparse.Namespace, diagnostics: Diagnostics) -> int:
-    """Publish the JSON and requested previews only after the full run succeeds."""
+    """Publish the JSON and previews, or this round's diagnostics alone.
+
+    The intermediate document describes one complete board, so a run that could
+    not compose every layer publishes no products at all: only
+    ``diagnostics/run.json`` with the reason. A caller therefore reads the exit
+    status, and a file that exists is a file that passed.
+    """
     from dataclasses import asdict
     from pathlib import Path
     from .publication import OutputRun
     from .report import runtime_metrics
+    import shutil
     import time
     directory = args.out or str(Path("out") / Path(job.source_path).name)
     try:
@@ -314,27 +313,36 @@ def _run_export(job: Job, args: argparse.Namespace, diagnostics: Diagnostics) ->
             staged_args.out = str(output.path)
             staged_args._final_out = str(directory)
             code = _export_to_stage(job, staged_args, diagnostics)
-            if code == 2:
-                return code
-            step = job.step(args.step) if args.step else job.single_step
-            for old, new in ((f"{step.name}.json", "intermediate.json"),
-                             (f"{step.name}.svg", "preview.svg"),
-                             (f"{step.name}.html", "preview.html")):
-                source = output.path / old
-                if source.is_file() and old != new:
-                    source.replace(output.path / new)
-            report = output.path / "diagnostics/run.json"
-            report.parent.mkdir(parents=True, exist_ok=True)
-            report.write_text(json.dumps({"source": job.source_path,
-                "numerical_backend": "rust",
-                "step": step.name, "status": "partial" if code else "success",
-                "precision": {"sagitta_mm": args.sagitta, "digits": args.digits},
-                "runtime": runtime_metrics(getattr(args, "_started", time.perf_counter())),
-                "diagnostics": [asdict(d) for d in diagnostics.items]},
-                ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            try:
+                step = job.step(args.step) if args.step else job.single_step
+            except ValueError:
+                step = None
+            if code == 0:
+                for old, new in ((f"{step.name}.json", "intermediate.json"),
+                                 (f"{step.name}.svg", "preview.svg"),
+                                 (f"{step.name}.html", "preview.html")):
+                    source = output.path / old
+                    if source.is_file() and old != new:
+                        source.replace(output.path / new)
+            else:
+                # Drop anything this round staged: a failed run leaves evidence,
+                # never a half-written document.
+                for child in output.path.iterdir():
+                    shutil.rmtree(child) if child.is_dir() else child.unlink()
+            if step is not None:
+                report = output.path / "diagnostics/run.json"
+                report.parent.mkdir(parents=True, exist_ok=True)
+                report.write_text(json.dumps({"source": job.source_path,
+                    "numerical_backend": "rust",
+                    "step": step.name, "status": "success" if code == 0 else "failed",
+                    "precision": {"sagitta_mm": args.sagitta, "digits": args.digits},
+                    "runtime": runtime_metrics(getattr(args, "_started", time.perf_counter())),
+                    "diagnostics": [asdict(d) for d in diagnostics.items]},
+                    ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")
             output.commit()
     except (OSError, ValueError, OdbError) as exc:
         print(f"error: cannot export: {exc}", file=sys.stderr)
         return 2
-    print(f"published parser outputs -> {directory}")
+    print(f"published parser outputs -> {directory}" if code == 0
+          else f"failed; published diagnostics only -> {directory}")
     return code

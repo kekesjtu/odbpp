@@ -30,10 +30,8 @@ uv run python tools/sync_contract.py --check
 | 根 `steps` | 恰好一个单板 step，不支持矩阵拼板和嵌套引用 |
 | step `profile_id` | `profiles` 中整板实体范围的引用 |
 | step `profiles` | `{id, layers, polygons}`。按规整后几何去重的轮廓集合，包含继承的 step 孔；`layers` 列出所属 BOARD 层名称 |
-| step `layers` | 按 matrix row 排列的 BOARD 层目录；唯一存储层类型、上下文、Z、跨度、厚度来源与图案 |
+| step `layers` | 按 matrix row 排列的 BOARD 层目录；唯一存储层类型、上下文、Z、跨度与图案；每个层都带本层几何 |
 | layer `row` | 必填正整数，同一 step 内唯一；matrix 层序的权威来源，钻孔覆盖按端点铜层和介质的 row 判断 |
-| layer `geometry_status` | `ready` 成功（允许空图案）、`failed` 失败、`omitted` 被筛选等原因未导出 |
-| layer `geometry_error` | 失败或域不可用的原因；失败层必须提供，不静默继承 step 域 |
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
 | layer `z_mm` | `{start_mm, thickness_mm}`；实体物理层自身的绝对 Z；值可为 `null`，DRILL 不导出 |
 | layer `start_layer/end_layer` | DRILL 起止铜层名称；引用同一 step 的 BOARD 铜层，按 row 自顶向下排列；其他层不保存端点 |
@@ -50,7 +48,7 @@ MISC 层不进入此接口，包括层目录、图案、轮廓归属与叠层信
 
 ## 介质实体范围与图元
 
-介质实体范围仅保存在 `profiles[].polygons` 中，包含轮廓定义的真实空洞。介质 `layer.polygons` 从空几何开始，按本层图元极性规整，不填充轮廓基底；无图元时输出空数组，`geometry_status` 仍为 `ready`。
+介质实体范围仅保存在 `profiles[].polygons` 中，包含轮廓定义的真实空洞。介质 `layer.polygons` 从空几何开始，按本层图元极性规整，不填充轮廓基底；无图元时输出空数组。
 
 跨层 DRILL 作为独立图案交付，不改写本层图案。介质预览从 profile 构造基底，应用本层图元并扣除相交钻孔，仅作用于绘图副本。等效器以 profile 和钻孔投影确定介质材料分布，见[材料采样](../decisions/pcbeq/material-sampling.md)。
 
@@ -73,9 +71,9 @@ MISC 层不进入此接口，包括层目录、图案、轮廓归属与叠层信
 钻孔保存投影多边形和 `start_layer/end_layer` 来描述几何与深度；端点名称来自 matrix 的 START_NAME/END_NAME，引用解析后的实际层名。层身份和解析状态仍保留。
 端点必须引用两个不同的 BOARD 铜层，且起点 row 小于终点 row。覆盖条件为 `起点铜层.row < 介质层.row < 终点铜层.row`，不依赖层厚或绝对 Z。最外侧铜层之外的介质不被覆盖。
 需要介质采样时，钻孔缺少拓扑跨度或无法定位端点铜层均明确报错。绝对 Z 仅用于三维尺寸；未知位置或重合的厚度不改变覆盖关系。
-无有效域、失败/未导出的待等效层、介质采样所需钻孔跨度未知仍阻止生成正式结果。
+无有效域、层缺少计算轮廓、介质采样所需钻孔跨度未知仍阻止生成正式结果。文档的层目录即整板层目录，等效器不区分“失败层”或“未导出层”。
 铜层忽略 DRILL，仅铜层输入不要求钻孔跨度。
 原始层极性、轮廓基底使用状态与图元/极性段计数仅保留在内部模型及解析统计中，
 不写入中间 JSON。根节点也不导出 `diagnostics`，
-解析诊断通过命令行和独立的 `diagnostics/run.json` 交付；中间 JSON 保留逐层 `geometry_status/geometry_error`。
+解析诊断通过命令行和独立的 `diagnostics/run.json` 交付，不写入中间 JSON。
 消费者直接使用规整后的实体几何。

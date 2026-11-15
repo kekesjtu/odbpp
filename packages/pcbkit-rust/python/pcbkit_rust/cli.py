@@ -51,11 +51,6 @@ def build_parser(*, prog="pcbkit-rust") -> argparse.ArgumentParser:
     common(p_exp)
     p_exp.add_argument("-o", "--out", default=None,
                        help="output directory (default: out/<job name>)")
-    p_exp.add_argument("--layer", action="append", default=None, metavar="NAME",
-                       help="restrict to this layer; repeatable")
-    p_exp.add_argument("--exclude-type", action="append", default=None,
-                       metavar="TYPE",
-                       help="skip layers of this matrix TYPE (e.g. DOCUMENT); repeatable")
     p_exp.add_argument("--sagitta-mm", "--sagitta", dest="sagitta", type=float, default=DEFAULT_SAGITTA_MM,
                        help=f"curve flattening tolerance in mm (default {DEFAULT_SAGITTA_MM})")
     p_exp.add_argument("--digits", type=int, default=4,
@@ -70,8 +65,6 @@ def build_parser(*, prog="pcbkit-rust") -> argparse.ArgumentParser:
                        help="also write one SVG per layer under <out>/layers/")
     p_exp.add_argument("--per-layer-png", action="store_true",
                        help="write one PNG per layer under <out>/layers/")
-    p_exp.add_argument("--no-diagnostics", action="store_true",
-                       help="omit the final parser diagnostic listing on stderr; exit status is unchanged")
     p_exp.set_defaults(json_out=None, format=None, max_records=5, no_features=False)
 
     return parser

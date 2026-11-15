@@ -69,7 +69,7 @@ def existing_preview(directory, source, *, backend='rust', per_layer_png=False):
             owned = json.loads((base / 'diagnostics/artifacts.json').read_text(encoding='utf-8'))['files']
             pngs = [name for name in owned if name.startswith('layers/') and name.endswith('.png')]
             # Additional MISC images belong to the manifest, not the BOARD JSON catalogue.
-            expected = sum(layer['geometry_status'] == 'ready' for layer in data['steps'][0]['layers'])
+            expected = len(data['steps'][0]['layers'])
             if len(pngs) < expected or any(not (base / name).is_file() for name in pngs):
                 return None
         return (path, data)

@@ -8,9 +8,6 @@ use serde::Deserialize;
 fn board() -> String {
     "BOARD".into()
 }
-fn ready() -> String {
-    "ready".into()
-}
 fn resolution() -> f64 {
     0.0001
 }
@@ -45,9 +42,6 @@ pub struct Layer {
     #[serde(default = "board")]
     pub context: String,
     pub row: u64,
-    #[serde(default = "ready")]
-    pub geometry_status: String,
-    pub geometry_error: Option<String>,
     pub polygons: Vec<Polygon>,
     pub z_mm: Option<Extent>,
     pub start_layer: Option<String>,

@@ -207,7 +207,6 @@ def test_snap_keeps_self_crossings_and_counts_collapsed_rings():
 def test_input_adapter_to_contract_keeps_layer_profiles_and_z(tmp_path):
     job = _basic_job(tmp_path)
     preview = build_step_preview(job)
-    assert not preview.failed_layers
     document = step_to_document(job, preview)
     assert document.steps[0].profiles
     assert len(document.steps[0].layers) == sum(l.ref.context.value == "BOARD" for l in job.single_step.layers)
@@ -277,7 +276,7 @@ def test_json_only_does_not_parse_misc_features(tmp_path):
         "steps/board/layers/notes/features": "UNITS=MM\nP BROKEN\n",
     })
     output = tmp_path / "result"
-    assert main(["export", str(source), "-o", str(output), "--only-json", "--no-diagnostics"]) == 0
+    assert main(["export", str(source), "-o", str(output), "--only-json"]) == 0
     step = json.loads((output / "intermediate.json").read_text())["steps"][0]
     assert [layer["name"] for layer in step["layers"]] == ["cu"]
     assert step["profiles"][0]["layers"] == ["cu"]
@@ -297,7 +296,6 @@ def test_dielectric_without_artwork_exports_profile_and_renders_substrate(tmp_pa
     job = load_job(str(source))
     preview = build_step_preview(job)
     step = step_to_document(job, preview).steps[0]
-    assert step.layers[0].geometry_status == "ready"
     assert step.layers[0].polygons == []
     assert step.profiles[0].layers == ["FR"] and step.profiles[0].polygons
     assert not job.diagnostics.errors
@@ -332,20 +330,21 @@ def test_dielectric_artwork_is_composed_without_a_profile_seed(tmp_path, polarit
     assert preview.layers[0].area_mm2 == pytest.approx(artwork_area)
 
 
-def test_filtered_dielectric_draws_omitted_drills_at_requested_precision(tmp_path):
-    from pcbkit_rust.export import PreviewOptions
+def test_dielectric_drill_cutout_keeps_submicron_offsets(tmp_path):
     from pcbkit_rust.drawing import dielectric_drill_cutouts
-    from conftest import write_tree
+    from pcbkit_rust.export import PreviewOptions
     source = Path(_basic_job(tmp_path).source_path)
-    write_tree(source, {"steps/board/layers/drill_1_2/features":
-        "UNITS=MM\n$0 s1000\nP 4.000021 4 0 P 0 0\n"})
+    write_tree(source, {"steps/board/layers/drill_1_2/features": chr(10).join(
+        ["UNITS=MM", "$0 s1000", "P 4.000021 4 0 P 0 0", ""])})
     job = load_job(str(source))
-    preview = build_step_preview(job, options=PreviewOptions(layers=["dielectric_1"], round_digits=6))
+    preview = build_step_preview(job, options=PreviewOptions(round_digits=6))
+    assert next(l for l in step_to_document(job, preview).steps[0].layers
+                if l.name == "dielectric_1").polygons == []
     drawn = dielectric_drill_cutouts(preview)
-    assert step_to_document(job, preview).steps[0].layers[1].polygons == []
     assert drawn.drawing_only
-    assert drawn.layers[0].area_mm2 == pytest.approx(99)
-    holes = [ring for ring in drawn.layers[0].rings if ring.is_hole]
+    cut = next(l for l in drawn.layers if l.name == "dielectric_1")
+    assert cut.area_mm2 == pytest.approx(99)
+    holes = [ring for ring in cut.rings if ring.is_hole]
     assert any(ring.bounds[0] == pytest.approx(3.500021, abs=1e-7) for ring in holes)
 
 

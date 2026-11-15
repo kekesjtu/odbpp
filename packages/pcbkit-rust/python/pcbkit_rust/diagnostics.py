@@ -167,10 +167,7 @@ GEOMETRY_ZERO_WIDTH_STROKE = "geometry.zero_width_stroke"
 
 # export
 EXPORT_NO_GEOMETRY = "export.no_geometry"
-EXPORT_LAYER_SELECTION_EMPTY = "export.layer_selection_empty"
 EXPORT_LAYER_FAILED = "export.layer_failed"
-EXPORT_LAYER_SKIPPED = "export.layer_skipped"
-EXPORT_UNKNOWN_LAYER = "export.unknown_layer"
 #: Vertices collapsed onto one another at the output grid, so a ring lost all
 #: its area; the ring is dropped from the model rather than shipped invalid.
 EXPORT_DEGENERATE_RING = "export.degenerate_ring"

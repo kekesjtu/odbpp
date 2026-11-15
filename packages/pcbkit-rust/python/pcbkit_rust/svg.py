@@ -254,7 +254,7 @@ def render_svg(preview: StepPreview, *, options: Optional[SvgOptions] = None,
     # coordinates at a coarser precision is what turned a 0.00002 mm-wide pad
     # into a zero-width path whose JSON still claimed area.
     view = regularise_preview(preview, digits, diagnostics=preview.diagnostics)
-    view = dielectric_drill_cutouts(view, None if layers is None else {l.name for l in layers})
+    view = dielectric_drill_cutouts(view)
     if layers is not None:
         by_name = {l.name: l for l in view.layers}
         source = [by_name[l.name] for l in layers if l.name in by_name]
@@ -340,7 +340,7 @@ def _render_svg(view: StepPreview, opts: SvgOptions,
                'stroke-dasharray="6 4" pointer-events="none">')
     for index, layer in enumerate(chosen):
         profile = layer.layer.profile if layer.layer.profile is not None else view.step.profile
-        if layer.drawing is None and profile is not None and layer.layer.profile_error is None:
+        if layer.drawing is None and profile is not None:
             profile_region, _ = snap_to_grid(layer_profile_region(view.step, layer.layer, view.expansion_options.tessellation), digits)
             out.append(f'<path data-name="{_escape(layer.name)}" '
                        f'd="{path_data(profile_region.rings, digits)}" style="display:none" '
@@ -791,8 +791,7 @@ def _layer_rows(preview: StepPreview, options: SvgOptions,
             f'data-z-end="{extent.end_mm:.3f}" '
             f'data-z-known="{str(extent.thickness_known).lower()}" '
         )
-        profile_source = (f"error: {layer.layer.profile_error}" if layer.layer.profile_error else
-                          "layer_profile" if layer.layer.profile is not None else
+        profile_source = ("layer_profile" if layer.layer.profile is not None else
                           "step_profile" if preview.step.profile is not None else "missing")
         details = (
             f'data-context="{layer.layer.ref.context.value}" '
@@ -951,7 +950,6 @@ def _render_html(view: StepPreview, opts: SvgOptions,
     bounds = view.bounds or (0, 0, 0, 0)
     size = f"{bounds[2] - bounds[0]:.2f} x {bounds[3] - bounds[1]:.2f} mm"
     empty = [l.name for l in ordered if l.is_empty]
-    failed = list(view.failed_layers)
 
     head_meta = " &middot; ".join(filter(None, [
         _html.escape(source or ""),
@@ -963,9 +961,8 @@ def _render_html(view: StepPreview, opts: SvgOptions,
         _thickness_note(view),
     ]))
 
-    # Empty and failed layers are called out separately and never merged: an
-    # empty layer is usually intentional (zero-width artwork) while a failed one
-    # means the drawing is incomplete, and a reader needs to know which.
+    # An empty layer is usually intentional (zero-width artwork); it is called
+    # out so a reader does not mistake it for a layer that vanished.
     warning = ""
     if empty:
         warning += (
@@ -975,14 +972,6 @@ def _render_html(view: StepPreview, opts: SvgOptions,
             f'{"..." if len(empty) > 6 else ""}'
             " &mdash; often zero-width (<code>r0</code>) artwork</div>"
         )
-    if failed:
-        warning += (
-            '<div class="meta" style="color:#f85149;margin-top:4px">'
-            f'{len(failed)} layer(s) could not be composed and are absent: '
-            f'{_html.escape(", ".join(failed[:6]))}'
-            f'{"..." if len(failed) > 6 else ""}</div>'
-        )
-
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>

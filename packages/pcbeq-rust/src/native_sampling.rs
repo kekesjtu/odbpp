@@ -27,7 +27,7 @@ pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
     if !step
         .layers
         .iter()
-        .any(|l| l.physical() && l.kind == "DIELECTRIC" && l.geometry_status == "ready")
+        .any(|l| l.physical() && l.kind == "DIELECTRIC")
     {
         return Ok(vec![]);
     }
@@ -57,12 +57,6 @@ pub fn drills(step: &Step) -> Result<Vec<Drill<'_>>> {
             "drill layer {:?}: missing end copper layer",
             layer.name
         ))?;
-        if layer.geometry_status != "ready" {
-            return Err(format!(
-                "drill layer {:?}: geometry is {}",
-                layer.name, layer.geometry_status
-            ));
-        }
         drills.push(Drill {
             layer,
             endpoint_rows: [top.row, bottom.row],
