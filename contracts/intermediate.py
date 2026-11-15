@@ -57,8 +57,6 @@ class LayerModel(ContractModel):
     type: str = Field(min_length=1, description="ODB++ 层类型；等效器明确报告不支持的材料类型。")
     context: Literal["BOARD"] = "BOARD"
     row: StrictInt = Field(ge=1, description="matrix ROW；同一 step 内唯一，表达层的上下次序。")
-    form: Literal["RIGID", "FLEX"] = "RIGID"
-    form_source: Literal["DECLARED", "FLEX_SUBTYPE", "DEFAULT"] = "DEFAULT"
     geometry_status: Literal["ready", "failed", "omitted"] = "ready"
     geometry_error: str | None = None
     polygons: list[PolygonModel] = Field(description="本层图元规整后的正向几何；介质未扣除跨层 DRILL 投影，铜层不受 DRILL 改写。")

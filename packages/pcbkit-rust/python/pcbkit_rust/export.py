@@ -508,7 +508,6 @@ def _layer_metadata(layer: Layer, stackup: Optional[Stackup], digits: int) -> di
         "name": layer.name,
         "type": layer.type.value if layer.type is not None else "UNKNOWN",
         "context": ref.context.value, "row": ref.row,
-        "form": ref.form.value, "form_source": ref.form_source.value,
         "start_layer": None if endpoints is None else endpoints[0].name,
         "end_layer": None if endpoints is None else endpoints[1].name,
         "z_mm": None if extent is None else {

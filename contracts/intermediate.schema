@@ -26,25 +26,6 @@
           "title": "Row",
           "type": "integer"
         },
-        "form": {
-          "default": "RIGID",
-          "enum": [
-            "RIGID",
-            "FLEX"
-          ],
-          "title": "Form",
-          "type": "string"
-        },
-        "form_source": {
-          "default": "DEFAULT",
-          "enum": [
-            "DECLARED",
-            "FLEX_SUBTYPE",
-            "DEFAULT"
-          ],
-          "title": "Form Source",
-          "type": "string"
-        },
         "geometry_status": {
           "default": "ready",
           "enum": [

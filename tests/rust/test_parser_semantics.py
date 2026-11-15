@@ -82,7 +82,7 @@ def test_form_precedence_sources_and_diagnostics(tmp_path, kind, subtype, declar
     assert all(issue.level == "warning" and issue.path.endswith("matrix/matrix")
                for issue in job.diagnostics)
     layer = exported_layers(job)["LAYER"]
-    assert (layer["form"], layer["form_source"]) == (form, source)
+    assert "form" not in layer and "form_source" not in layer
 
 
 def test_nested_custom_symbols_expand_after_archive_closes_and_unused_symbols_stay_unread(tmp_path):

@@ -67,17 +67,6 @@ impl Board {
             )?;
             require(l.context == "BOARD", "invalid layer context")?;
             require(
-                matches!(l.form.as_str(), "RIGID" | "FLEX"),
-                "invalid layer form",
-            )?;
-            require(
-                matches!(
-                    l.form_source.as_str(),
-                    "DECLARED" | "FLEX_SUBTYPE" | "DEFAULT"
-                ),
-                "invalid form_source",
-            )?;
-            require(
                 matches!(l.geometry_status.as_str(), "ready" | "failed" | "omitted"),
                 "invalid geometry_status",
             )?;

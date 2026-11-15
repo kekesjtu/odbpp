@@ -37,7 +37,6 @@ uv run python tools/sync_contract.py --check
 | layer `polygons` | 正向实体图案；岛和孔用 `island` 明确区分，不携带可执行的 ODB++ 极性 |
 | layer `z_mm` | `{start_mm, thickness_mm}`；实体物理层自身的绝对 Z；值可为 `null`，DRILL 不导出 |
 | layer `start_layer/end_layer` | DRILL 起止铜层名称；引用同一 step 的 BOARD 铜层，按 row 自顶向下排列；其他层不保存端点 |
-| layer `form/form_source` | RIGID/FLEX 及其声明、子类型或规范默认来源 |
 
 MISC 层不进入此接口，包括层目录、图案、轮廓归属与叠层信息。MISC 预览直接使用独立绘图指令，不从中间 JSON 恢复。
 

@@ -8,12 +8,6 @@ use serde::Deserialize;
 fn board() -> String {
     "BOARD".into()
 }
-fn rigid() -> String {
-    "RIGID".into()
-}
-fn default_form() -> String {
-    "DEFAULT".into()
-}
 fn ready() -> String {
     "ready".into()
 }
@@ -51,10 +45,6 @@ pub struct Layer {
     #[serde(default = "board")]
     pub context: String,
     pub row: u64,
-    #[serde(default = "rigid")]
-    form: String,
-    #[serde(default = "default_form")]
-    form_source: String,
     #[serde(default = "ready")]
     pub geometry_status: String,
     pub geometry_error: Option<String>,
