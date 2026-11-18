@@ -19,4 +19,5 @@ mod raster_index;
 mod rectangles;
 mod region_raster;
 mod sampling;
+mod thermal_network;
 mod topology;

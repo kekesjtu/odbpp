@@ -61,5 +61,5 @@ Python 环境与依赖由根目录的 `.python-version`、`pyproject.toml` 和 `
 ## 推导与参考来源
 
 - [官方规范与参考格式](reference/format-sources.md)：ODB++ 规范版次、来源及其他参考格式。
-- [串并联 PCB 等效热模型推导](derivation/串并联PCB等效热模型推导.md)。
+- [二维热阻网络 PCB 等效热模型推导](derivation/二维热阻网络PCB等效热模型推导.md)。
 - [密度和热容等效热模型推导](derivation/密度和热容等效热模型推导.md)。

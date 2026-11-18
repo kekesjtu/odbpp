@@ -109,12 +109,13 @@ pub fn evaluate(
         regions[rid] = diagnostics.measure("equivalence", || {
             let values = sampling::integrate_pixels(
                 &pixels,
-                tile.x.2,
-                tile.y.2,
-                tile.windows.clone(),
+                [tile.x.2, tile.y.2],
+                [tile.x.1, tile.y.1],
+                &tile.windows,
                 materials,
                 mesh.minimum,
-            )?;
+            )
+            .map_err(|error| format!("layer {:?} region {rid}: {error}", layer.name))?;
             let mut checked = Vec::with_capacity(values.len());
             for (q, value) in values.into_iter().enumerate() {
                 let mut properties = value.ok_or_else(|| format!(
