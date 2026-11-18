@@ -4,6 +4,7 @@ use crate::{
     Result,
     thermal_network::{Network, PixelWindow},
 };
+use rayon::prelude::*;
 
 type Window = (usize, usize, usize, usize);
 
@@ -39,24 +40,32 @@ pub fn integrate_pixels(
         return Err("sampling window outside raster".into());
     }
 
-    let mut network = Network::default();
     windows
-        .iter()
+        .par_iter()
+        .with_min_len(
+            windows
+                .len()
+                .div_ceil(rayon::current_num_threads() * 4)
+                .max(1),
+        )
         .enumerate()
-        .map(|(cell, &(left, right, bottom, top))| {
-            let (cols, rows) = (right - left, top - bottom);
-            if cols < minimum || rows < minimum {
-                return Ok(None);
-            }
-            let window = PixelWindow {
-                pixels: &pixels[bottom * stride + left..],
-                stride,
-                cols,
-                rows,
-            };
-            properties(&window, pitch, materials, &mut network)
-                .map_err(|e| format!("cell {cell}: {e}"))
-        })
+        .map_init(
+            Network::default,
+            |network, (cell, &(left, right, bottom, top))| {
+                let (cols, rows) = (right - left, top - bottom);
+                if cols < minimum || rows < minimum {
+                    return Ok(None);
+                }
+                let window = PixelWindow {
+                    pixels: &pixels[bottom * stride + left..],
+                    stride,
+                    cols,
+                    rows,
+                };
+                properties(&window, pitch, materials, network)
+                    .map_err(|e| format!("cell {cell}: {e}"))
+            },
+        )
         .collect()
 }
 
