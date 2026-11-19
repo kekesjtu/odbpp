@@ -27,6 +27,7 @@ def build_parser():
     mesh = parser.add_mutually_exclusive_group()
     mesh.add_argument('--grid-level', choices=('coarse', 'standard', 'fine'))
     mesh.add_argument('--max-cell-mm', type=float, nargs='+', metavar='MM')
+    parser.add_argument('--mode', type=int, choices=(1, 2), help='1 = 2DVTN (default), 2 = SPTRA')
     parser.add_argument('--materials', type=Path, help='production material configuration JSON')
     return parser
 
@@ -49,7 +50,7 @@ def main(argv=None) -> int:
         parser.error('input must not be overwritten by benchmark outputs')
     errors = (OSError, ValueError, ImportError, RuntimeError)
     try:
-        settings = {'px': args.px, 'py': args.py, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'max_cell_mm': args.max_cell_mm, 'max_area_error_ratio': args.max_area_error_ratio}
+        settings = {'px': args.px, 'py': args.py, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'mode': args.mode, 'max_cell_mm': args.max_cell_mm, 'max_area_error_ratio': args.max_area_error_ratio}
         args.output.mkdir(parents=True, exist_ok=True)
         report = {'measurement': 'intermediate JSON read/validation through MaterialMap close and rename', 'excluded': ['ODB++ parsing', 'process startup/imports (separately reported in process_wall_s)', 'images/HTML', 'benchmark metadata', 'fsync to physical storage'], 'cache_policy': 'fresh pcbeq process per run; normal OS file cache', 'environment': {'python': sys.version, 'platform': platform.platform(), 'processor': platform.processor(), 'cpu_count': os.cpu_count()}, 'backend': args.backend, 'input': {'path': str(args.input.resolve()), 'bytes': args.input.stat().st_size}, 'options': {**settings, 'materials_path': str(args.materials) if args.materials else None}, 'warmup': args.warmup, 'repeat': args.repeat, 'runs': []}
         for index in range(args.warmup + args.repeat):

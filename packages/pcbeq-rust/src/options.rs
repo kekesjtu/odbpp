@@ -1,5 +1,18 @@
 use crate::Result;
+use clap::ValueEnum;
 use serde_json::Value;
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+pub enum Mode {
+    /// 2DVTN, a two-dimensional pixel thermal resistance network.
+    #[default]
+    #[value(name = "1")]
+    TwoDimensional,
+    /// SPTRA, a series-parallel approximation of the pixel thermal resistances.
+    #[value(name = "2")]
+    Sptra,
+}
+
 pub struct Options {
     pub px: Option<usize>,
     pub py: Option<usize>,
@@ -8,6 +21,7 @@ pub struct Options {
     pub max_area_error_ratio: f64,
     pub materials: Value,
     pub materials_path: Option<String>,
+    pub mode: Mode,
 }
 impl Options {
     pub fn validate(&self) -> Result<()> {

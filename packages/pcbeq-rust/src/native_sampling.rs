@@ -75,6 +75,7 @@ pub fn evaluate(
     mesh: &Mesh,
     profile: usize,
     materials: [f64; 6],
+    mode: crate::options::Mode,
     diagnostics: &mut Diagnostics,
 ) -> Result<Vec<Vec<[f64; 5]>>> {
     let source = diagnostics.measure("sampling", || {
@@ -114,6 +115,7 @@ pub fn evaluate(
                 &tile.windows,
                 materials,
                 mesh.minimum,
+                mode,
             )
             .map_err(|error| format!("layer {:?} region {rid}: {error}", layer.name))?;
             let mut checked = Vec::with_capacity(values.len());

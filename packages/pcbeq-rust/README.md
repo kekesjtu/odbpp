@@ -25,6 +25,8 @@ cargo build -p pcbeq-rust --release --target x86_64-pc-windows-msvc
 
 ## 可选 Python 管线与绘图
 
+原生 CLI 和 Python 管线均使用 `--mode 1`（默认）选择 2DVTN，使用 `--mode 2` 选择 SPTRA。两种模式的面内热导计算见[材料模型](../../docs/decisions/pcbeq/material-model.md)。
+
 Python 包独立构建：`uv build --package pcbeq-rust`，不携带原生扩展或计算程序。计算程序放入 PATH，或通过环境变量和命令选项指定：
 
 ```powershell

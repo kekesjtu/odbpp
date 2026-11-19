@@ -1,5 +1,8 @@
 use clap::{Args, Parser, Subcommand};
-use pcbeq::{options::Options, pipeline};
+use pcbeq::{
+    options::{Mode, Options},
+    pipeline,
+};
 use serde_json::{Value, json};
 use std::{path::PathBuf, process::ExitCode};
 
@@ -32,6 +35,9 @@ struct Run {
     py: Option<usize>,
     #[arg(long, value_parser = ["coarse", "standard", "fine"], conflicts_with = "max_cell_mm")]
     grid_level: Option<String>,
+    /// In-plane conductivity model.
+    #[arg(long, value_enum, default_value = "1")]
+    mode: Mode,
     /// One common or two X/Y maximum cell sizes in mm.
     #[arg(long, num_args = 1..=2)]
     max_cell_mm: Option<Vec<f64>>,
@@ -105,6 +111,7 @@ impl Run {
             PathBuf::from("out").join(self.path.file_stem().unwrap_or_default())
         });
         let options = Options {
+            mode: self.mode,
             px: self.px,
             py: self.py,
             grid_level: self

@@ -2,11 +2,13 @@
 
 use crate::{
     Result,
+    options::Mode,
+    series_parallel,
     thermal_network::{Network, PixelWindow},
 };
 use rayon::prelude::*;
 
-type Window = (usize, usize, usize, usize);
+pub(crate) type Window = (usize, usize, usize, usize);
 
 pub fn integrate_pixels(
     pixels: &[u8],
@@ -15,6 +17,7 @@ pub fn integrate_pixels(
     windows: &[Window],
     materials: [f64; 6],
     minimum: usize,
+    mode: Mode,
 ) -> Result<Vec<Option<[f64; 5]>>> {
     if stride.checked_mul(height) != Some(pixels.len())
         || stride == 0
@@ -38,6 +41,11 @@ pub fn integrate_pixels(
         .any(|&(a, b, c, d)| a > b || b > stride || c > d || d > height)
     {
         return Err("sampling window outside raster".into());
+    }
+    if matches!(mode, Mode::Sptra) {
+        return Ok(series_parallel::integrate(
+            pixels, stride, windows, materials, minimum,
+        ));
     }
 
     windows
@@ -72,7 +80,7 @@ pub fn integrate_pixels(
 fn properties(
     window: &PixelWindow<'_>,
     pitch: [f64; 2],
-    [k1, k2, d1, d2, c1, c2]: [f64; 6],
+    materials: [f64; 6],
     network: &mut Network,
 ) -> Result<Option<[f64; 5]>> {
     let first = window.row(0);
@@ -95,7 +103,8 @@ fn properties(
     }
     let count = window.cols * window.rows;
     let fraction = copper as f64 / count as f64;
-    let kz = fraction * k1 + (1. - fraction) * k2;
+    let [k1, k2, ..] = materials;
+    let [kz, density, cp] = bulk_properties(fraction, materials);
     let (kx, ky) = if copper == 0 || copper == count || k1 == k2 {
         (kz, kz)
     } else if constant_rows || identical_rows {
@@ -117,9 +126,14 @@ fn properties(
                 .map_err(|e| format!("Y: {e}"))?,
         )
     };
+    Ok(Some([kx, ky, kz, density, cp]))
+}
+
+pub(crate) fn bulk_properties(fraction: f64, [k1, k2, d1, d2, c1, c2]: [f64; 6]) -> [f64; 3] {
+    let kz = fraction * k1 + (1. - fraction) * k2;
     let density = fraction * d1 + (1. - fraction) * d2;
     let cp = (fraction * d1 * c1 + (1. - fraction) * d2 * c2) / density;
-    Ok(Some([kx, ky, kz, density, cp]))
+    [kz, density, cp]
 }
 
 #[cfg(test)]
@@ -134,6 +148,7 @@ mod tests {
             &[(0, size[0], 0, size[1])],
             materials,
             1,
+            Mode::default(),
         )
         .unwrap()[0]
             .unwrap()
@@ -176,11 +191,31 @@ mod tests {
             (vec![0; 4], (0, 2, 0, 2), 3),
         ] {
             assert_eq!(
-                integrate_pixels(&pixels, [2, 2], [1.; 2], &[window], [1.; 6], minimum).unwrap(),
+                integrate_pixels(
+                    &pixels,
+                    [2, 2],
+                    [1.; 2],
+                    &[window],
+                    [1.; 6],
+                    minimum,
+                    Mode::default()
+                )
+                .unwrap(),
                 vec![None]
             );
         }
-        assert!(integrate_pixels(&[], [1, 1], [1.; 2], &[], [1.; 6], 1).is_err());
-        assert!(integrate_pixels(&[0], [1, 1], [1.; 2], &[(0, 2, 0, 1)], [1.; 6], 1).is_err());
+        assert!(integrate_pixels(&[], [1, 1], [1.; 2], &[], [1.; 6], 1, Mode::default()).is_err());
+        assert!(
+            integrate_pixels(
+                &[0],
+                [1, 1],
+                [1.; 2],
+                &[(0, 2, 0, 1)],
+                [1.; 6],
+                1,
+                Mode::default()
+            )
+            .is_err()
+        );
     }
 }

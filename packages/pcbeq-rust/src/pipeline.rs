@@ -157,6 +157,7 @@ fn execute(
             &mesh,
             profile,
             pair,
+            options.mode,
             diagnostics,
         )?;
         diagnostics.measure("write", || {
