@@ -1,6 +1,10 @@
-//! Row and column series-parallel conductivity using band prefix sums.
+//! Row and column series-parallel conductivity for each pixel window.
 
 use crate::sampling::{Window, bulk_properties};
+
+const COMPARISON_WIDTH: usize = 128;
+const COPPER: [u8; COMPARISON_WIDTH] = [0; COMPARISON_WIDTH];
+const BASE: [u8; COMPARISON_WIDTH] = [255; COMPARISON_WIDTH];
 
 pub(crate) fn integrate(
     pixels: &[u8],
@@ -10,55 +14,102 @@ pub(crate) fn integrate(
     minimum: usize,
 ) -> Vec<Option<[f64; 5]>> {
     let [k1, k2, ..] = materials;
-    let mut out = vec![None; windows.len()];
-    let mut start = 0;
-    while start < windows.len() {
-        let (_, _, bottom, top) = windows[start];
-        let mut end = start + 1;
-        while end < windows.len() && windows[end].2 == bottom && windows[end].3 == top {
-            end += 1;
-        }
-        let rows = top - bottom;
-        if rows < minimum {
-            start = end;
-            continue;
-        }
-        let left = windows[start..end].iter().map(|w| w.0).min().unwrap();
-        let right = windows[start..end].iter().map(|w| w.1).max().unwrap();
-        let width = right - left;
-        let mut prefix = vec![0u32; rows * (width + 1)];
-        let mut columns = vec![0u32; width];
-        let mut invalid = vec![false; width];
-        for row in 0..rows {
-            for col in 0..width {
-                let pixel = pixels[(bottom + row) * stride + left + col];
-                let n = u32::from(pixel == 0);
-                prefix[row * (width + 1) + col + 1] = prefix[row * (width + 1) + col] + n;
-                columns[col] += n;
-                invalid[col] |= pixel != 0 && pixel != 255;
+    let series = |fraction: f64| 1. / (fraction / k1 + (1. - fraction) / k2);
+    let mut columns = Vec::new();
+    windows
+        .iter()
+        .map(|&(left, right, bottom, top)| {
+            let (cols, rows) = (right - left, top - bottom);
+            if cols < minimum || rows < minimum {
+                return None;
             }
-        }
-        let series = |fraction: f64| 1. / (fraction / k1 + (1. - fraction) / k2);
-        for i in start..end {
-            let (a, b) = (windows[i].0 - left, windows[i].1 - left);
-            let cols = b - a;
-            if cols < minimum || invalid[a..b].iter().any(|v| *v) {
-                continue;
+            let row_pixels = |row| &pixels[row * stride + left..row * stride + right];
+            let (fill, pure_fraction) = match row_pixels(bottom)[0] {
+                0 => (&COPPER, 1.),
+                255 => (&BASE, 0.),
+                _ => return None,
+            };
+            let uniform = (bottom..top).all(|row| {
+                row_pixels(row)
+                    .chunks(COMPARISON_WIDTH)
+                    .all(|chunk| chunk == &fill[..chunk.len()])
+            });
+            if uniform {
+                let k = series(pure_fraction);
+                // Preserve the row and column accumulation, including floating-point rounding.
+                let kx = (0..rows).fold(0., |sum, _| sum + k) / rows as f64;
+                let ky = (0..cols).fold(0., |sum, _| sum + k) / cols as f64;
+                let [kz, density, cp] = bulk_properties(pure_fraction, materials);
+                return Some([kx, ky, kz, density, cp]);
             }
-            let (mut kx, mut ky, mut copper) = (0., 0., 0u64);
-            for row in 0..rows {
-                let n = prefix[row * (width + 1) + b] - prefix[row * (width + 1) + a];
-                copper += u64::from(n);
-                kx += series(n as f64 / cols as f64);
+
+            columns.clear();
+            columns.resize(cols, 0usize);
+            let (mut kx, mut copper) = (0., 0);
+            for row in bottom..top {
+                let mut row_copper = 0;
+                for (&pixel, column) in row_pixels(row).iter().zip(&mut columns) {
+                    match pixel {
+                        0 => {
+                            row_copper += 1;
+                            *column += 1;
+                        }
+                        255 => (),
+                        _ => return None,
+                    }
+                }
+                copper += row_copper;
+                kx += series(row_copper as f64 / cols as f64);
             }
-            for &n in &columns[a..b] {
-                ky += series(n as f64 / rows as f64);
-            }
-            let fraction = copper as f64 / (rows * cols) as f64;
-            let [kz, density, cp] = bulk_properties(fraction, materials);
-            out[i] = Some([kx / rows as f64, ky / cols as f64, kz, density, cp]);
-        }
-        start = end;
+            let ky = columns
+                .iter()
+                .fold(0., |sum, &n| sum + series(n as f64 / rows as f64));
+            let [kz, density, cp] =
+                bulk_properties(copper as f64 / (rows * cols) as f64, materials);
+            Some([kx / rows as f64, ky / cols as f64, kz, density, cp])
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MATERIALS: [f64; 6] = [385., 0.3, 8960., 1850., 385., 1100.];
+
+    #[test]
+    fn uniform_window_preserves_directional_rounding_and_rejects_invalid_pixels() {
+        let stride = 132;
+        let window = [(1, 131, 0, 3)];
+        let mut pixels = vec![255; stride * 3];
+        pixels[0] = 42;
+        let k = 1. / (1. / MATERIALS[1]);
+        let ky = (0..130).fold(0., |sum, _| sum + k) / 130.;
+        assert_eq!(
+            integrate(&pixels, stride, &window, MATERIALS, 1),
+            vec![Some([(k + k + k) / 3., ky, 0.3, 1850., 1100.])]
+        );
+        pixels[2 * stride + 130] = 42;
+        assert_eq!(
+            integrate(&pixels, stride, &window, MATERIALS, 1),
+            vec![None]
+        );
     }
-    out
+
+    #[test]
+    fn mixed_window_reduces_rows_and_columns_separately() {
+        let pixels = [0, 255, 0, 0, 255, 255];
+        let series = |f: f64| 1. / (f / MATERIALS[0] + (1. - f) / MATERIALS[1]);
+        let [kz, density, cp] = bulk_properties(0.5, MATERIALS);
+        assert_eq!(
+            integrate(&pixels, 2, &[(0, 2, 0, 3)], MATERIALS, 1),
+            vec![Some([
+                (series(0.5) + series(1.) + series(0.)) / 3.,
+                (series(2. / 3.) + series(1. / 3.)) / 2.,
+                kz,
+                density,
+                cp,
+            ])]
+        );
+    }
 }
