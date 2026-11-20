@@ -37,7 +37,7 @@ def build_parser():
         epilog=dedent("""\
             Calculation options forwarded to pcbeq
               --grid-level {coarse,standard,fine} or --max-cell-mm MM [MM]
-                Choose a grid preset or set the maximum cell size in X and Y.
+                Use a board-size preset or set maximum cell sizes in millimetres.
               --max-area-error-ratio RATIO   Relative area error limit per profile.
               --pixels-per-cell-axis N       Sample N by N pixels per cell (default: 9).
               --mode {1,2}                  1 for 2DVTN, 2 for SPTRA.

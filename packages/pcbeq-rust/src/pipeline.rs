@@ -123,7 +123,7 @@ fn execute(
     }
     let geometry = planning::plan(step, &options, diagnostics)?;
     diagnostics.geometry(step, &geometry);
-    let mesh = diagnostics.measure("mesh", || native_mesh::build(step, &geometry, &options))?;
+    let mesh = diagnostics.measure("mesh", || native_mesh::build(&geometry, &options))?;
     diagnostics.mesh(&geometry, &mesh);
     let drills = diagnostics.measure("prepare", || native_sampling::drills(step))?;
     let publication = diagnostics.measure("write", || {

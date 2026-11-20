@@ -121,6 +121,23 @@ def test_profile_hole_witness_does_not_remove_its_nested_island(tmp_path):
     assert sum(len(p.interiors) for p in model.geoms) == 1
 
 
+@pytest.mark.parametrize("options,expected", [
+    ({"grid_level": "coarse"}, (256, 4)),
+    ({"grid_level": "standard"}, (512, 8)),
+    ({"grid_level": "fine"}, (512, 8)),
+    ({"max_cell_mm": [0.125, 1]}, (1024, 2)),
+])
+def test_board_sized_presets_and_expert_limits_on_a_narrow_board(tmp_path, options, expected):
+    # A thin track on a 128 x 2 mm board exercises board-only sizing and the 0.25 mm floor.
+    document = build_document(profile=rect(0, 0, 128, 2),
+                              layers=[{"name": "CU", "polygons": [rect(0, 0, 100, 0.012)]}])
+    source = tmp_path / "input.json"
+    source.write_text(json.dumps(document), encoding="utf-8")
+    run(source, tmp_path / "out", pixels_per_cell_axis=1, **options)
+    region, = read_document(tmp_path / "out/materialmap.json").regions
+    assert (region.grid_counts.x, region.grid_counts.y) == expected
+
+
 def test_fast_planning_is_independent_of_material_sampling_density(tmp_path):
     profile = {"island": True, "points": [(0, 0), (12, 0), (12, 12)]}
     source = tmp_path / "input.json"

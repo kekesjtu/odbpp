@@ -73,7 +73,7 @@ struct Run {
         help_heading = "Sampling options"
     )]
     pixels_per_cell_axis: NonZeroUsize,
-    /// Grid preset based on board size and copper features.
+    /// Set one target cell edge length for all regions from the board bounding box.
     ///
     /// Coarse uses larger cells and fine uses smaller cells. The default is standard
     /// when neither grid option is supplied. Mutually exclusive with --max-cell-mm.
