@@ -28,7 +28,7 @@ Linux / macOS 下使用 `export PCBEQ_EXE="$PWD/target/release/pcbeq"`。大部�
 `pytest` 可用 `-k` 缩小到相关行为。默认临时目录为 `tmp/pytest-tmp`。需要按任务保留测试产物时，可将 `--basetemp` 指向任务工作区中的 `pytest/` 子目录。
 
 ```powershell
-$taskScratch = 'tmp/YYYY-MM-DD-case-sync'
+$taskScratch = '.scratch/YYYY-MM-DD-case-sync'
 New-Item -ItemType Directory -Force -Path $taskScratch | Out-Null
 uv run --extra test pytest tests/rust/test_rust_cli.py -k sync_out --basetemp "$taskScratch/pytest"
 ```

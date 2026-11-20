@@ -15,7 +15,8 @@
 | `docs/` | 需求、架构、设计决策、接口、领域调研及参考资料 | 本页下方的专题索引 |
 | `cases/` | 本地 ODB++ 案例与来源资料 | [案例目录](../cases/) |
 | `out/` | 按案例保存的解析、等效、图像和管道正式产物 | [输出与发布](decisions/output-publication.md) |
-| `tmp/` | 任务临时脚本、日志、基准与其他可再生产物 | [协作规范](../AGENTS.md) |
+| `.scratch/` | 任务专属的临时脚本、调试文件与实验产物 | [协作规范](../AGENTS.md) |
+| `tmp/` | 程序管理的临时文件与运行日志 | [协作规范](../AGENTS.md) |
 
 Python 环境与依赖由根目录的 `.python-version`、`pyproject.toml` 和 `uv.lock` 管理；Rust workspace 与依赖由 `Cargo.toml` 和 `Cargo.lock` 管理。开发约定见 [AGENTS.md](../AGENTS.md)。
 

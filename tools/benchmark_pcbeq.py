@@ -1,7 +1,7 @@
 """Benchmark intermediate JSON reading through closed MaterialMap output, without images.
 
 Example (from the repository root):
-    uv run python tools/benchmark_pcbeq.py out/minimal-test-odb/rust/pcbkit/intermediate.json         --output tmp/2026-11-02-pcbeq-benchmark/rust --repeat 3
+    uv run python tools/benchmark_pcbeq.py out/minimal-test-odb/rust/pcbkit/intermediate.json --output .scratch/2026-11-02-pcbeq-benchmark/rust --repeat 3
 """
 from __future__ import annotations
 import argparse
