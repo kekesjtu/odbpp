@@ -8,7 +8,6 @@
 | --- | --- | --- |
 | `packages/pcbkit-rust/` | ODB++ 解析器、Rust 扩展、Python 输入适配与工程预览 | [解析器使用说明](../packages/pcbkit-rust/README.md) |
 | `packages/pcbeq-rust/` | 独立 Rust 等效计算 CLI，以及可选的 Python 管线和绘图 | [等效器使用说明](../packages/pcbeq-rust/README.md) |
-| `crates/` | 产品内部使用的共享 Rust 库 | [几何库](../crates/pcb-geometry/) |
 | `contracts/` | 中间 JSON 的共享 Pydantic 模型与生成 schema | [中间 JSON 契约](interfaces/intermediate-json.md) |
 | `tests/` | 接口、集成、分发验证与最小手写夹具 | [测试目录](../tests/) |
 | `tools/` | 契约同步、进程管道、案例输出、审计、基准及分发验证工具 | [维护工具](../tools/README.md) |

@@ -1,5 +1,5 @@
 //! ODB++ line records. Coordinates, attributes and curves stay native.
-use pcb_geometry::{Point, Ring, boolean, curves};
+use crate::geometry::{Point, Ring, boolean, curves};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::{

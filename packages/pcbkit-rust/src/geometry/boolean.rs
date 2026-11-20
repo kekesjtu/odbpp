@@ -1,4 +1,4 @@
-use crate::{Point, Ring, curves::signed_area};
+use super::{Point, Ring, curves::signed_area};
 use clipper2_rust::*;
 
 pub const SCALE: f64 = 1_000_000.;

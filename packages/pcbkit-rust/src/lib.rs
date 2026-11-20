@@ -1,8 +1,9 @@
-use pcb_geometry::{Point, curves};
+use crate::geometry::{Point, curves};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
 mod compose;
 mod drawing;
+mod geometry;
 mod native;
 mod parser;
 mod symbols;

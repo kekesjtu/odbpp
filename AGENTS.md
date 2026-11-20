@@ -20,7 +20,6 @@ pcbkit / pcbeq AI 协作开发指南，说明项目结构、开发规范和文�
 | `docs/`                                         | 项目文档       | 技术决策、接口、开发说明、调研、推导、参考资料与验证方法 |
 | `contracts/`                                    | 中间 JSON 契约 | 共享 Pydantic 模型权威源和生成的文本 schema              |
 | `packages/pcbkit-rust/`、`packages/pcbeq-rust/` | Rust 核心版    | Rust 扩展、Python 入口及独立分发定义                     |
-| `crates/`                                       | 内部 Rust 库   | 数值核心的共享实现，不作为产品间数据接口                 |
 | `tests/`                                        | 跨包验证       | 接口、集成、分发测试及最小手写夹具                       |
 | `tools/`                                        | 维护工具       | 契约同步、进程管道、批量输出、审计、基准和分发验证       |
 | `cases/`                                        | 本地 PCB 样本  | 符合官方规范的 ODB++ v8.1 案例及来源说明                 |

@@ -1,9 +1,9 @@
 //! Whole-layer expansion: no Python records or intermediate coordinate trees.
 use crate::{
+    geometry::{Point, Ring, boolean, curves},
     parser::{Diagnostic, Features, Record, Result, Shape, SymbolRef, Unit, warn},
     symbols,
 };
-use pcb_geometry::{Point, Ring, boolean, curves};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,

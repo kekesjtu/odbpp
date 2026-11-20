@@ -1,6 +1,8 @@
 //! Full-name standard-symbol recognition and native construction.
-use crate::parser::{Result, Unit};
-use pcb_geometry::{Point, Ring, boolean, curves};
+use crate::{
+    geometry::{Point, Ring, boolean, curves},
+    parser::{Result, Unit},
+};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
 struct Spec {

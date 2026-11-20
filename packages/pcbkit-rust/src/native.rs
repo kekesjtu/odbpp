@@ -1,10 +1,10 @@
 //! Coarse PyO3 boundary. Handles share native data, never Python geometry.
 use crate::{
     compose::Engine,
+    geometry::{Point, Ring, boolean, curves},
     parser::{self, Features, Shape, Surface, Unit},
     symbols,
 };
-use pcb_geometry::{Point, Ring, boolean, curves};
 use pyo3::{
     exceptions::{PyIndexError, PyValueError},
     prelude::*,
