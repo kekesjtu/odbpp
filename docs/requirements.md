@@ -25,7 +25,7 @@
 
 ## 输出与验收
 
-- [MaterialMap](interfaces/materialmap.md) 为每个有效单元交付三个方向的热导率、密度与比热容。物性适用于完整单元体积。采样覆盖率不能折减体积、质量或热容。中间 JSON 以 null 表达未实测的 Z，正式结果对未知侧交付 null。
+- [MaterialMap](interfaces/materialmap.md) 为每个有效单元交付三个方向的热导率、密度与比热容。物性适用于完整单元体积。采样覆盖率不能折减体积、质量或热容。中间 JSON 分别用 `null` 表达未知的层顶位置和层厚，任一项未知时 MaterialMap 的两个 Z 端点均为 `null`。
 - 输入缺少有效域、缺少计算轮廓或必要钻孔跨度无法确定时，须报告可定位的错误。数值几何与物性由运行诊断支持核对。
-- pcbeq 只输出一个 `diagnostics.json`，不输出数值或图片产物清单。诊断分为几何统计、告警与错误、误差分析和性能分析。内置材料默认值记录告警；层厚度或累计绝对 Z 不可信记录非阻断错误，仍正常生成 MaterialMap，未知 Z 为 null。阻断失败须尽力发布本轮失败诊断，不将未完成统计写成零。
+- pcbeq 使用一个 `diagnostics.json` 记录运行诊断，不输出数值或图片产物清单。诊断分为几何统计、告警与错误、误差分析和性能分析。内置材料默认值记录告警，层厚度或累计绝对 Z 不可信记录非阻断错误，仍正常生成 MaterialMap。阻断失败须尽力发布本轮失败诊断，不将未完成统计写成零。
 - 从正式 MaterialMap 恢复 region、网格和物性图表。原始轮廓与模型的面积差异及拓扑结果由数值诊断记录。图表用途与失败后的产物状态见[可视化](decisions/pcbeq/pcbeq-visualization.md)和[输出与发布](decisions/output-publication.md)。

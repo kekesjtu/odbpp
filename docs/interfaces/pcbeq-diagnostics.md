@@ -13,7 +13,7 @@
 | `accuracy` | 各 profile 的面积误差与三项拓扑检查 |
 | `performance` | 不重叠的阶段耗时与总耗时 |
 
-`geometry.profiles` 与 `accuracy.profiles` 使用相同的 profile ID。profile 表示参与等效的二维有效几何，域的物理语义见[几何规划](../decisions/pcbeq/geometry-planning.md)。同几何去重，不依赖输入 profile ID、顶点起点和绕序。只有参与等效的 BOARD 铜层与介质层计入统计。
+`geometry.profiles` 与 `accuracy.profiles` 使用相同的 profile ID。profile 表示参与等效的二维有效几何，域的物理语义见[几何规划](../decisions/pcbeq/geometry-planning.md)。几何相同的输入 profile 共用一项统计，使用其中一个输入 ID。只有参与等效的 BOARD 铜层与介质层计入统计。
 
 ## 几何统计 geometry
 
@@ -44,7 +44,7 @@ MaterialMap 对任一未知侧使用 `[null,null]`，仍交付完整 XY 网格�
 
 输入无效、缺少必要几何、无法满足近似约束、采样不足或发布失败属于阻断错误。条目记录阶段对应的稳定代码 `<stage>.failed`、`stage`、`message` 和 `blocking=true`；消息保留可用的层、profile、region 或单元位置。
 
-正常完成包括存在非阻断错误的情况，CLI 返回 0，问题同时写到 stderr，后续绘图可继续。阻断失败返回 2；输出目录可写且不会覆盖输入时，尽力发布本轮 `failed` 诊断，未完成或未知的统计使用 `null`，已完成统计保留。失败不发布本轮 MaterialMap，目录中保留的上一轮 MaterialMap 不属于本轮失败诊断。命令行语法解析失败发生在计算入口之前，仅由 CLI 报告。
+正常完成包括存在非阻断错误的情况，CLI 返回 0，问题同时写到 stderr，后续绘图可继续。阻断失败返回 2。计算过程中出错时，若输出位置允许写入且安全，尽力发布本轮 `failed` 诊断。未完成或未知的统计使用 `null`，已完成的统计保留。目录中可能仍有上一轮成功发布的 MaterialMap。CLI 参数解析、内联材料 JSON 解析和输出覆盖输入的检查均可能在计算诊断开始前失败，此时由 CLI 报告。
 
 ## 误差分析 accuracy
 

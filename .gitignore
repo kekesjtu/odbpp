@@ -29,10 +29,8 @@ venv/
 Thumbs.db
 
 # Reference checkouts: cloned on demand, never committed.
-# See "external/README.md" for the fetch commands.
 external/*/
 
-# Vendor specification PDF: 7.9 MB binary, Siemens copyright. Kept in the working
-# tree but not versioned; source and checksum are in docs/reference/README.md.
+# Local vendor PDFs. The ODB++ specification source is in docs/reference/format-sources.md.
 docs/reference/ODB++_Format_User_Guide.pdf
 docs/reference/*.pdf

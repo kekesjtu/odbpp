@@ -6,7 +6,7 @@
 
 | 目录 | 产物 |
 | --- | --- |
-| `pcbkit/` | `intermediate.json`、可选 `preview.svg` 和 `preview.html`、可选 `layers/*.png`、`diagnostics/run.json` 与 `diagnostics/artifacts.json` |
+| `pcbkit/` | `intermediate.json`、`preview.svg` 和 `preview.html`（默认生成）、可选 `layers/*.svg` 和 `layers/*.png`、`diagnostics/run.json` 与 `diagnostics/artifacts.json` |
 | `pcbeq/` | `materialmap.json`、唯一的 `diagnostics.json` 和所请求的[工程图表](pcbeq/pcbeq-visualization.md)，不输出产物清单 |
 | `pipeline/` | `run.json` 和两个 CLI 的 stdout、stderr 日志 |
 
@@ -18,7 +18,7 @@
 
 等效器的厚度或累计 Z 不可信属于非阻断错误，正常发布物性与未知 Z，返回 0，后续绘图继续。阻断失败时不发布本轮 MaterialMap，尽力以本轮失败诊断覆盖 `diagnostics.json`；目录中仍可能保留上一轮成功的 MaterialMap。调用者依据退出码和诊断状态判断本轮是否有可用结果，不能仅依据文件存在。诊断写入失败同时通过 stderr 报告。
 
-解析器返回 0 表示成功，2 表示失败。中间 JSON 描述一块完整的板：任一 BOARD 层无法解析或合成时终止本轮，不发布中间 JSON 与预览，只发布 `diagnostics/run.json`（`status=failed`，含可定位的错误）。因此产物存在即代表本轮完整解析通过，`polygons: []` 只表示该层图案为空。管道遇到上游非零即停止，失败阶段和日志可从管道报告定位。
+解析器导出成功返回 0。`--only-json` 省略预览，仍发布运行诊断和产物清单。任一 BOARD 层无法解析或合成时终止本轮并返回 2。进入暂存阶段且能定位到 step 的失败会发布 `diagnostics/run.json`（`status=failed`）及其产物清单，并清理上一轮由清单管理的 JSON 与预览。参数、输入加载或发布本身出错时，可能只有 stderr，旧文件可能仍在。调用者依据退出码和本轮诊断判断导出是否成功。成功结果中的 `polygons: []` 表示该层图案为空。管道遇到上游非零即停止，失败阶段和日志可从管道报告定位。
 
 ## 来源与复用
 

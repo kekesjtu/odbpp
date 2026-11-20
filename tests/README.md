@@ -22,8 +22,8 @@ Linux / macOS 下使用 `export PCBEQ_EXE="$PWD/target/release/pcbeq"`。大部�
 | 数值与产品边界 | 圆弧端点、坐标有效性、两产品的运行环境 | `uv run --extra test pytest tests/rust/test_numerical.py` |
 | CLI 和案例同步 | 独立可执行文件、CLI 调用、案例管道、缓存复用与单案例同步 | `uv run --extra test pytest tests/rust/test_rust_cli.py` |
 | 分发与契约 | 包元信息、导入边界、中间 JSON 模型副本与等效输入边界 | `uv run --extra test pytest tests/distribution` |
-| Rust 几何单元测试 | 多边形布尔运算与曲线离散 | `cargo test -p pcbkit-rust --lib geometry::` |
-| Rust 等效单元测试 | 分区、网格、采样、串并联物性及数值产物发布 | `cargo test -p pcbeq-rust` |
+| Rust 几何单元测试 | 多边形布尔运算与曲线离散 | `uv run cargo test -p pcbkit-rust --lib geometry::` |
+| Rust 等效单元测试 | 分区、网格、采样、2DVTN、SPTRA 及数值产物发布 | `cargo test -p pcbeq-rust` |
 
 `pytest` 可用 `-k` 缩小到相关行为。默认临时目录为 `tmp/pytest-tmp`。需要按任务保留测试产物时，可将 `--basetemp` 指向任务工作区中的 `pytest/` 子目录。
 
@@ -39,7 +39,7 @@ uv run --extra test pytest tests/rust/test_rust_cli.py -k sync_out --basetemp "$
 
 ```powershell
 uv run --extra test pytest
-cargo test --workspace
+uv run cargo test --workspace
 ```
 
 需要验证单独安装、交付和 sdist 重建时，使用[分发验证工具](../tools/README.md)。

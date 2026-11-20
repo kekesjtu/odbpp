@@ -8,7 +8,7 @@
 | `sync_out.py` | 同步本产品线案例、缓存与图库 |
 | `sync_contract.py` | 同步本分支中间 JSON 模型与 schema |
 | `verify_distributions.py` | 独立安装与 sdist 重建验证 |
-| `benchmark_pcbeq.py` | 仅测 JSON 读取至 MaterialMap 关闭，不含图片 |
+| `benchmark_pcbeq.py` | 测量从中间 JSON 读取到正式 MaterialMap 安装完成的数值计算耗时 |
 | `audit_out.py` | 独立核查实体域、拓扑、网格统计、Z 状态与物性有效性 |
 | `refresh_viewer_outputs.py` | 刷新解析器工程预览 CSS/JS |
 
@@ -25,6 +25,6 @@ uv run python tools/sync_out.py --force
 
 `run_pipeline.py` 和 `sync_out.py` 支持 `--per-layer-png`，将逐层 PNG 随解析器预览发布到 `pcbkit/layers/`。
 
-Python 等效管线从 `PATH` 定位独立的 `pcbeq`，也可设置 `PCBEQ_EXE` 为可执行文件路径。分发验证可用 `--pcbeq-exe` 指定单独交付的二进制文件。
+Python 等效管线通过 `PCBEQ_EXE` 或 `PATH` 定位独立的 `pcbeq`。`run_pipeline.py --pcbeq-exe` 指定外层 `pcbeq-rust` 命令，`verify_distributions.py --pcbeq-exe` 指定内层原生 `pcbeq` 二进制文件。
 
 基准默认预热一次，每轮启动独立计算进程。从 Rust 内部 JSON 读取和校验计时，包含几何规划、采样、等效和 MaterialMap 写入关闭及发布操作；子进程墙钟时间另行记录。导入、预热、诊断报告序列化、图片和物理磁盘落盘不计入 MaterialMap 耗时。按任务生成的基准结果和审计报告写入 `.scratch/YYYY-MM-DD-<task-slug>/`。
