@@ -11,7 +11,6 @@ pub(crate) fn integrate(
     stride: usize,
     windows: &[Window],
     materials: [f64; 6],
-    minimum: usize,
 ) -> Vec<Option<[f64; 5]>> {
     let [k1, k2, ..] = materials;
     let series = |fraction: f64| 1. / (fraction / k1 + (1. - fraction) / k2);
@@ -20,9 +19,6 @@ pub(crate) fn integrate(
         .iter()
         .map(|&(left, right, bottom, top)| {
             let (cols, rows) = (right - left, top - bottom);
-            if cols < minimum || rows < minimum {
-                return None;
-            }
             let row_pixels = |row| &pixels[row * stride + left..row * stride + right];
             let (fill, pure_fraction) = match row_pixels(bottom)[0] {
                 0 => (&COPPER, 1.),
@@ -86,14 +82,11 @@ mod tests {
         let k = 1. / (1. / MATERIALS[1]);
         let ky = (0..130).fold(0., |sum, _| sum + k) / 130.;
         assert_eq!(
-            integrate(&pixels, stride, &window, MATERIALS, 1),
+            integrate(&pixels, stride, &window, MATERIALS),
             vec![Some([(k + k + k) / 3., ky, 0.3, 1850., 1100.])]
         );
         pixels[2 * stride + 130] = 42;
-        assert_eq!(
-            integrate(&pixels, stride, &window, MATERIALS, 1),
-            vec![None]
-        );
+        assert_eq!(integrate(&pixels, stride, &window, MATERIALS), vec![None]);
     }
 
     #[test]
@@ -102,7 +95,7 @@ mod tests {
         let series = |f: f64| 1. / (f / MATERIALS[0] + (1. - f) / MATERIALS[1]);
         let [kz, density, cp] = bulk_properties(0.5, MATERIALS);
         assert_eq!(
-            integrate(&pixels, 2, &[(0, 2, 0, 3)], MATERIALS, 1),
+            integrate(&pixels, 2, &[(0, 2, 0, 3)], MATERIALS),
             vec![Some([
                 (series(0.5) + series(1.) + series(0.)) / 3.,
                 (series(2. / 3.) + series(1. / 3.)) / 2.,

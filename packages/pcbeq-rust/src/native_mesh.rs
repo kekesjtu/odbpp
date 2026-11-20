@@ -2,13 +2,11 @@ use crate::{Result, document::Step, geometry::Shape, grid, options::Options, pla
 pub struct Mesh {
     pub axes: Vec<(Vec<f64>, Vec<f64>)>,
     pub rasters: Vec<crate::region_raster::RegionRaster>,
-    pub minimum: usize,
 }
 pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh> {
     let bounds = geometry.bounds;
     let spans = [bounds[2] - bounds[0], bounds[3] - bounds[1]];
     let mut maximum = options.maximum();
-    let mut minimum = 1;
     if let Some(preset) = options.grid_level.as_deref() {
         let mut estimates = vec![];
         for layer in step.layers.iter().filter(|l| l.copper()) {
@@ -44,7 +42,6 @@ pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh
         }
         target = target.max(spans[0].max(spans[1]) / 512.);
         maximum = [target, target];
-        minimum = 8;
     }
     let mut axes = vec![];
     let mut cell_count = 0usize;
@@ -66,10 +63,6 @@ pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh
     if cell_count == 0 {
         return Err("no modeled board cells".into());
     }
-    let rasters = crate::region_raster::build(bounds, &axes, minimum, options)?;
-    Ok(Mesh {
-        axes,
-        rasters,
-        minimum,
-    })
+    let rasters = crate::region_raster::build(&axes, options.pixels_per_cell_axis)?;
+    Ok(Mesh { axes, rasters })
 }

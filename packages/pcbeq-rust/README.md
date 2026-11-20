@@ -38,4 +38,4 @@ uv run pcbeq-rust plot result/materialmap.json
 
 `run` 将计算参数原样传递给独立进程，随后绘图；Python 不参与数值计算。`plot` 仅消费 MaterialMap，无需计算程序。图表使用 `--no-heatmap`、`--no-regions`、`--no-grids`、`--no-gallery` 控制，也可设置热图尺寸和色域。
 
-每个 region 独立采样；显式 `--px/--py` 使用整板参考采样相位。产物事务与绘图失败行为见[输出与发布](../../docs/decisions/output-publication.md)。
+`--pixels-per-cell-axis N` 指定每个物性单元沿 X、Y 各采多少个像素，N 为正整数，默认 9。例如设为 16 时，每格固定采 16×16 个像素。产物事务与绘图失败行为见[输出与发布](../../docs/decisions/output-publication.md)。

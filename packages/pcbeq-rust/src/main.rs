@@ -4,7 +4,7 @@ use pcbeq::{
     pipeline,
 };
 use serde_json::{Value, json};
-use std::{path::PathBuf, process::ExitCode};
+use std::{num::NonZeroUsize, path::PathBuf, process::ExitCode};
 
 #[derive(Parser)]
 #[command(
@@ -65,28 +65,14 @@ struct Run {
     /// Defaults to out/<input file stem> relative to the current directory.
     #[arg(short, long, value_name = "DIR", help_heading = "Output options")]
     out: Option<PathBuf>,
-    /// Reference sampling pixels across the board bounding box in X.
-    ///
-    /// Supply both --px and --py as positive integers. With neither set, automatic
-    /// sampling starts at 4096 pixels along the board's longer axis and can refine
-    /// each region locally. Explicit sampling keeps the reference pixel spacing and
-    /// centers and fails if cells are undersampled. Sampling leaves the grid unchanged.
-    #[arg(
-        verbatim_doc_comment,
-        long,
-        value_name = "PIXELS",
-        requires = "py",
-        help_heading = "Sampling options"
-    )]
-    px: Option<usize>,
-    /// Reference sampling pixels across the board bounding box in Y. Requires --px.
+    /// Sample each material cell at N by N evenly spaced pixel centers.
     #[arg(
         long,
-        value_name = "PIXELS",
-        requires = "px",
+        value_name = "N",
+        default_value = "9",
         help_heading = "Sampling options"
     )]
-    py: Option<usize>,
+    pixels_per_cell_axis: NonZeroUsize,
     /// Grid preset based on board size and copper features.
     ///
     /// Coarse uses larger cells and fine uses smaller cells. The default is standard
@@ -207,8 +193,7 @@ impl Run {
         });
         let options = Options {
             mode: self.mode,
-            px: self.px,
-            py: self.py,
+            pixels_per_cell_axis: self.pixels_per_cell_axis,
             grid_level: self
                 .grid_level
                 .clone()

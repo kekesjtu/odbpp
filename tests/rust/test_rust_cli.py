@@ -79,7 +79,7 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
     result = execute(case_path("minimal-test-odb"),tmp_path,
         pcbkit_exe=executable("pcbkit-rust"),pcbeq_exe=executable("pcbeq-rust"),
         parser_args=["--per-layer-png"],
-        equivalent_args=["--px","97","--py","101","--max-cell-mm","10"])
+        equivalent_args=["--pixels-per-cell-axis", "8","--max-cell-mm","10"])
     assert result["status"] == "success"
     for name in ("pcbkit/preview.svg","pcbkit/preview.html","pcbkit/intermediate.json",
                  "pcbeq/materialmap.json","pcbeq/diagnostics.json","pcbeq/index.html","pcbeq/regions/regions.png",
@@ -97,7 +97,7 @@ def test_sync_out_rust_owns_its_pipeline_and_reuses_numeric_and_image_artifacts(
     shutil.copytree(case_path("minimal-test-odb"),source)
     monkeypatch.setattr(sync_out,"CASES",source.parent)
     monkeypatch.setattr(sync_out,"OUT",tmp_path/"out")
-    monkeypatch.setattr(sys,"argv",["sync_out.py","--backend","rust","--px","32","--py","32","--max-cell-mm","10","--per-layer-png"])
+    monkeypatch.setattr(sys,"argv",["sync_out.py","--backend","rust","--pixels-per-cell-axis", "8","--max-cell-mm","10","--per-layer-png"])
     sync_out.main()
     output=tmp_path/"out/minimal-test-odb/rust"
     materialmap=output/"pcbeq/materialmap.json"
@@ -126,7 +126,7 @@ def test_sync_out_selects_one_case_and_indexes_all_published_outputs(tmp_path, m
 
     monkeypatch.setattr(sync_out, "CASES", cases)
     monkeypatch.setattr(sync_out, "OUT", out)
-    options = ["--px", "8", "--py", "8", "--max-cell-mm", "10"]
+    options = ["--pixels-per-cell-axis", "8", "--max-cell-mm", "10"]
     sync_out.main(options)
     board = out / "board/rust"
     selected = out / "kicad-positive/native/example/rust"

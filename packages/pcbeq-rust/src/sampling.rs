@@ -16,7 +16,6 @@ pub fn integrate_pixels(
     pitch: [f64; 2],
     windows: &[Window],
     materials: [f64; 6],
-    minimum: usize,
     mode: Mode,
 ) -> Result<Vec<Option<[f64; 5]>>> {
     if stride.checked_mul(height) != Some(pixels.len())
@@ -26,25 +25,22 @@ pub fn integrate_pixels(
     {
         return Err("mask dimensions do not match pixels or exceed resource limit".into());
     }
-    if minimum == 0
-        || materials
-            .iter()
-            .chain(&pitch)
-            .any(|v| !v.is_finite() || *v <= 0.)
+    if materials
+        .iter()
+        .chain(&pitch)
+        .any(|v| !v.is_finite() || *v <= 0.)
     {
-        return Err(
-            "materials, pixel pitch and sampling minimum must be finite and positive".into(),
-        );
+        return Err("materials and pixel pitch must be finite and positive".into());
     }
     if windows
         .iter()
-        .any(|&(a, b, c, d)| a > b || b > stride || c > d || d > height)
+        .any(|&(a, b, c, d)| a >= b || b > stride || c >= d || d > height)
     {
-        return Err("sampling window outside raster".into());
+        return Err("empty sampling window or window outside raster".into());
     }
     if matches!(mode, Mode::Sptra) {
         return Ok(series_parallel::integrate(
-            pixels, stride, windows, materials, minimum,
+            pixels, stride, windows, materials,
         ));
     }
 
@@ -61,9 +57,6 @@ pub fn integrate_pixels(
             Network::default,
             |network, (cell, &(left, right, bottom, top))| {
                 let (cols, rows) = (right - left, top - bottom);
-                if cols < minimum || rows < minimum {
-                    return Ok(None);
-                }
                 let window = PixelWindow {
                     pixels: &pixels[bottom * stride + left..],
                     stride,
@@ -147,7 +140,6 @@ mod tests {
             pitch,
             &[(0, size[0], 0, size[1])],
             materials,
-            1,
             Mode::default(),
         )
         .unwrap()[0]
@@ -185,26 +177,30 @@ mod tests {
 
     #[test]
     fn incomplete_samples_and_invalid_windows_are_rejected() {
-        for (pixels, window, minimum) in [
-            (vec![0, 255, 160, 255], (0, 2, 0, 2), 1),
-            (vec![0; 4], (0, 0, 0, 2), 1),
-            (vec![0; 4], (0, 2, 0, 2), 3),
-        ] {
-            assert_eq!(
-                integrate_pixels(
-                    &pixels,
-                    [2, 2],
-                    [1.; 2],
-                    &[window],
-                    [1.; 6],
-                    minimum,
-                    Mode::default()
-                )
-                .unwrap(),
-                vec![None]
-            );
-        }
-        assert!(integrate_pixels(&[], [1, 1], [1.; 2], &[], [1.; 6], 1, Mode::default()).is_err());
+        assert_eq!(
+            integrate_pixels(
+                &[0, 255, 160, 255],
+                [2, 2],
+                [1.; 2],
+                &[(0, 2, 0, 2)],
+                [1.; 6],
+                Mode::default()
+            )
+            .unwrap(),
+            vec![None]
+        );
+        assert!(
+            integrate_pixels(
+                &[0; 4],
+                [2, 2],
+                [1.; 2],
+                &[(0, 0, 0, 2)],
+                [1.; 6],
+                Mode::default()
+            )
+            .is_err()
+        );
+        assert!(integrate_pixels(&[], [1, 1], [1.; 2], &[], [1.; 6], Mode::default()).is_err());
         assert!(
             integrate_pixels(
                 &[0],
@@ -212,7 +208,6 @@ mod tests {
                 [1.; 2],
                 &[(0, 2, 0, 1)],
                 [1.; 6],
-                1,
                 Mode::default()
             )
             .is_err()

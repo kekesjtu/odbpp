@@ -42,7 +42,7 @@
 Z 错误记录 `code`、`message`、`layers`、`blocking=false`。同一层两者均为 `null` 时记 `z.thickness_unknown`。
 MaterialMap 对任一未知侧使用 `[null,null]`，仍交付完整 XY 网格与物性，不据此计算可信体积或质量。
 
-输入无效、缺少必要几何、无法满足近似约束、采样不足或发布失败属于阻断错误。条目记录阶段对应的稳定代码 `<stage>.failed`、`stage`、`message` 和 `blocking=true`；消息保留可用的层、profile、region 或单元位置。
+输入无效、缺少必要几何、无法满足近似约束、局部采样光栅超限或发布失败属于阻断错误。条目记录阶段对应的稳定代码 `<stage>.failed`、`stage`、`message` 和 `blocking=true`；消息保留可用的层、profile、region 或单元位置。
 
 正常完成包括存在非阻断错误的情况，CLI 返回 0，问题同时写到 stderr，后续绘图可继续。阻断失败返回 2。计算过程中出错时，若输出位置允许写入且安全，尽力发布本轮 `failed` 诊断。未完成或未知的统计使用 `null`，已完成的统计保留。目录中可能仍有上一轮成功发布的 MaterialMap。CLI 参数解析、内联材料 JSON 解析和输出覆盖输入的检查均可能在计算诊断开始前失败，此时由 CLI 报告。
 

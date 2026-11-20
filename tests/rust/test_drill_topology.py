@@ -42,7 +42,7 @@ def test_native_drill_coverage_uses_rows_and_endpoint_names(tmp_path, z_mode):
     layers.reverse()
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
-    summary = run(source, tmp_path / "out", px=100, py=100, max_cell_mm=[10])
+    summary = run(source, tmp_path / "out", pixels_per_cell_axis=10, max_cell_mm=[10])
     report = json.loads((tmp_path / "out/diagnostics.json").read_text())
     values = {r.layer.name: r.values[0] for r in read_document(tmp_path / "out/materialmap.json").regions}
     for name in ("A", "B"):
@@ -84,7 +84,7 @@ def test_invalid_matrix_topology_is_rejected_by_both_readers(tmp_path, change, m
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(ValueError, match=match):
-        run(source, tmp_path / "out", px=20, py=20, max_cell_mm=[10])
+        run(source, tmp_path / "out", max_cell_mm=[10])
     assert not (tmp_path / "out/materialmap.json").exists()
 
 
@@ -95,13 +95,13 @@ def test_unresolved_drill_endpoints_fails_only_when_dielectric_sampling_is_neede
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(ValueError, match='D01.*missing start_layer/end_layer'):
-        run(source, tmp_path / "out", px=20, py=20, max_cell_mm=[10])
+        run(source, tmp_path / "out", max_cell_mm=[10])
     document["steps"][0]["layers"] = [l for l in layers if l["type"] != "DIELECTRIC"]
     names = {l["name"] for l in document["steps"][0]["layers"]}
     for profile in document["steps"][0]["profiles"]:
         profile["layers"] = [name for name in profile["layers"] if name in names]
     source.write_text(json.dumps(document), encoding="utf-8")
-    assert run(source, tmp_path / "out", px=20, py=20, max_cell_mm=[10])["layers"] == 3
+    assert run(source, tmp_path / "out", max_cell_mm=[10])["layers"] == 3
 
 
 def test_parser_preview_uses_matrix_rows_without_thickness():
@@ -140,7 +140,7 @@ def test_diagnostics_group_layers_and_support_independent_audit(tmp_path):
     source.parent.mkdir(parents=True)
     source.write_text(json.dumps(document), encoding="utf-8")
     output = source.parent.parent / "pcbeq"
-    run(source, output, px=100, py=100, max_cell_mm=[10])
+    run(source, output, pixels_per_cell_axis=10, max_cell_mm=[10])
     delivered = read_document(output / "materialmap.json")
     report = json.loads((output / "diagnostics.json").read_text())
     profiles = report["geometry"]["profiles"]

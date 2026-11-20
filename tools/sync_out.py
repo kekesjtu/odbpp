@@ -76,10 +76,10 @@ def existing_preview(directory, source, *, backend='rust', per_layer_png=False):
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
-def existing_equivalence(directory, preview, *, px, py, max_cell_mm=5, grid_level=None, mode=1, draw_grid=False, max_area_error_ratio=0.01, backend='rust'):
+def existing_equivalence(directory, preview, *, pixels_per_cell_axis, max_cell_mm=5, grid_level=None, mode=1, draw_grid=False, max_area_error_ratio=0.01, backend='rust'):
     try:
         cache = json.loads((directory / 'pipeline/cache.json').read_text(encoding='utf-8'))
-        requested = {'px': px, 'py': py, 'max': sizes(max_cell_mm, 5), 'grid_level': grid_level, 'mode': mode, 'draw_grid': draw_grid, 'max_area_error_ratio': max_area_error_ratio}
+        requested = {'pixels_per_cell_axis': pixels_per_cell_axis, 'max': sizes(max_cell_mm, 5), 'grid_level': grid_level, 'mode': mode, 'draw_grid': draw_grid, 'max_area_error_ratio': max_area_error_ratio}
         if cache['equivalent'] != fingerprint('pcbeq-rust') or cache['requested'] != requested:
             return None
         if cache['json_sha256'] != hashlib.sha256(preview.read_bytes()).hexdigest():
@@ -149,15 +149,14 @@ def main(argv=None):
     scope.add_argument('--prune', action='store_true', help='remove outputs without a matching case after full sync')
     for flag in ('force', 'force-equivalent', 'heatmap-grid', 'per-layer-png'):
         parser.add_argument('--' + flag, action='store_true')
-    parser.add_argument('--px', type=int)
-    parser.add_argument('--py', type=int)
+    parser.add_argument('--pixels-per-cell-axis', type=int, metavar='N', help='sample N by N pixels per material cell')
     parser.add_argument('--grid-level', choices=('coarse', 'standard', 'fine'))
     parser.add_argument('--mode', type=int, choices=(1, 2), default=1, help='1 = 2DVTN (default), 2 = SPTRA')
     parser.add_argument('--max-cell-mm', nargs='+', type=float)
     parser.add_argument('--max-area-error-ratio', type=float, default=0.01)
     args = parser.parse_args(argv)
-    if (args.px is None) != (args.py is None) or (args.px is not None and min(args.px, args.py) <= 0):
-        parser.error('provide positive px/py together')
+    if args.pixels_per_cell_axis is not None and args.pixels_per_cell_axis <= 0:
+        parser.error('--pixels-per-cell-axis must be positive')
     expert = args.max_cell_mm is not None
     if expert and args.grid_level:
         parser.error('grid level cannot be combined with expert sizes')
@@ -178,12 +177,12 @@ def main(argv=None):
         output = OUT / name / args.backend
         valid = None if args.force else existing_preview(output, source, backend=args.backend,
                                                          per_layer_png=args.per_layer_png)
-        equivalent = None if valid is None or args.force_equivalent else existing_equivalence(output, valid[0], px=args.px, py=args.py, max_cell_mm=upper, grid_level=args.grid_level, mode=args.mode, draw_grid=args.heatmap_grid, max_area_error_ratio=args.max_area_error_ratio, backend=args.backend)
+        equivalent = None if valid is None or args.force_equivalent else existing_equivalence(output, valid[0], pixels_per_cell_axis=args.pixels_per_cell_axis, max_cell_mm=upper, grid_level=args.grid_level, mode=args.mode, draw_grid=args.heatmap_grid, max_area_error_ratio=args.max_area_error_ratio, backend=args.backend)
         result = execute(source, output, parser_args=parser_options, equivalent_args=options, reuse_parser=valid is not None, reuse_equivalent=equivalent is not None, pcbkit_exe='pcbkit-rust', pcbeq_exe='pcbeq-rust')
         if result['status'] != 'success':
             raise RuntimeError(f'pipeline failed for {name}: {result}')
         preview = output / 'pcbkit/intermediate.json'
-        cache = {'parser': fingerprint('pcbkit-rust'), 'equivalent': fingerprint('pcbeq-rust'), 'source_mtime_ns': source_mtime(source), 'json_sha256': hashlib.sha256(preview.read_bytes()).hexdigest(), 'requested': {'px': args.px, 'py': args.py, 'max': upper, 'grid_level': args.grid_level, 'mode': args.mode, 'draw_grid': args.heatmap_grid, 'max_area_error_ratio': args.max_area_error_ratio}}
+        cache = {'parser': fingerprint('pcbkit-rust'), 'equivalent': fingerprint('pcbeq-rust'), 'source_mtime_ns': source_mtime(source), 'json_sha256': hashlib.sha256(preview.read_bytes()).hexdigest(), 'requested': {'pixels_per_cell_axis': args.pixels_per_cell_axis, 'max': upper, 'grid_level': args.grid_level, 'mode': args.mode, 'draw_grid': args.heatmap_grid, 'max_area_error_ratio': args.max_area_error_ratio}}
         (output / 'pipeline/cache.json').write_text(json.dumps(cache, indent=2), encoding='utf-8')
     OUT.mkdir(parents=True, exist_ok=True)
     if args.prune:

@@ -114,14 +114,17 @@ pub fn evaluate(
                 [tile.x.1, tile.y.1],
                 &tile.windows,
                 materials,
-                mesh.minimum,
                 mode,
             )
             .map_err(|error| format!("layer {:?} region {rid}: {error}", layer.name))?;
             let mut checked = Vec::with_capacity(values.len());
             for (q, value) in values.into_iter().enumerate() {
-                let mut properties = value.ok_or_else(|| format!(
-                    "layer {:?} region {rid} cell {q}: insufficient raster samples or profile/geometry contradiction; increase px/py", layer.name))?;
+                let mut properties = value.ok_or_else(|| {
+                    format!(
+                        "layer {:?} region {rid} cell {q}: invalid material pixel",
+                        layer.name
+                    )
+                })?;
                 for (i, v) in properties.iter_mut().enumerate() {
                     let factor = if i < 3 { 1e6 } else { 1e4 };
                     let rounded = (*v * factor).round_ties_even() / factor;

@@ -39,7 +39,7 @@ def build_parser():
               --grid-level {coarse,standard,fine} or --max-cell-mm MM [MM]
                 Choose a grid preset or set the maximum cell size in X and Y.
               --max-area-error-ratio RATIO   Relative area error limit per profile.
-              --px PIXELS and --py PIXELS    Set both reference sampling dimensions.
+              --pixels-per-cell-axis N       Sample N by N pixels per cell (default: 9).
               --mode {1,2}                  1 for 2DVTN, 2 for SPTRA.
               --materials FILE, --materials-json JSON
                 Load material properties from a file or pass inline JSON.

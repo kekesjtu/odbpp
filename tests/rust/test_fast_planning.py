@@ -12,7 +12,7 @@ def execute(document, tmp_path, **options):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     output = tmp_path / "native"
-    summary = run(source, output, px=103, py=97, max_cell_mm=[3, 3], **options)
+    summary = run(source, output, max_cell_mm=[3, 3], **options)
     return summary, read_document(output / "materialmap.json"), output
 
 
@@ -95,7 +95,7 @@ def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document))
     output = tmp_path / "native"
-    run(source, output, px=100, py=100, max_cell_mm=[10])
+    run(source, output, pixels_per_cell_axis=100, max_cell_mm=[10])
     delivered = read_document(output / "materialmap.json")
     assert len(delivered.regions) == 1
     report = json.loads((output / "diagnostics.json").read_text())
@@ -126,8 +126,8 @@ def test_fast_planning_is_independent_of_material_sampling_density(tmp_path):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(build_document(profile=profile, layers=[{"name": "CU", "polygons": []}])))
     layouts = []
-    for density in (2048, 4096):
+    for density in (1, 16):
         output = tmp_path / str(density)
-        run(source, output, px=density, py=density, max_cell_mm=[5])
+        run(source, output, pixels_per_cell_axis=density, max_cell_mm=[5])
         layouts.append([(r.bounds_mm, r.grid_counts) for r in read_document(output / "materialmap.json").regions])
     assert layouts[0] == layouts[1]

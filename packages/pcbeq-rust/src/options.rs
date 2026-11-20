@@ -1,6 +1,7 @@
 use crate::Result;
 use clap::ValueEnum;
 use serde_json::Value;
+use std::num::NonZeroUsize;
 
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
 pub enum Mode {
@@ -14,8 +15,7 @@ pub enum Mode {
 }
 
 pub struct Options {
-    pub px: Option<usize>,
-    pub py: Option<usize>,
+    pub pixels_per_cell_axis: NonZeroUsize,
     pub grid_level: Option<String>,
     pub max_cell_mm: Vec<f64>,
     pub max_area_error_ratio: f64,
@@ -25,9 +25,6 @@ pub struct Options {
 }
 impl Options {
     pub fn validate(&self) -> Result<()> {
-        if self.px.is_some() != self.py.is_some() || self.px == Some(0) || self.py == Some(0) {
-            return Err("px and py must both be positive".into());
-        }
         if self
             .grid_level
             .as_deref()
