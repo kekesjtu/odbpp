@@ -5,10 +5,13 @@ import shutil
 import sys
 import os
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
-from conftest import case_path, REPO_ROOT
 from board_fixture import build_document, rect
+from conftest import case_path, REPO_ROOT, write_tree
+from odb_fixture import odb_files
+from tools import sync_out
 from tools.run_pipeline import execute
 
 pytest.importorskip("pcbkit_rust")
@@ -86,8 +89,6 @@ def test_rust_pipeline_writes_json_and_python_visualizations(tmp_path):
     assert list((tmp_path/"pcbkit/layers").glob("*.png"))
 
 
-from tools import sync_out
-
 def test_sync_out_rust_owns_its_pipeline_and_reuses_numeric_and_image_artifacts(tmp_path,monkeypatch):
     pytest.importorskip("pcbkit_rust")
     pytest.importorskip("pcbeq_rust")
@@ -106,3 +107,39 @@ def test_sync_out_rust_owns_its_pipeline_and_reuses_numeric_and_image_artifacts(
     before=materialmap.stat().st_mtime_ns
     sync_out.main()
     assert materialmap.stat().st_mtime_ns==before
+
+
+def test_sync_out_selects_one_case_and_indexes_all_published_outputs(tmp_path, monkeypatch):
+    cases = tmp_path / "cases"
+    out = tmp_path / "out"
+    files = odb_files([{
+        "name": "TOP",
+        "features": "UNITS=MM\nF 1\n$0 s1000\nP 5 5 0 P 0 0\n",
+        "attrlist": "UNITS=MM\n.copper_weight=35\n",
+    }])
+    write_tree(cases / "board", files)
+    archive = cases / "kicad-positive/native/example.zip"
+    archive.parent.mkdir(parents=True)
+    with ZipFile(archive, "w") as job:
+        for relative, content in files.items():
+            job.writestr(relative, content)
+
+    monkeypatch.setattr(sync_out, "CASES", cases)
+    monkeypatch.setattr(sync_out, "OUT", out)
+    options = ["--px", "8", "--py", "8", "--max-cell-mm", "10"]
+    sync_out.main(options)
+    board = out / "board/rust"
+    selected = out / "kicad-positive/native/example/rust"
+    for output in (board, selected):
+        assert (output / "pcbeq/materialmap.json").is_file()
+
+    board_report = board / "pipeline/run.json"
+    previous_run = board_report.stat().st_mtime_ns
+    sync_out.main([*options, "--case", "kicad-positive/native/example", "--force"])
+
+    assert board_report.stat().st_mtime_ns == previous_run
+    selected_report = json.loads((selected / "pipeline/run.json").read_text(encoding="utf-8"))
+    assert [stage["name"] for stage in selected_report["stages"]] == ["pcbkit", "pcbeq"]
+    index = (out / "index.html").read_text(encoding="utf-8")
+    for output in (board, selected):
+        assert (output / "pcbeq/materialmap.json").relative_to(out).as_posix() in index

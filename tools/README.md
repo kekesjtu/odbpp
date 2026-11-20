@@ -14,6 +14,15 @@
 
 案例管道默认调用 `pcbkit-rust`、`pcbeq-rust`。输出目录与管理边界见[输出与发布](../docs/decisions/output-publication.md)。
 
+`sync_out.py` 默认同步全部已发现的案例。指定 `--case NAME` 可仅同步一个案例，并刷新 `out/index.html` 中的完整产物索引。`NAME` 使用案例目录名、带扩展名的顶层归档名，或 `kicad-positive/native/<归档名不含扩展名>`、`kicad-positive/clean/<归档名不含扩展名>`。
+
+```powershell
+uv run python tools/sync_out.py --case minimal-test-odb --force
+uv run python tools/sync_out.py --force
+```
+
+以上分别强制重建单个案例和全部案例。省略 `--force` 时会复用有效缓存。`--prune` 用于全量同步，会清理 `out/` 中未匹配到已发现案例的条目，和 `--case` 互斥。
+
 `run_pipeline.py` 和 `sync_out.py` 支持 `--per-layer-png`，将逐层 PNG 随解析器预览发布到 `pcbkit/layers/`。
 
 Python 等效管线从 `PATH` 定位独立的 `pcbeq`，也可设置 `PCBEQ_EXE` 为可执行文件路径。分发验证可用 `--pcbeq-exe` 指定单独交付的二进制文件。

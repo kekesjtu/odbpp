@@ -141,10 +141,13 @@ def prune_unmatched(inputs):
         else:
             path.unlink()
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--backend', choices=('rust',), default='rust')
-    for flag in ('force', 'force-equivalent', 'prune', 'heatmap-grid', 'per-layer-png'):
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument('--case', metavar='NAME', help='synchronise only the named case (default: all cases)')
+    scope.add_argument('--prune', action='store_true', help='remove outputs without a matching case after full sync')
+    for flag in ('force', 'force-equivalent', 'heatmap-grid', 'per-layer-png'):
         parser.add_argument('--' + flag, action='store_true')
     parser.add_argument('--px', type=int)
     parser.add_argument('--py', type=int)
@@ -152,7 +155,7 @@ def main():
     parser.add_argument('--mode', type=int, choices=(1, 2), default=1, help='1 = 2DVTN (default), 2 = SPTRA')
     parser.add_argument('--max-cell-mm', nargs='+', type=float)
     parser.add_argument('--max-area-error-ratio', type=float, default=0.01)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if (args.px is None) != (args.py is None) or (args.px is not None and min(args.px, args.py) <= 0):
         parser.error('provide positive px/py together')
     expert = args.max_cell_mm is not None
@@ -165,6 +168,12 @@ def main():
     args.grid_level = args.grid_level or (None if expert else 'standard')
     parser_options, options = forwarded(args)
     inputs = case_inputs()
+    if args.case is not None:
+        selected = [entry for entry in inputs if entry[0] == args.case]
+        if not selected:
+            available = ', '.join(name for name, _ in inputs)
+            parser.error(f'unknown case {args.case!r}; available cases: {available}')
+        inputs = selected
     for name, source in inputs:
         output = OUT / name / args.backend
         valid = None if args.force else existing_preview(output, source, backend=args.backend,
