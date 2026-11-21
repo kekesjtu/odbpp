@@ -8,14 +8,14 @@
 | --- | --- | --- |
 | `packages/pcbkit-rust/` | ODB++ 解析器、Rust 扩展、Python 输入适配与工程预览 | [解析器使用说明](../packages/pcbkit-rust/README.md) |
 | `packages/pcbeq-rust/` | 独立 Rust 等效计算 CLI，以及可选的 Python 管线和绘图 | [等效器使用说明](../packages/pcbeq-rust/README.md) |
-| `crates/` | 产品内部使用的共享 Rust 库 | [几何库](../crates/pcb-geometry/) |
 | `contracts/` | 中间 JSON 的共享 Pydantic 模型与生成 schema | [中间 JSON 契约](interfaces/intermediate-json.md) |
 | `tests/` | 接口、集成、分发验证与最小手写夹具 | [测试目录](../tests/) |
 | `tools/` | 契约同步、进程管道、案例输出、审计、基准及分发验证工具 | [维护工具](../tools/README.md) |
 | `docs/` | 需求、架构、设计决策、接口、领域调研及参考资料 | 本页下方的专题索引 |
-| `cases/` | 本地 ODB++ 案例与来源资料 | [案例目录](../cases/) |
+| `cases/` | 本地 ODB++ 案例与来源资料，独立于源码检出 | [案例同步](../tools/README.md) |
 | `out/` | 按案例保存的解析、等效、图像和管道正式产物 | [输出与发布](decisions/output-publication.md) |
-| `tmp/` | 任务临时脚本、日志、基准与其他可再生产物 | [协作规范](../AGENTS.md) |
+| `.scratch/` | 任务专属的临时脚本、调试文件与实验产物 | [协作规范](../AGENTS.md) |
+| `tmp/` | 程序管理的临时文件与运行日志 | [协作规范](../AGENTS.md) |
 
 Python 环境与依赖由根目录的 `.python-version`、`pyproject.toml` 和 `uv.lock` 管理；Rust workspace 与依赖由 `Cargo.toml` 和 `Cargo.lock` 管理。开发约定见 [AGENTS.md](../AGENTS.md)。
 
@@ -61,5 +61,6 @@ Python 环境与依赖由根目录的 `.python-version`、`pyproject.toml` 和 `
 ## 推导与参考来源
 
 - [官方规范与参考格式](reference/format-sources.md)：ODB++ 规范版次、来源及其他参考格式。
-- [串并联 PCB 等效热模型推导](derivation/串并联PCB等效热模型推导.md)。
+- [2DVTN 二维热阻网络 PCB 等效热模型推导](derivation/二维热阻网络PCB等效热模型推导.md)。
+- [SPTRA 串并联 PCB 等效热模型推导](derivation/串并联PCB等效热模型推导.md)。
 - [密度和热容等效热模型推导](derivation/密度和热容等效热模型推导.md)。

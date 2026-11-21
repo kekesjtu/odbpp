@@ -82,9 +82,9 @@ def build_parser():
     parser.add_argument("--sagitta-mm", type=float)
     parser.add_argument("--digits", type=int)
     parser.add_argument("--per-layer-png", action="store_true")
-    parser.add_argument("--px", type=int)
-    parser.add_argument("--py", type=int)
+    parser.add_argument("--pixels-per-cell-axis", type=int, metavar="N", help="sample N by N pixels per material cell")
     parser.add_argument("--grid-level", choices=("coarse", "standard", "fine"))
+    parser.add_argument("--mode", type=int, choices=(1, 2), help="1 = 2DVTN (default), 2 = SPTRA")
     parser.add_argument("--max-cell-mm", type=float, nargs="+")
     parser.add_argument("--max-area-error-ratio", type=float)
     parser.add_argument("--materials", type=Path)
@@ -95,7 +95,7 @@ def build_parser():
 def forwarded(args) -> tuple[list[str], list[str]]:
     groups = []
     for names in (("step", "sagitta_mm", "digits", "per_layer_png"),
-                  ("px", "py", "grid_level", "max_cell_mm", "materials", "heatmap_grid",
+                  ("pixels_per_cell_axis", "grid_level", "mode", "max_cell_mm", "materials", "heatmap_grid",
                    "max_area_error_ratio")):
         options = []
         for name in names:

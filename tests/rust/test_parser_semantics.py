@@ -140,8 +140,13 @@ def test_resize_is_a_size_delta_and_reports_unverified_assumption(tmp_path, unit
 
 @pytest.mark.parametrize("orientation,expected", [
     ("0", box(5, 5, 7, 6)),
+    ("4", box(3, 5, 5, 6)),
+    ("5", box(4, 3, 5, 5)),
     ("8 90", box(5, 3, 6, 5)),
-    ("9 90", box(5, 5, 6, 7)),
+    ("9 90", box(4, 3, 5, 5)),
+    ("9 30", Polygon([(5, 5), (5 - math.sqrt(3), 4),
+                       (4.5 - math.sqrt(3), 4 + math.sqrt(3) / 2),
+                       (4.5, 5 + math.sqrt(3) / 2)])),
 ])
 def test_asymmetric_pad_rotates_then_mirrors_before_translation(tmp_path, orientation, expected):
     files = odb_files([{"name": "CU", "features": (
@@ -149,7 +154,121 @@ def test_asymmetric_pad_rotates_then_mirrors_before_translation(tmp_path, orient
     )}])
     files["symbols/asymmetric/features"] = profile_text([rect(0, 0, 2, 1)])
     job = load_job(str(write_tree(tmp_path / "job", files)))
-    assert physical_shape(exported_layers(job)["CU"]["polygons"]).equals(expected)
+    actual = physical_shape(exported_layers(job)["CU"]["polygons"])
+    assert actual.symmetric_difference(expected).area < .0002
+
+
+def standard_shape(tmp_path, symbol, unit="MM"):
+    files = odb_files([{"name": "CU", "features": (
+        f"UNITS={unit}\nF 1\n$0 {symbol}\nP 0 0 0 P 0 0\n"
+    )}], units=unit)
+    job = load_job(str(write_tree(tmp_path / "job", files)))
+    return physical_shape(exported_layers(job)["CU"]["polygons"])
+
+
+@pytest.mark.parametrize("symbol,bounds,area,islands,holes", [
+    ("el4000x2000", (-2, -1, 2, 1), 2 * math.pi, 1, 0),
+    ("bfr4000", (-2, -2, 2, 2), 2 * math.pi, 2, 0),
+    ("bfs4000", (-2, -2, 2, 2), 8, 2, 0),
+    ("donut_sr4000x2000", (-2, -2, 2, 2), 16 - math.pi, 1, 1),
+    ("hole2000xpx200x300", (-1, -1, 1, 1), math.pi, 1, 0),
+    ("hole2000xnx200x300", (-1, -1, 1, 1), math.pi, 1, 0),
+    ("hole2000xvx200x300", (-1, -1, 1, 1), math.pi, 1, 0),
+    ("hplate4000x2000x1000", (-2, -1, 2, 1), 7, 1, 0),
+    ("rhplate4000x2000x1000", (-2, -1, 2, 1), 7, 1, 0),
+    ("fhplate4000x2000x500x1000", (-2, -1, 2, 1), 7.5, 1, 0),
+    ("cross4000x3000x1000x1000x25x50xs", (-2, -1.5, 2, 1.5), 6, 1, 0),
+    ("dogbone4000x3000x500x1000x25xs", (-2, -1.5, 2, 1.5), 6, 1, 0),
+    ("dpack4000x3000x500x600x3x2", (-2, -1.5, 2, 1.5), 7.2, 6, 0),
+])
+def test_standard_pad_dimensions_and_topology(tmp_path, symbol, bounds, area, islands, holes):
+    shape = standard_shape(tmp_path, symbol)
+    parts = list(shape.geoms) if shape.geom_type == "MultiPolygon" else [shape]
+    assert shape.is_valid
+    assert shape.bounds == pytest.approx(bounds, abs=.006)
+    assert shape.area == pytest.approx(area, abs=.045)
+    assert len(parts) == islands
+    assert sum(len(part.interiors) for part in parts) == holes
+
+
+@pytest.mark.parametrize("symbol,filled,clear,islands", [
+    ("thr4000x2000x0x4x500", (1.06, 1.06), (1.5, 0), 4),
+    ("ths4000x2000x45x4x500", (1.5, 0), (1.06, 1.06), 4),
+    ("s_ths4000x2000x0x4x500", (1.7, 1.7), (1.5, 0), 4),
+    ("s_tho4000x2000x45x4x500", (1.5, .2), (1.8, .8), 4),
+    ("s_thr4000x2000x45x4x500", (0, 1.5), (1, 1.5), 4),
+    ("sr_ths4000x2000x0x4x500", (.85, .85), (.55, .55), 4),
+    ("rc_ths6000x4000x45x4x500x500", (0, 1.8), (2.75, 1.75), 4),
+    ("rc_tho6000x4000x45x4x500x500", (0, 1.8), (2.8, 1.55), 4),
+    ("o_ths6000x4000x0x4x500x500", (1.2, 1.8), (0, 1.75), 4),
+    ("oblong_ths6000x4000x45x4x500x500xr", (0, 1.75), (1.8, 1.8), 4),
+    ("oblong_ths6000x4000x0x2x500x500xs", (0, 1.75), (2.75, 0), 2),
+])
+def test_thermal_footprints_preserve_openings(tmp_path, symbol, filled, clear, islands):
+    shape = standard_shape(tmp_path, symbol)
+    assert shape.is_valid
+    assert shape.contains(Point(filled))
+    assert not shape.covers(Point(clear))
+    assert not shape.covers(Point(0, 0))
+    assert len(shape.geoms) == islands
+
+
+def test_rounded_thermal_ends_keep_the_spoke_clear(tmp_path):
+    squared = standard_shape(tmp_path / "squared", "ths4000x2000x0x4x500")
+    rounded = standard_shape(tmp_path / "rounded", "thr4000x2000x0x4x500")
+    corner = Point(1.8, .36)
+    assert squared.contains(corner)
+    assert not rounded.covers(corner)
+    assert rounded.difference(squared).area < .01
+
+
+@pytest.mark.parametrize("symbol,filled,clear", [
+    ("bfr4000", (-1, 1), (1, 1)),
+    ("bfs4000", (1.75, -1.75), (-1, -1)),
+    ("hplate4000x2000x1000xra100xro80", (1.7, 0), (1.7, .7)),
+    ("rhplate4000x2000x1000xro100", (1.7, .9), (1.7, 0)),
+    ("fhplate4000x2000x500x1000xra100", (1.7, .3), (1.7, .9)),
+    ("radhplate4000x4000x1000xra200", (1.7, 1.25), (1.7, 0)),
+    ("dshape4000x3000x1000xra100", (1.8, 0), (1.8, 1.25)),
+    ("cross4000x3000x1000x1000x25x50xrxra100", (-1, 1.25), (0, 1.25)),
+    ("dogbone4000x3000x500x1000x25xsx100", (-1, 0), (0, 0)),
+    ("dpack4000x3000x500x600x3x2xra150", (0, .9), (0, 0)),
+    ("moire100x300x3x100x2200x0", (.247, .247), (.36, .36)),
+    ("s_ths4000x2000x0x4x500xr600x1", (-1.9, 1.9), (1.9, 1.9)),
+    ("rc_ths6000x4000x0x4x500x500xr800x1", (-2.9, 1.9), (2.9, 1.9)),
+])
+def test_symbol_parameter_variants_preserve_local_geometry(tmp_path, symbol, filled, clear):
+    shape = standard_shape(tmp_path, symbol)
+    assert shape.is_valid
+    assert shape.contains(Point(filled))
+    assert not shape.covers(Point(clear))
+
+
+def test_moire_rotates_both_crosshair_branches_and_preserves_ring_gaps(tmp_path):
+    shape = standard_shape(tmp_path, "moire100x300x1x100x2200x45")
+    assert shape.contains(Point(.6, .6))
+    assert shape.contains(Point(.6, -.6))
+    assert not shape.covers(Point(.8, 0))
+    assert len(shape.interiors) == 4
+
+
+@pytest.mark.parametrize("symbol", ["ext", "ext3"])
+def test_null_standard_symbol_has_no_artwork_or_warning(symbol):
+    parsed = native.Features.parse(
+        f"UNITS=MM\n$0 {symbol}\nP 0 0 0 P 0 0\nL 0 0 1 0 0 P 0\n",
+        "features", "MM", {},
+    )
+    composer = native.Composer({})
+    region, _, _ = composer.layer(parsed, None, False, False, 4)
+    assert len(region) == 0
+    assert json.loads(composer.diagnostics_json()) == []
+
+
+def test_new_symbols_apply_file_units_and_symbol_overrides(tmp_path):
+    shape = standard_shape(tmp_path, "el100x50", "INCH")
+    assert shape.bounds == pytest.approx((-1.27, -.635, 1.27, .635), abs=.006)
+    metric = standard_shape(tmp_path / "metric", "el2000x1000 M", "INCH")
+    assert metric.bounds == pytest.approx((-1, -.5, 1, .5), abs=.006)
 
 
 @pytest.mark.parametrize("symbol,area,bounds", [

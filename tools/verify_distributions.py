@@ -66,9 +66,9 @@ def main():
     if not resolved.is_relative_to(output) or resolved == output:
         raise ValueError('unsafe detached fixture cleanup')
     shutil.rmtree(resolved)
-    call([binary, 'run', str(output / 'parser/intermediate.json'), '-o', str(output / 'standalone'), '--px', '64', '--py', '64', '--max-cell-mm', '10'])
-    call([executables['pcbeq'], 'run', str(output / 'parser/intermediate.json'), '-o', str(output / 'consumer'), '--px', '64', '--py', '64', '--max-cell-mm', '10'])
-    call([sys.executable, str(ROOT / 'tools/run_pipeline.py'), str(ROOT / 'cases/minimal-test-odb'), '-o', str(output / 'pipeline-case'), '--pcbkit-exe', executables['pcbkit'], '--pcbeq-exe', executables['pcbeq'], '--px', '64', '--py', '64', '--max-cell-mm', '10'])
+    call([binary, 'run', str(output / 'parser/intermediate.json'), '-o', str(output / 'standalone'), '--pixels-per-cell-axis', '8', '--max-cell-mm', '10'])
+    call([executables['pcbeq'], 'run', str(output / 'parser/intermediate.json'), '-o', str(output / 'consumer'), '--pixels-per-cell-axis', '8', '--max-cell-mm', '10'])
+    call([sys.executable, str(ROOT / 'tools/run_pipeline.py'), str(ROOT / 'cases/minimal-test-odb'), '-o', str(output / 'pipeline-case'), '--pcbkit-exe', executables['pcbkit'], '--pcbeq-exe', executables['pcbeq'], '--pixels-per-cell-axis', '8', '--max-cell-mm', '10'])
     (output / 'validation.json').write_text(json.dumps({'backend': args.backend, 'separate_installations': True, 'sdist_rebuilt': True, 'source_removed_before_consumer': True, 'pipeline': json.loads((output / 'pipeline-case/pipeline/run.json').read_text(encoding='utf-8'))}, indent=2) + '\n', encoding='utf-8')
 if __name__ == '__main__':
     main()

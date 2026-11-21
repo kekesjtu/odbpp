@@ -126,7 +126,6 @@ ATTR_LAYER_DIELECTRIC_ON_COPPER = "attr.layer_dielectric_on_copper"
 FEATURES_NO_UNITS = "features.no_units"
 FEATURES_COUNT_MISMATCH = "features.count_mismatch"
 FEATURES_UNKNOWN_RECORD = "features.unknown_record"
-FEATURES_UNSUPPORTED_RECORD = "features.unsupported_record"
 FEATURES_BAD_ATTRIBUTE_REF = "features.bad_attribute_ref"
 FEATURES_UNDECLARED_ATTRIBUTE = "features.undeclared_attribute"
 FEATURES_MULTIPLE_SURFACES = "features.multiple_surfaces"
@@ -135,7 +134,6 @@ FEATURES_MULTIPLE_SURFACES = "features.multiple_surfaces"
 SYMBOL_STANDARD_GRAMMAR_MISMATCH = "symbol.standard_grammar_mismatch"
 SYMBOL_UNKNOWN = "symbol.unknown"
 SYMBOL_SHADOWS_STANDARD = "symbol.shadows_standard"
-SYMBOL_UNSUPPORTED_SHAPE = "symbol.unsupported_shape"
 
 # step header (requirements.md parser constraint 1: no nested/arrayed steps)
 STEP_NESTED_REPEAT = "stephdr.nested_repeat"
@@ -157,7 +155,6 @@ STACKUP_THICKNESS_UNKNOWN = "stackup.thickness_unknown"
 
 # geometry expansion (research 05 §12: sweeps, polarity, missing symbols)
 GEOMETRY_SYMBOL_UNDEFINED = "geometry.symbol_undefined"
-GEOMETRY_SYMBOL_UNSUPPORTED = "geometry.symbol_unsupported"
 GEOMETRY_SWEEP_ASYMMETRIC = "geometry.sweep_asymmetric"
 GEOMETRY_ARC_DEGENERATE = "geometry.arc_degenerate"
 GEOMETRY_EMPTY_RESULT = "geometry.empty_result"

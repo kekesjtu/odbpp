@@ -1,8 +1,8 @@
 //! Planar geometry owned by Rust; all operations use geo.
 use crate::Result;
 use geo::{
-    Area, BooleanOps, BoundingRect, Buffer, Euclidean, InteriorPoint, Length, LineString,
-    MultiPolygon, Orient, Polygon, Relate, Validation, orient::Direction, unary_union,
+    Area, BooleanOps, BoundingRect, Buffer, InteriorPoint, LineString, MultiPolygon, Orient,
+    Polygon, Relate, Validation, orient::Direction, unary_union,
 };
 
 pub type Point = (f64, f64);
@@ -78,20 +78,6 @@ impl Shape {
 
     pub fn area(&self) -> f64 {
         self.0.unsigned_area()
-    }
-
-    pub fn length(&self) -> f64 {
-        self.0
-            .0
-            .iter()
-            .map(|p| {
-                Euclidean.length(p.exterior())
-                    + p.interiors()
-                        .iter()
-                        .map(|r| Euclidean.length(r))
-                        .sum::<f64>()
-            })
-            .sum()
     }
 
     pub fn bounds(&self) -> Result<[f64; 4]> {

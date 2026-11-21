@@ -26,7 +26,7 @@ $<index> <symbol_name> M
 $<index> <symbol_name> I
 ```
 
-`M` 表示公制符号尺寸，`I` 表示英制符号尺寸；表示长度的标准符号参数分别使用 µm 和 mil。未指定时由 features 文件的单位体系决定。（p.166–168）f
+`M` 表示公制符号尺寸，`I` 表示英制符号尺寸；表示长度的标准符号参数分别使用 µm 和 mil。未指定时由 features 文件的单位体系决定。（p.166–168）
 
 ```text
 UNITS=MM

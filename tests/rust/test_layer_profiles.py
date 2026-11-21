@@ -134,7 +134,7 @@ def test_parser_to_equivalence_keeps_holes_and_full_layer_extent(tmp_path):
     source.parent.mkdir(parents=True)
     source.write_text(json.dumps(document), encoding="utf-8")
     output = source.parent.parent / "pcbeq"
-    run(source, output, px=100, py=100, max_cell_mm=[3], max_area_error_ratio=0)
+    run(source, output, pixels_per_cell_axis=10, max_cell_mm=[3], max_area_error_ratio=0)
     delivered = read_document(output / "materialmap.json")
     expected = box(-1, -1, 11, 11).difference(unary_union([box(4, 4, 6, 6), box(5, 5, 7, 7)]))
     for name, values in [("FR", (.3, .3, .3, 1850, 1100)), ("CU", (385, 385, 385, 8960, 385))]:
@@ -148,10 +148,9 @@ def test_parser_to_equivalence_keeps_holes_and_full_layer_extent(tmp_path):
     assert audit_outputs(tmp_path / "case")[0]["physical_regions"] == len(delivered.regions)
 
 
-@pytest.mark.parametrize("density", [{}, {"px": 40, "py": 60}], ids=["automatic", "explicit"])
 @pytest.mark.parametrize("bounds", [(-1, -1, 2, 2), (12, 12, 14, 14), (4, 4, 6, 6)],
                          ids=["cross-bounds", "outside-bounds", "outside-islands"])
-def test_equivalence_preserves_layer_extent_and_copper_outside_step(tmp_path, density, bounds):
+def test_equivalence_preserves_layer_extent_and_copper_outside_step(tmp_path, bounds):
     # A concave step also exercises layer material outside its islands but inside its bbox.
     board = {"island": True, "points": [(0, 0), (10, 0), (10, 3), (3, 3), (3, 10), (0, 10)]}
     document = build_document(profiles=[
@@ -161,26 +160,27 @@ def test_equivalence_preserves_layer_extent_and_copper_outside_step(tmp_path, de
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     output = tmp_path / "native"
-    run(source, output, max_cell_mm=[10], **density)
+    run(source, output, max_cell_mm=[10])
     delivered = read_document(output / "materialmap.json")
     assert unary_union([box(*b) for _, b, _ in iter_cells(delivered)]).equals(box(*bounds))
     assert all(v == (385, 385, 385, 8960, 385) for _, _, v in iter_cells(delivered))
 
 
-def test_explicit_sampling_extends_board_pixel_spacing_and_phase(tmp_path):
-    profile = rect(-.7, -.7, 1.3, 1.3)
+@pytest.mark.parametrize("n,fraction", [(1, 0), (4, 1 / 16), (None, 4 / 81)], ids=["one", "four", "default"])
+def test_cell_local_sampling_centers_outside_board(tmp_path, n, fraction):
+    # Two 1 x 0.6 mm cells. Copper covers the lower left corner of the second cell.
     document = build_document(profiles=[
         {"id": "step_profile", "polygons": [rect(0, 0, 10, 10)]},
-        {"id": "layer", "polygons": [profile]},
-    ], layers=[{"name": "CU", "profile_id": "layer", "polygons": [rect(-.7, -.7, -.3, 1.3)]}])
+        {"id": "layer", "polygons": [rect(-.7, -.7, 1.3, -.1)]},
+    ], layers=[{"name": "CU", "profile_id": "layer", "polygons": [rect(.3, -.7, .56, -.544)]}])
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
-    run(source, tmp_path / "out", px=10, py=20, max_cell_mm=[10])
+    run(source, tmp_path / "out", pixels_per_cell_axis=n, max_cell_mm=[1])
     region, = read_document(tmp_path / "out/materialmap.json").regions
     assert region.bounds_mm.x == (-.7, 1.3)
-    # Reference X centers are -0.5 and 0.5: exactly one column is copper.
-    assert region.values[0][2] == pytest.approx((385 + .3) / 2)
-    assert region.values[0][3] == pytest.approx((8960 + 1850) / 2)
+    first, second = region.values
+    assert first[2] == .3
+    assert second[2] == pytest.approx(fraction * 385 + (1 - fraction) * .3, abs=1e-6)
 
 
 def test_dielectric_drill_material_outside_step_is_sampled(tmp_path):
@@ -192,7 +192,7 @@ def test_dielectric_drill_material_outside_step_is_sampled(tmp_path):
                {"name": "DRILL", "type": "DRILL", "polygons": [outside]}])
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
-    run(source, tmp_path / "out", px=50, py=50, max_cell_mm=[10])
+    run(source, tmp_path / "out", max_cell_mm=[10])
     regions = read_document(tmp_path / "out/materialmap.json").regions
     dielectric = [r for r in regions if r.layer.name == "FR"]
     assert len(dielectric) == 1

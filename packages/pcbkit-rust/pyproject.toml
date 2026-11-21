@@ -26,6 +26,4 @@ cache-keys = [
     { file = "src/**/*.rs" },
     { file = "../../Cargo.toml" },
     { file = "../../Cargo.lock" },
-    { file = "../../crates/pcb-geometry/Cargo.toml" },
-    { file = "../../crates/pcb-geometry/src/**/*.rs" },
 ]

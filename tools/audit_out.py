@@ -129,7 +129,7 @@ def audit_outputs(out_dir: Path = ROOT / 'out'):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, default=ROOT / 'out')
-    parser.add_argument('--output', type=Path, required=True, help='audit report, normally under task-specific tmp/')
+    parser.add_argument('--output', type=Path, required=True, help='audit report, normally under .scratch/YYYY-MM-DD-<task-slug>/')
     args = parser.parse_args()
     report = {'cases': audit_outputs(args.out)}
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-use crate::{Point, Ring, curves::signed_area};
+use super::{Point, Ring, curves::signed_area};
 use clipper2_rust::*;
 
 pub const SCALE: f64 = 1_000_000.;
@@ -84,6 +84,33 @@ pub fn operate(
         _ => return Err(format!("unknown geometry operation {operation}")),
     };
     resolve(&paths(subject, scale)?, &paths(clip, scale)?, op, scale)
+}
+
+pub fn cut_lines(lines: &[Vec<Point>], cutters: &[Ring]) -> Result<Vec<Vec<Point>>, String> {
+    let open = lines
+        .iter()
+        .map(|line| path(line, SCALE))
+        .collect::<Result<_, _>>()?;
+    let mut engine = Clipper64::new();
+    engine.add_open_subject(&open);
+    engine.add_clip(&paths(cutters, SCALE)?);
+    let mut parts = vec![];
+    if !engine.execute(
+        ClipType::Difference,
+        FillRule::NonZero,
+        &mut vec![],
+        Some(&mut parts),
+    ) {
+        return Err("integer line clipping failed".into());
+    }
+    Ok(parts
+        .into_iter()
+        .map(|part| {
+            part.into_iter()
+                .map(|p| (p.x as f64 / SCALE, p.y as f64 / SCALE))
+                .collect()
+        })
+        .collect())
 }
 
 pub fn snap(rings: &[Ring], scale: f64) -> Result<(Vec<Ring>, usize), String> {

@@ -1,51 +1,22 @@
-use crate::{Result, document::Step, geometry::Shape, grid, options::Options, planning::Geometry};
+use crate::{Result, grid, options::Options, planning::Geometry};
 pub struct Mesh {
     pub axes: Vec<(Vec<f64>, Vec<f64>)>,
     pub rasters: Vec<crate::region_raster::RegionRaster>,
-    pub minimum: usize,
 }
-pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh> {
-    let bounds = geometry.bounds;
-    let spans = [bounds[2] - bounds[0], bounds[3] - bounds[1]];
-    let mut maximum = options.maximum();
-    let mut minimum = 1;
-    if let Some(preset) = options.grid_level.as_deref() {
-        let mut estimates = vec![];
-        for layer in step.layers.iter().filter(|l| l.copper()) {
-            for ring in layer.polygons.iter().filter(|p| p.island) {
-                let polygon = Shape::polygon(&ring.points, &[])?;
-                let area = polygon.area();
-                let perimeter = polygon.length();
-                // This is a sizing heuristic, not a topology acceptance check.
-                if area > 0. && perimeter > 0. {
-                    estimates.push(2. * area / perimeter);
-                }
-            }
-        }
-        let mut usable = estimates
-            .iter()
-            .copied()
-            .filter(|v| *v >= 0.01)
-            .collect::<Vec<_>>();
-        usable.sort_by(f64::total_cmp);
-        let representative = if usable.is_empty() {
-            None
-        } else {
-            Some(usable[((usable.len() - 1) as f64 * 0.1) as usize])
+pub fn build(geometry: &Geometry, options: &Options) -> Result<Mesh> {
+    let maximum = if let Some(preset) = options.grid_level.as_deref() {
+        let [x0, y0, x1, y1] = geometry.bounds;
+        let (width, height) = (x1 - x0, y1 - y0);
+        let divisions = match preset {
+            "coarse" => 32.,
+            "fine" => 128.,
+            _ => 64.,
         };
-        let (divisions, factor) = match preset {
-            "coarse" => (32., 24.),
-            "fine" => (128., 6.),
-            _ => (64., 12.),
-        };
-        let mut target = (spans[0] * spans[1]).sqrt() / divisions;
-        if let Some(width) = representative {
-            target = target.min(width * factor);
-        }
-        target = target.max(spans[0].max(spans[1]) / 512.);
-        maximum = [target, target];
-        minimum = 8;
-    }
+        let target = ((width * height).sqrt() / divisions).max(width.max(height) / 512.);
+        [target; 2]
+    } else {
+        options.maximum()
+    };
     let mut axes = vec![];
     let mut cell_count = 0usize;
     for (i, r) in geometry.rectangles.iter().enumerate() {
@@ -66,10 +37,6 @@ pub fn build(step: &Step, geometry: &Geometry, options: &Options) -> Result<Mesh
     if cell_count == 0 {
         return Err("no modeled board cells".into());
     }
-    let rasters = crate::region_raster::build(bounds, &axes, minimum, options)?;
-    Ok(Mesh {
-        axes,
-        rasters,
-        minimum,
-    })
+    let rasters = crate::region_raster::build(&axes, options.pixels_per_cell_axis)?;
+    Ok(Mesh { axes, rasters })
 }

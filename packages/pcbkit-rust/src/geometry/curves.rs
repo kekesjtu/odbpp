@@ -1,4 +1,4 @@
-use crate::Point;
+use super::Point;
 use std::f64::consts::{FRAC_PI_2, TAU};
 
 fn count(sweep: f64, radius: f64, sagitta: f64, maximum: usize) -> Result<usize, String> {
@@ -93,17 +93,6 @@ pub fn signed_area(points: &[Point]) -> f64 {
         * 0.5
 }
 
-pub fn transform(points: &[Point], angle: f64, mirrored: bool) -> Vec<Point> {
-    let (s, c) = angle.to_radians().sin_cos();
-    points
-        .iter()
-        .map(|&(x, y)| {
-            let (u, v) = (x * c + y * s, -x * s + y * c);
-            (u, if mirrored { -v } else { v })
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,10 +101,5 @@ mod tests {
         let p = arc_points((1., 0.), (1., 0.), (0., 0.), true, 0.001, 4096).unwrap();
         assert_eq!(p.last(), Some(&(1., 0.)));
         assert!(signed_area(&p) < -3.13);
-    }
-    #[test]
-    fn rotate_then_mirror() {
-        let p = transform(&[(1., 0.)], 90., true);
-        assert!((p[0].1 - 1.).abs() < 1e-12);
     }
 }

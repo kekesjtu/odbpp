@@ -41,8 +41,8 @@ ODB++ 单板目录或压缩包
 
 MISC 不进入中间 JSON，由 Rust 生成独立有序绘图指令供 Python 预览。BOARD 图元及中间几何保存在 Rust 内部，Python 在 JSON 契约与绘图边界读取最终结果。
 
-解析器的 wheel / sdist 使用 Maturin 构建 PyO3 扩展。等效器由 Cargo 构建 `pcbeq` 可执行文件，计算不依赖 Python；其 Python 管线和绘图单独构建纯 Python wheel / sdist，通过 `PATH`、`PCBEQ_EXE` 或显式路径定位可执行文件。计算参数及默认值由 Rust CLI 解释，绘图可以独立重跑。uv workspace 锁定 Python 依赖，Cargo workspace 管理 Rust 依赖，两个产品通过文件契约独立运行。
+Maturin 打包解析器源码并构建含 PyO3 扩展的 wheel。等效器由 Cargo 构建 `pcbeq` 可执行文件，计算不依赖 Python；其 Python 管线和绘图单独构建纯 Python wheel / sdist，通过 `PATH`、`PCBEQ_EXE` 或显式路径定位可执行文件。计算参数及默认值由 Rust CLI 解释，绘图可以独立重跑。uv workspace 锁定 Python 依赖，Cargo workspace 管理 Rust 依赖，两个产品通过文件契约独立运行。
 
-等效器的平面几何统一使用纯 Rust `geo` 库，Windows 发布静态链接 C 运行库，无需额外 Python、GEOS 或 VC 运行库。验收关注物理区域、拓扑、面积预算和物性容差，不以特定几何库的顶点排列或分块结果为标准。Shapely 仅可用于开发侧独立验收。
+解析器使用 `clipper2-rust` 完成整数坐标下的布尔运算、偏移和符号扫掠。等效器的平面几何统一使用纯 Rust `geo` 库，Windows 发布静态链接 C 运行库，无需额外 Python、GEOS 或 VC 运行库。验收关注物理区域、拓扑、面积预算和物性容差，不以特定几何库的顶点排列或分块结果为标准。Shapely 仅可用于开发侧独立验收。
 
 `main` 维护 Rust 产品线及其随包 Python 适配。`reference` 同时保留 Python 与 Rust 两条产品线，便于对照。独立安装与跨环境交接见[分发验证工具](../tools/README.md)，数值与图表的发布边界见[输出与发布](decisions/output-publication.md)。

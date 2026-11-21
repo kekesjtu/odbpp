@@ -12,7 +12,7 @@ def execute(document, tmp_path, **options):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     output = tmp_path / "native"
-    summary = run(source, output, px=103, py=97, max_cell_mm=[3, 3], **options)
+    summary = run(source, output, max_cell_mm=[3, 3], **options)
     return summary, read_document(output / "materialmap.json"), output
 
 
@@ -95,7 +95,7 @@ def test_fast_outside_pixels_are_base_even_when_copper_covers_them(tmp_path):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document))
     output = tmp_path / "native"
-    run(source, output, px=100, py=100, max_cell_mm=[10])
+    run(source, output, pixels_per_cell_axis=100, max_cell_mm=[10])
     delivered = read_document(output / "materialmap.json")
     assert len(delivered.regions) == 1
     report = json.loads((output / "diagnostics.json").read_text())
@@ -121,13 +121,30 @@ def test_profile_hole_witness_does_not_remove_its_nested_island(tmp_path):
     assert sum(len(p.interiors) for p in model.geoms) == 1
 
 
+@pytest.mark.parametrize("options,expected", [
+    ({"grid_level": "coarse"}, (256, 4)),
+    ({"grid_level": "standard"}, (512, 8)),
+    ({"grid_level": "fine"}, (512, 8)),
+    ({"max_cell_mm": [0.125, 1]}, (1024, 2)),
+])
+def test_board_sized_presets_and_expert_limits_on_a_narrow_board(tmp_path, options, expected):
+    # A thin track on a 128 x 2 mm board exercises board-only sizing and the 0.25 mm floor.
+    document = build_document(profile=rect(0, 0, 128, 2),
+                              layers=[{"name": "CU", "polygons": [rect(0, 0, 100, 0.012)]}])
+    source = tmp_path / "input.json"
+    source.write_text(json.dumps(document), encoding="utf-8")
+    run(source, tmp_path / "out", pixels_per_cell_axis=1, **options)
+    region, = read_document(tmp_path / "out/materialmap.json").regions
+    assert (region.grid_counts.x, region.grid_counts.y) == expected
+
+
 def test_fast_planning_is_independent_of_material_sampling_density(tmp_path):
     profile = {"island": True, "points": [(0, 0), (12, 0), (12, 12)]}
     source = tmp_path / "input.json"
     source.write_text(json.dumps(build_document(profile=profile, layers=[{"name": "CU", "polygons": []}])))
     layouts = []
-    for density in (2048, 4096):
+    for density in (1, 16):
         output = tmp_path / str(density)
-        run(source, output, px=density, py=density, max_cell_mm=[5])
+        run(source, output, pixels_per_cell_axis=density, max_cell_mm=[5])
         layouts.append([(r.bounds_mm, r.grid_counts) for r in read_document(output / "materialmap.json").regions])
     assert layouts[0] == layouts[1]

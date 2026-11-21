@@ -1,10 +1,11 @@
 //! Coarse PyO3 boundary. Handles share native data, never Python geometry.
 use crate::{
     compose::Engine,
+    geometry::{Point, Ring, boolean, curves},
+    labeling::Font,
     parser::{self, Features, Shape, Surface, Unit},
     symbols,
 };
-use pcb_geometry::{Point, Ring, boolean, curves};
 use pyo3::{
     exceptions::{PyIndexError, PyValueError},
     prelude::*,
@@ -305,6 +306,12 @@ impl NativeFeatures {
     fn custom_references(&self) -> Vec<String> {
         self.data.custom_references()
     }
+    fn font_references(&self) -> std::collections::BTreeSet<&str> {
+        self.data.records.iter().filter_map(|record| match &record.shape {
+            Shape::Label(label) if label.kind.uses_font() => Some(label.font.as_str()),
+            _ => None,
+        }).collect()
+    }
     fn profile(&self) -> PyResult<NativeProfile> {
         self.data
             .profile()
@@ -323,20 +330,26 @@ impl NativeFeatures {
         }
         match &r.shape {
             Shape::Pad {
-                origin,
                 resize,
-                angle,
-                mirrored,
+                placement,
                 ..
             } => {
-                v["origin_mm"] = serde_json::json!(origin);
+                v["origin_mm"] = serde_json::json!(placement.origin);
                 v["resize_mm"] = (*resize).into();
-                v["angle"] = (*angle).into();
-                v["mirrored"] = (*mirrored).into();
+                v["angle"] = placement.angle.into();
+                v["mirrored"] = placement.mirrored.into();
             }
             Shape::Line { start, end, .. } | Shape::Arc { start, end, .. } => {
                 v["start_mm"] = serde_json::json!(start);
                 v["end_mm"] = serde_json::json!(end);
+            }
+            Shape::Label(label) => {
+                v["origin_mm"] = serde_json::json!(label.placement.origin);
+                v["angle"] = label.placement.angle.into();
+                v["mirrored"] = label.placement.mirrored.into();
+                v["size_mm"] = serde_json::json!(label.size);
+                v["font"] = label.font.clone().into();
+                v["text"] = label.value.clone().into();
             }
             _ => {}
         }
@@ -361,7 +374,7 @@ pub fn describe_symbol(name: &str, unit: &str) -> PyResult<Option<String>> {
     if s.chamfer != 0. {
         params.insert("chamfer", s.chamfer);
     }
-    Ok(Some(serde_json::json!({"prefix":s.prefix,"params":params,"unit":s.unit.name(),"supported":symbols::supported(s.prefix)}).to_string()))
+    Ok(Some(serde_json::json!({"prefix":s.prefix,"params":params,"unit":s.unit.name(),"supported":true}).to_string()))
 }
 
 #[pyfunction]
@@ -429,6 +442,20 @@ impl NativeDrawing {
     }
 }
 
+#[pyclass(name = "Font", frozen, module = "pcbkit_rust._pcbkit_native")]
+struct NativeFont {
+    data: Arc<Font>,
+}
+#[pymethods]
+impl NativeFont {
+    #[staticmethod]
+    fn parse(py: Python<'_>, text: &str, path: &str) -> PyResult<Self> {
+        py.detach(|| Font::parse(text, path))
+            .map(|font| Self { data: Arc::new(font) })
+            .map_err(value_error)
+    }
+}
+
 #[pyclass(name = "Composer", module = "pcbkit_rust._pcbkit_native")]
 pub struct Composer {
     engine: Engine,
@@ -436,7 +463,7 @@ pub struct Composer {
 #[pymethods]
 impl Composer {
     #[new]
-    #[pyo3(signature=(definitions,sagitta=0.005,maximum=4096,minimum_stroke=0.,max_depth=16,warn_sweeps=true))]
+    #[pyo3(signature=(definitions,sagitta=0.005,maximum=4096,minimum_stroke=0.,max_depth=16,warn_sweeps=true,*,fonts=None))]
     fn new(
         definitions: HashMap<String, PyRef<'_, NativeFeatures>>,
         sagitta: f64,
@@ -444,12 +471,13 @@ impl Composer {
         minimum_stroke: f64,
         max_depth: usize,
         warn_sweeps: bool,
+        fonts: Option<HashMap<String, PyRef<'_, NativeFont>>>,
     ) -> PyResult<Self> {
         let definitions = definitions
             .into_iter()
             .map(|(k, v)| (k.to_lowercase(), v.data.clone()))
             .collect();
-        Engine::new(
+        let mut engine = Engine::new(
             definitions,
             sagitta,
             maximum,
@@ -457,10 +485,12 @@ impl Composer {
             max_depth,
             warn_sweeps,
         )
-        .map(|engine| Self { engine })
-        .map_err(value_error)
+        .map_err(value_error)?;
+        engine.labels.fonts = fonts.unwrap_or_default().into_iter()
+            .map(|(name, font)| (name.to_lowercase(), font.data.clone())).collect();
+        Ok(Self { engine })
     }
-    #[pyo3(signature=(features,profile,invert,seed,digits))]
+    #[pyo3(signature=(features,profile,invert,seed,digits,*,variables=None))]
     fn layer(
         &mut self,
         py: Python<'_>,
@@ -469,8 +499,10 @@ impl Composer {
         invert: bool,
         seed: bool,
         digits: u32,
+        variables: Option<HashMap<String, String>>,
     ) -> PyResult<(NativeRegion, usize, usize)> {
         py.detach(|| -> parser::Result<_> {
+            self.engine.set_label_variables(variables.unwrap_or_default());
             let base = if seed {
                 profile
                     .ok_or("layer has no usable base profile")?
@@ -497,6 +529,7 @@ impl Composer {
         })
         .map_err(value_error)
     }
+    #[pyo3(signature=(features,profile,invert,seed,*,variables=None))]
     fn drawing(
         &mut self,
         py: Python<'_>,
@@ -504,8 +537,10 @@ impl Composer {
         profile: Option<&NativeRegion>,
         invert: bool,
         seed: bool,
+        variables: Option<HashMap<String, String>>,
     ) -> PyResult<NativeDrawing> {
         py.detach(|| {
+            self.engine.set_label_variables(variables.unwrap_or_default());
             self.engine.drawing(
                 features.map(|f| f.data.as_ref()),
                 profile.map(|p| p.data.as_slice()),
@@ -526,6 +561,7 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NativeRegion>()?;
     m.add_class::<NativeFeatures>()?;
     m.add_class::<NativeProfile>()?;
+    m.add_class::<NativeFont>()?;
     m.add_class::<Composer>()?;
     m.add_class::<NativeDrawing>()?;
     m.add_function(wrap_pyfunction!(region_boolean, m)?)?;

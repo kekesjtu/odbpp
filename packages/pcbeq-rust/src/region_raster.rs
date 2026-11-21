@@ -1,93 +1,45 @@
-//! Independent physical sampling windows; explicit density retains the board lattice.
+//! Pixel-center sampling on the uniform mesh of each region.
 use crate::{
     Result,
-    options::Options,
-    raster::{self, Axis},
+    raster::{Axis, MAX_RASTER_PIXELS},
+    sampling::Window,
 };
+use std::num::NonZeroUsize;
 
 pub struct RegionRaster {
     pub x: Axis,
     pub y: Axis,
-    pub windows: Vec<(usize, usize, usize, usize)>,
+    pub windows: Vec<Window>,
 }
 
 pub fn build(
-    bounds: [f64; 4],
     axes: &[(Vec<f64>, Vec<f64>)],
-    minimum: usize,
-    options: &Options,
+    pixels_per_cell_axis: NonZeroUsize,
 ) -> Result<Vec<RegionRaster>> {
-    let spans = [bounds[2] - bounds[0], bounds[3] - bounds[1]];
-    let automatic = options.px.is_none();
-    let base = if let (Some(x), Some(y)) = (options.px, options.py) {
-        [x, y]
-    } else {
-        std::array::from_fn(|i| {
-            ((4096. * spans[i] / spans[0].max(spans[1])).ceil() as usize).max(1)
-        })
-    };
-    let reference: [Axis; 2] =
-        std::array::from_fn(|i| (bounds[i], spans[i] / base[i] as f64, base[i]));
-    let mut rasters = vec![];
+    let n = pixels_per_cell_axis.get();
+    let mut rasters = Vec::with_capacity(axes.len());
     for (rid, (xs, ys)) in axes.iter().enumerate() {
-        let mut local = [(0., 1., 1); 2];
-        let mut indices = [vec![], vec![]];
-        for (i, lines) in [xs, ys].into_iter().enumerate() {
-            let n = lines.len() - 1;
-            let lo = lines[0];
-            let hi = lines[n];
-            if automatic {
-                let per_cell = ((hi - lo) / n as f64 / reference[i].1).ceil() as usize;
-                let per_cell = per_cell.max(minimum + 1);
-                let count = n
-                    .checked_mul(per_cell)
-                    .ok_or("region raster resource limit")?;
-                local[i] = (lo, (hi - lo) / count as f64, count);
-                indices[i] = (0..=n).map(|j| j * per_cell).collect();
-            } else {
-                // Extend the reference lattice beyond the board bounding box.
-                // Keep signed offsets until shifting to this region's origin.
-                let lattice_index =
-                    |v: f64| ((v - reference[i].0) / reference[i].1 - 0.5 - 1e-9).ceil();
-                let start = lattice_index(lo);
-                let end = lattice_index(hi);
-                local[i] = (
-                    reference[i].0 + start * reference[i].1,
-                    reference[i].1,
-                    (end - start) as usize,
-                );
-                indices[i] = lines
-                    .iter()
-                    .map(|&v| (lattice_index(v) - start) as usize)
-                    .collect();
-            }
+        let (nx, ny) = (xs.len() - 1, ys.len() - 1);
+        if nx
+            .checked_mul(ny)
+            .and_then(|cells| cells.checked_mul(n))
+            .and_then(|rows| rows.checked_mul(n))
+            .is_none_or(|count| count > MAX_RASTER_PIXELS)
+        {
+            return Err(format!(
+                "region {rid}: {nx}x{ny} cells at {n}x{n} pixels per cell exceeds the raster limit of {MAX_RASTER_PIXELS} pixels"
+            ));
         }
-        local[0]
-            .2
-            .checked_mul(local[1].2)
-            .filter(|n| *n <= raster::MAX_RASTER_PIXELS)
-            .ok_or(format!(
-                "region {rid}: raster {}x{} exceeds {} pixels per region",
-                local[0].2,
-                local[1].2,
-                raster::MAX_RASTER_PIXELS
-            ))?;
-        let mut windows = vec![];
-        for (j, y) in indices[1].windows(2).enumerate() {
-            for (i, x) in indices[0].windows(2).enumerate() {
-                if x[1] - x[0] < minimum || y[1] - y[0] < minimum {
-                    return Err(format!(
-                        "region {rid} cell ({i},{j}): insufficient raster samples {}x{}, required {minimum} per axis; increase px/py; geometry is unchanged",
-                        x[1] - x[0],
-                        y[1] - y[0]
-                    ));
-                }
-                windows.push((x[0], x[1], y[0], y[1]));
+        let (width, height) = (nx * n, ny * n);
+        let mut windows = Vec::with_capacity(nx * ny);
+        for bottom in (0..height).step_by(n) {
+            for left in (0..width).step_by(n) {
+                windows.push((left, left + n, bottom, bottom + n));
             }
         }
         rasters.push(RegionRaster {
-            x: local[0],
-            y: local[1],
+            x: (xs[0], (xs[nx] - xs[0]) / width as f64, width),
+            y: (ys[0], (ys[ny] - ys[0]) / height as f64, height),
             windows,
         });
     }

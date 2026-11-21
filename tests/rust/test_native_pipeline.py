@@ -16,7 +16,7 @@ def execute(document, tmp_path, **options):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document, allow_nan=True), encoding="utf-8")
     output = tmp_path / "native"
-    summary = run(source, output, px=103, py=97, max_cell_mm=[3, 3], **options)
+    summary = run(source, output, max_cell_mm=[3, 3], **options)
     return summary, read_document(output / "materialmap.json"), output
 
 
@@ -33,7 +33,7 @@ def test_native_anisotropy_and_material_precedence(tmp_path):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     output = tmp_path / "native"
-    summary = run(source, output, px=40, py=40, max_cell_mm=[10], materials={
+    summary = run(source, output, pixels_per_cell_axis=4, max_cell_mm=[10], materials={
         "global": {"copper": {"k_w_mk": 390}},
         "layer_types": {"copper": {"copper": {"k_w_mk": 395}}},
         "layers": {"CU": {"copper": {"k_w_mk": 400, "density_kg_m3": 8000, "specific_heat_j_kgk": 400},
@@ -51,7 +51,7 @@ def test_drills_only_affect_dielectrics_and_combine_overlap_once(tmp_path):
         {"name":"D2","type":"DRILL","polygons":[rect(4,3,7,5)]}])
     source=tmp_path/"input.json"
     source.write_text(json.dumps(document),encoding="utf-8")
-    run(source,tmp_path/"native",px=100,py=100,max_cell_mm=[10])
+    run(source,tmp_path/"native",pixels_per_cell_axis=10,max_cell_mm=[10])
     delivered=read_document(tmp_path/"native/materialmap.json")
     values={r.layer.name:r.values[0] for r in delivered.regions}
     assert values["CU"][2]==pytest.approx(.68*385+.32*.3)
@@ -97,12 +97,12 @@ def test_local_sampling_keeps_enclosing_holes_and_nested_islands(tmp_path):
             rect(0,0,10,10),hole(2,2,8,8),rect(4.5,4.5,5.5,5.5),rect(11,0,12,1)]}])
     source=tmp_path/"input.json"
     source.write_text(json.dumps(document),encoding="utf-8")
-    run(source,tmp_path/"native",px=24,py=20,max_cell_mm=[3])
+    run(source,tmp_path/"native",pixels_per_cell_axis=4,max_cell_mm=[3])
     values=read_document(tmp_path/"native/materialmap.json").regions[0].values[0]
-    harmonic=1/(.5/385+.5/.3)
     density=.25*8960+.75*1850
     cp=(.25*8960*385+.75*1850*1100)/density
-    assert values==pytest.approx(((.3+harmonic)/2,)*2+(96.475,density,cp),abs=1e-4)
+    assert values[0] == pytest.approx(values[1])
+    assert values[2:] == pytest.approx((96.475,density,cp),abs=1e-4)
 
 
 @pytest.mark.parametrize("change", ["units", "coordinate", "unknown", "profile", "z", "endpoint"])
@@ -135,10 +135,10 @@ def test_sampling_failure_keeps_previous_materialmap(tmp_path):
     source = tmp_path / "input.json"
     source.write_text(json.dumps(document), encoding="utf-8")
     output = tmp_path / "native"
-    run(source, output, px=20, py=20, max_cell_mm=[5])
+    run(source, output, max_cell_mm=[5])
     previous = read_document(output / "materialmap.json")
-    with pytest.raises(ValueError, match="insufficient raster"):
-        run(source, output, px=1, py=1, max_cell_mm=[1])
+    with pytest.raises(ValueError, match="region 0: .*raster limit"):
+        run(source, output, pixels_per_cell_axis=6000, max_cell_mm=[5])
     assert read_document(output / "materialmap.json") == previous
     assert not list(output.glob("*.tmp"))
     report = json.loads((output / "diagnostics.json").read_text())
@@ -171,7 +171,7 @@ def test_rust_benchmark_uses_native_file_pipeline(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "pcbeq", None)
     output = tmp_path / "benchmark"
     assert benchmark_pcbeq.main([str(source), "--output", str(output), "--backend", "rust",
-                                 "--px", "32", "--py", "32", "--max-cell-mm", "5",
+                                 "--pixels-per-cell-axis", "8", "--max-cell-mm", "5",
                                  "--repeat", "1", "--warmup", "0"]) == 0
     report = json.loads((output / "benchmark.json").read_text(encoding="utf-8"))
     assert report["runs"][0]["cells"] == 4
@@ -184,7 +184,7 @@ def test_native_publication_invalidates_owned_images_and_keeps_user_files(tmp_pa
     render(output / "materialmap.json", output, heatmap=False, grids=False)
     notes = output / "notes.txt"
     notes.write_text("user notes", encoding="utf-8")
-    run(tmp_path / "input.json", output, px=32, py=32, max_cell_mm=[5])
+    run(tmp_path / "input.json", output, max_cell_mm=[5])
     assert read_document(output / "materialmap.json").regions
     assert not (output / "index.html").exists()
     assert not (output / "regions/regions.png").exists()

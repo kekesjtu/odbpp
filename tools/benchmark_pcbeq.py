@@ -1,7 +1,7 @@
 """Benchmark intermediate JSON reading through closed MaterialMap output, without images.
 
 Example (from the repository root):
-    uv run python tools/benchmark_pcbeq.py out/minimal-test-odb/rust/pcbkit/intermediate.json         --output tmp/2026-11-02-pcbeq-benchmark/rust --repeat 3
+    uv run python tools/benchmark_pcbeq.py out/minimal-test-odb/rust/pcbkit/intermediate.json --output .scratch/2026-11-02-pcbeq-benchmark/rust --repeat 3
 """
 from __future__ import annotations
 import argparse
@@ -21,12 +21,12 @@ def build_parser():
     parser.add_argument('--backend', choices=('rust',), default='rust')
     parser.add_argument('--repeat', type=int, default=3, help='measured runs (default: 3)')
     parser.add_argument('--warmup', type=int, default=1, help='unmeasured runs (default: 1)')
-    parser.add_argument('--px', type=int)
-    parser.add_argument('--py', type=int)
+    parser.add_argument('--pixels-per-cell-axis', type=int, metavar='N', help='sample N by N pixels per material cell')
     parser.add_argument('--max-area-error-ratio', type=float, default=0.01)
     mesh = parser.add_mutually_exclusive_group()
     mesh.add_argument('--grid-level', choices=('coarse', 'standard', 'fine'))
     mesh.add_argument('--max-cell-mm', type=float, nargs='+', metavar='MM')
+    parser.add_argument('--mode', type=int, choices=(1, 2), help='1 = 2DVTN (default), 2 = SPTRA')
     parser.add_argument('--materials', type=Path, help='production material configuration JSON')
     return parser
 
@@ -43,13 +43,13 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if args.repeat < 1 or args.warmup < 0:
         parser.error('repeat must be positive and warmup must be nonnegative')
-    if (args.px is None) != (args.py is None):
-        parser.error('--px and --py must be provided together')
+    if args.pixels_per_cell_axis is not None and args.pixels_per_cell_axis <= 0:
+        parser.error('--pixels-per-cell-axis must be positive')
     if args.input.resolve() in {args.output.resolve() / name for name in ('materialmap.json', 'materialmap.json.tmp', 'benchmark.json')}:
         parser.error('input must not be overwritten by benchmark outputs')
     errors = (OSError, ValueError, ImportError, RuntimeError)
     try:
-        settings = {'px': args.px, 'py': args.py, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'max_cell_mm': args.max_cell_mm, 'max_area_error_ratio': args.max_area_error_ratio}
+        settings = {'pixels_per_cell_axis': args.pixels_per_cell_axis, 'grid_level': args.grid_level or ('standard' if args.max_cell_mm is None else None), 'mode': args.mode, 'max_cell_mm': args.max_cell_mm, 'max_area_error_ratio': args.max_area_error_ratio}
         args.output.mkdir(parents=True, exist_ok=True)
         report = {'measurement': 'intermediate JSON read/validation through MaterialMap close and rename', 'excluded': ['ODB++ parsing', 'process startup/imports (separately reported in process_wall_s)', 'images/HTML', 'benchmark metadata', 'fsync to physical storage'], 'cache_policy': 'fresh pcbeq process per run; normal OS file cache', 'environment': {'python': sys.version, 'platform': platform.platform(), 'processor': platform.processor(), 'cpu_count': os.cpu_count()}, 'backend': args.backend, 'input': {'path': str(args.input.resolve()), 'bytes': args.input.stat().st_size}, 'options': {**settings, 'materials_path': str(args.materials) if args.materials else None}, 'warmup': args.warmup, 'repeat': args.repeat, 'runs': []}
         for index in range(args.warmup + args.repeat):

@@ -288,7 +288,8 @@ def iter_step_previews(
                 if layer.profile_error is not None:
                     step.base_geometry(layer)
                 drawing = expander.native.drawing(layer.features, layer_profile_region(step, layer, opts.tessellation) if seed else None,
-                                                   layer.is_negative, seed)
+                                                   layer.is_negative, seed,
+                                                   variables=expander.text_variables(step, layer))
                 collect_diagnostics(expander.native, diags)
                 yield LayerPreview(layer=layer, geometry=LayerGeometry(layer.name, Region(), layer.feature_count),
                                    stackup=stackup, round_digits=opts.round_digits, drawing=drawing)

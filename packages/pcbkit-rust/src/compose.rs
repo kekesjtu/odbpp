@@ -1,9 +1,10 @@
 //! Whole-layer expansion: no Python records or intermediate coordinate trees.
 use crate::{
+    geometry::{Point, Ring, boolean, curves},
+    labeling::Labels,
     parser::{Diagnostic, Features, Record, Result, Shape, SymbolRef, Unit, warn},
     symbols,
 };
-use pcb_geometry::{Point, Ring, boolean, curves};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -25,6 +26,8 @@ pub struct Engine {
     pub definitions: HashMap<String, Arc<Features>>,
     cache: HashMap<(String, Unit), Option<Symbol>>,
     stack: Vec<String>,
+    pub labels: Labels,
+    dynamic_symbols: bool,
     pub diagnostics: Vec<Diagnostic>,
     pub sagitta: f64,
     pub maximum: usize,
@@ -51,10 +54,17 @@ impl Engine {
         {
             return Err("invalid expansion tolerance or resource limit".into());
         }
+        let dynamic_symbols = definitions.values().any(|file| {
+            file.records.iter().any(
+                |record| matches!(&record.shape, Shape::Label(label) if label.value.contains("$$")),
+            )
+        });
         Ok(Self {
             definitions,
             cache: HashMap::new(),
             stack: vec![],
+            labels: Labels::default(),
+            dynamic_symbols,
             diagnostics: vec![],
             sagitta,
             maximum,
@@ -62,6 +72,13 @@ impl Engine {
             max_depth,
             warn_sweeps,
         })
+    }
+    pub fn set_label_variables(&mut self, variables: HashMap<String, String>) {
+        if self.dynamic_symbols && variables != self.labels.variables {
+            self.cache
+                .retain(|(name, unit), _| symbols::parse(name, *unit).is_some());
+        }
+        self.labels.variables = variables;
     }
     fn symbol(&mut self, reference: Option<&SymbolRef>, path: &str) -> Result<Option<Symbol>> {
         let Some(reference) = reference else {
@@ -93,28 +110,18 @@ impl Engine {
                     path,
                 );
             }
-            if !symbols::supported(standard.prefix) {
-                warn(
-                    &mut self.diagnostics,
-                    "geometry.symbol_unsupported",
-                    format!(
-                        "standard symbol family {:?} ({:?}) is not supported",
-                        standard.prefix, reference.name
-                    ),
-                    path,
-                );
-                None
-            } else {
-                let stroke = match standard.prefix {
-                    "r" => Stroke::Round(standard.size(0) / 2.),
-                    "s" => Stroke::Square(standard.size(0)),
-                    _ => Stroke::Custom,
-                };
-                Some(Symbol {
-                    rings: Arc::new(standard.region(self.sagitta, self.maximum)?),
-                    stroke,
-                })
-            }
+            let stroke = match standard.prefix {
+                "r" => Stroke::Round(standard.size(0) / 2.),
+                "s" => Stroke::Square(standard.size(0)),
+                _ => Stroke::Custom,
+            };
+            let rings = standard
+                .region(self.sagitta, self.maximum)
+                .map_err(|error| format!("symbol {:?}: {error}", reference.name))?;
+            Some(Symbol {
+                rings: Arc::new(rings),
+                stroke,
+            })
         } else {
             let name = reference.name.to_lowercase();
             if self.stack.contains(&name) {
@@ -207,11 +214,9 @@ impl Engine {
                     rings.extend(surface.region(self.sagitta, self.maximum)?)
                 }
                 Shape::Pad {
-                    origin,
+                    placement,
                     symbol,
                     resize,
-                    angle,
-                    mirrored,
                 } => {
                     let Some(symbol) = self.symbol(symbol.as_ref(), &file.path)? else {
                         continue;
@@ -224,32 +229,30 @@ impl Engine {
                     } else {
                         symbol.rings.as_ref()
                     };
-                    let (s, c) = angle.to_radians().sin_cos();
-                    for (points, hole) in pattern {
-                        let mut points: Vec<Point> = points
-                            .iter()
-                            .map(|&(x, y)| {
-                                let (x, y) = (x * c + y * s, -x * s + y * c);
-                                (
-                                    x + origin.0,
-                                    if *mirrored {
-                                        -y + origin.1
-                                    } else {
-                                        y + origin.1
-                                    },
-                                )
-                            })
-                            .collect();
-                        if *mirrored {
-                            points.reverse();
-                        }
-                        rings.push((points, *hole));
-                    }
+                    let first = rings.len();
+                    rings.extend_from_slice(pattern);
+                    placement.transform(&mut rings[first..]);
+                }
+                Shape::Label(label) => {
+                    let artwork = self
+                        .labels
+                        .region(
+                            label,
+                            self.sagitta,
+                            self.maximum,
+                            &mut self.diagnostics,
+                            &file.path,
+                        )
+                        .map_err(|error| format!("{}:{}: {error}", file.path, record.line))?;
+                    rings.extend(artwork);
                 }
                 Shape::Line { symbol, .. } | Shape::Arc { symbol, .. } => {
                     let Some(resolved) = self.symbol(symbol.as_ref(), &file.path)? else {
                         continue;
                     };
+                    if resolved.rings.is_empty() && matches!(resolved.stroke, Stroke::Custom) {
+                        continue;
+                    }
                     let path = self.path(&record.shape, file)?;
                     if path.len() < 2 {
                         continue;

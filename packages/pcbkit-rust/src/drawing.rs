@@ -1,5 +1,5 @@
 //! Ordered paint operations for preview-only layers; no whole-layer boolean.
-use pcb_geometry::{Point, Ring};
+use crate::geometry::{Point, Ring};
 use std::fmt::Write;
 
 pub struct Paint {

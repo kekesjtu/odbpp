@@ -49,8 +49,13 @@ class Expander:
         opts = self.options
         self.native = Composer(library.files if library else {}, opts.tessellation.sagitta_mm,
             opts.tessellation.max_segments, opts.minimum_stroke_mm,
-            opts.max_symbol_depth, opts.warn_unsupported_strokes)
+            opts.max_symbol_depth, opts.warn_unsupported_strokes,
+            fonts=library.fonts if library else None)
+        self._text_variables = library.text_variables if library else {}
         self._stackups = {}
+
+    def text_variables(self, step, layer):
+        return dict(self._text_variables, STEP=step.name, LAYER=layer.name)
 
     def stackup(self, step):
         if step.name not in self._stackups:
@@ -68,7 +73,7 @@ def expand_layer(layer, step, *, expander, round_digits=4, with_dielectric_base=
     profile = layer_profile_region(step, layer, expander.options.tessellation) if seed or dielectric else None
     try:
         region, runs, collapsed = expander.native.layer(layer.features, profile,
-            layer.is_negative, seed, round_digits)
+            layer.is_negative, seed, round_digits, variables=expander.text_variables(step, layer))
     finally:
         collect_diagnostics(expander.native, expander.diagnostics)
     if not region and (not dielectric or layer.feature_count):
