@@ -188,11 +188,8 @@ def _print_summary(job: Job, summary: dict[str, Any], *, max_records: int) -> No
                 print(f"      | {raw}")
 
     symbols = symbol_summary(job)
-    unsupported = [n for n, e in symbols["standard"].items() if not e["supported"]]
     print(f"\nsymbols: {len(symbols['standard'])} standard, "
           f"{len(symbols['custom'])} user-defined")
-    if unsupported:
-        print(f"  not expanded natively: {', '.join(sorted(unsupported))}")
 
     items = job.diagnostics.items if job.diagnostics is not None else []
     print(f"\ndiagnostics: {len(items)}")

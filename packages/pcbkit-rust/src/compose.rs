@@ -93,28 +93,18 @@ impl Engine {
                     path,
                 );
             }
-            if !symbols::supported(standard.prefix) {
-                warn(
-                    &mut self.diagnostics,
-                    "geometry.symbol_unsupported",
-                    format!(
-                        "standard symbol family {:?} ({:?}) is not supported",
-                        standard.prefix, reference.name
-                    ),
-                    path,
-                );
-                None
-            } else {
-                let stroke = match standard.prefix {
-                    "r" => Stroke::Round(standard.size(0) / 2.),
-                    "s" => Stroke::Square(standard.size(0)),
-                    _ => Stroke::Custom,
-                };
-                Some(Symbol {
-                    rings: Arc::new(standard.region(self.sagitta, self.maximum)?),
-                    stroke,
-                })
-            }
+            let stroke = match standard.prefix {
+                "r" => Stroke::Round(standard.size(0) / 2.),
+                "s" => Stroke::Square(standard.size(0)),
+                _ => Stroke::Custom,
+            };
+            let rings = standard
+                .region(self.sagitta, self.maximum)
+                .map_err(|error| format!("symbol {:?}: {error}", reference.name))?;
+            Some(Symbol {
+                rings: Arc::new(rings),
+                stroke,
+            })
         } else {
             let name = reference.name.to_lowercase();
             if self.stack.contains(&name) {
@@ -230,14 +220,7 @@ impl Engine {
                             .iter()
                             .map(|&(x, y)| {
                                 let (x, y) = (x * c + y * s, -x * s + y * c);
-                                (
-                                    x + origin.0,
-                                    if *mirrored {
-                                        -y + origin.1
-                                    } else {
-                                        y + origin.1
-                                    },
-                                )
+                                ((if *mirrored { -x } else { x }) + origin.0, y + origin.1)
                             })
                             .collect();
                         if *mirrored {
@@ -250,6 +233,9 @@ impl Engine {
                     let Some(resolved) = self.symbol(symbol.as_ref(), &file.path)? else {
                         continue;
                     };
+                    if resolved.rings.is_empty() && matches!(resolved.stroke, Stroke::Custom) {
+                        continue;
+                    }
                     let path = self.path(&record.shape, file)?;
                     if path.len() < 2 {
                         continue;

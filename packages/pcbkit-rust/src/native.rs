@@ -361,7 +361,7 @@ pub fn describe_symbol(name: &str, unit: &str) -> PyResult<Option<String>> {
     if s.chamfer != 0. {
         params.insert("chamfer", s.chamfer);
     }
-    Ok(Some(serde_json::json!({"prefix":s.prefix,"params":params,"unit":s.unit.name(),"supported":symbols::supported(s.prefix)}).to_string()))
+    Ok(Some(serde_json::json!({"prefix":s.prefix,"params":params,"unit":s.unit.name(),"supported":true}).to_string()))
 }
 
 #[pyfunction]

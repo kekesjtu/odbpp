@@ -60,9 +60,25 @@ P 1 2 7 P 4 9 90;0=3,1,2=17;ID=42
 def test_placement_rotates_then_mirrors_then_translates():
     definition = features(surface(0, 0, 1, 2))
     region = compose("UNITS=MM\n$3 asymmetric\nP 10 20 3 P 0 9 90\n", definitions={"asymmetric": definition})
-    assert region.bounds == pytest.approx((10, 20, 12, 21))
+    assert region.bounds == pytest.approx((8, 19, 10, 20))
     assert region.area == pytest.approx(2)
     assert all(not r.is_hole for r in region.rings)
+
+
+def test_misc_mirrors_asymmetric_standard_pads():
+    f = features("UNITS=MM\n$0 hplate4000x2000x1000\nP 5 5 0 P 0 4\n")
+    drawing = native.Composer({}).drawing(f, None, False, False)
+    [(positive, width, _, [(vertices, hole)])] = drawing.commands()
+    assert positive and width == 0 and not hole
+    assert set(map(tuple, vertices)) == {(3, 5), (4, 4), (4, 6), (7, 4), (7, 6)}
+
+
+def test_text_and_barcode_still_report_unsupported_records():
+    f = features("UNITS=MM\nT 5 5 standard P 0 1 1 1 'text' 1\n"
+                 "B 5 5 UPC39 standard P 0 E 1 2 N N N N T '123'\n")
+    warnings = [d["code"] for d in json.loads(f.diagnostics_json())]
+    assert warnings.count("features.unsupported_record") == 2
+    assert f.actual_count == 0
 
 
 def test_polarity_runs_preserve_later_refill():
@@ -159,7 +175,8 @@ def test_standard_names_require_complete_grammar():
     assert native.describe_symbol("special_0.770x0.840", "MM") is None
     assert native.describe_symbol("rect1000x500xr-100", "MM") is None
     assert json.loads(native.describe_symbol("rect1000x500xr100x12", "MM"))["supported"]
-    assert not json.loads(native.describe_symbol("thr1000x500x0x4x100", "MM"))["supported"]
+    assert native.describe_symbol("thr1000x500x0x4x100xextra", "MM") is None
+    assert native.describe_symbol("oblong_ths1000x500x0x4x100x100xrr", "MM") is None
 
 
 @pytest.mark.parametrize("name,area", [
