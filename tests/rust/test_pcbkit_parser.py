@@ -73,14 +73,6 @@ def test_misc_mirrors_asymmetric_standard_pads():
     assert set(map(tuple, vertices)) == {(3, 5), (4, 4), (4, 6), (7, 4), (7, 6)}
 
 
-def test_text_and_barcode_still_report_unsupported_records():
-    f = features("UNITS=MM\nT 5 5 standard P 0 1 1 1 'text' 1\n"
-                 "B 5 5 UPC39 standard P 0 E 1 2 N N N N T '123'\n")
-    warnings = [d["code"] for d in json.loads(f.diagnostics_json())]
-    assert warnings.count("features.unsupported_record") == 2
-    assert f.actual_count == 0
-
-
 def test_polarity_runs_preserve_later_refill():
     body = surface(0, 0, 10, 10) + surface(2, 2, 8, 8, "N") + surface(4, 4, 6, 6)
     region = compose(body)

@@ -16,7 +16,7 @@ Linux / macOS 下使用 `export PCBEQ_EXE="$PWD/target/release/pcbeq"`。大部�
 
 | 范围 | 覆盖内容 | 从仓库根目录运行 |
 | --- | --- | --- |
-| ODB++ 解析 | 输入包装、压缩、单位、叠层、极性、符号与预览 | `uv run --extra test pytest tests/rust/test_parser_inputs.py tests/rust/test_parser_semantics.py tests/rust/test_pcbkit_parser.py` |
+| ODB++ 解析 | 输入包装、压缩、单位、叠层、极性、符号、文字、条码与预览 | `uv run --extra test pytest tests/rust/test_parser_inputs.py tests/rust/test_parser_semantics.py tests/rust/test_pcbkit_parser.py tests/rust/test_text_barcode.py` |
 | 跨产品几何 | 板与层的轮廓、孔洞、有效域、钻孔跨度与拓扑 | `uv run --extra test pytest tests/rust/test_layer_profiles.py tests/rust/test_drill_topology.py` |
 | 等效计算与发布 | 几何规划、采样密度、材料优先级、各向异性、诊断、图表与失败回滚 | `uv run --extra test pytest tests/rust/test_fast_planning.py tests/rust/test_native_pipeline.py tests/rust/test_diagnostics.py` |
 | 数值与产品边界 | 圆弧端点、坐标有效性、两产品的运行环境 | `uv run --extra test pytest tests/rust/test_numerical.py` |

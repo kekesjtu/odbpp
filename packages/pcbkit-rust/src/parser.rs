@@ -1,5 +1,6 @@
 //! ODB++ line records. Coordinates, attributes and curves stay native.
 use crate::geometry::{Point, Ring, boolean, curves};
+use crate::labeling::{Label, LabelKind};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::{
@@ -98,14 +99,34 @@ impl Surface {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Placement {
+    pub origin: Point,
+    pub angle: f64,
+    pub mirrored: bool,
+}
+impl Placement {
+    pub fn transform(self, rings: &mut [Ring]) {
+        let (sin, cos) = self.angle.to_radians().sin_cos();
+        for (points, _) in rings {
+            for (x, y) in points.iter_mut() {
+                let (u, v) = (*x * cos + *y * sin, -*x * sin + *y * cos);
+                *x = (if self.mirrored { -u } else { u }) + self.origin.0;
+                *y = v + self.origin.1;
+            }
+            if self.mirrored {
+                points.reverse();
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Shape {
     Pad {
-        origin: Point,
+        placement: Placement,
         symbol: Option<SymbolRef>,
         resize: f64,
-        angle: f64,
-        mirrored: bool,
     },
     Line {
         start: Point,
@@ -119,6 +140,7 @@ pub enum Shape {
         clockwise: bool,
         symbol: Option<SymbolRef>,
     },
+    Label(Label),
     Surface(Surface),
 }
 impl Shape {
@@ -127,6 +149,7 @@ impl Shape {
             Self::Pad { .. } => "pad",
             Self::Line { .. } => "line",
             Self::Arc { .. } => "arc",
+            Self::Label(label) => label.kind.name(),
             Self::Surface(_) => "surface",
         }
     }
@@ -205,7 +228,13 @@ fn tokens(s: &str) -> Result<Vec<&str>> {
     let mut tail = s.trim();
     while !tail.is_empty() {
         if let Some(rest) = tail.strip_prefix('\'') {
-            let end = rest.find('\'').ok_or("unterminated quoted string")?;
+            let mut quotes = rest.match_indices('\'').map(|(i, _)| i).peekable();
+            let end = loop {
+                let open_or_close = quotes.next().ok_or("unterminated quoted string")?;
+                if quotes.next_if_eq(&(open_or_close + 1)).is_none() {
+                    break open_or_close;
+                }
+            };
             result.push(&rest[..end]);
             tail = &rest[end + 1..];
             if !tail.is_empty() && !tail.starts_with(char::is_whitespace) {
@@ -265,6 +294,109 @@ fn polarity(t: &[&str], i: usize) -> Result<bool> {
 }
 fn point(t: &[&str], i: usize, unit: Unit) -> Result<Point> {
     Ok((unit.coord(num(t, i)?), unit.coord(num(t, i + 1)?)))
+}
+
+fn placement(t: &[&str], unit: Unit, i: usize) -> Result<(Placement, usize)> {
+    let code = t.get(i).and_then(|s| s.parse::<u8>().ok());
+    let (angle, mirrored, next) = match code {
+        Some(code @ 0..=7) => ((code % 4) as f64 * 90., code >= 4, i + 1),
+        Some(code @ (8 | 9)) => (num(t, i + 1)?.rem_euclid(360.), code == 9, i + 2),
+        _ => return Err("invalid orientation definition (expected 0-9)".into()),
+    };
+    Ok((
+        Placement {
+            origin: point(t, 1, unit)?,
+            angle,
+            mirrored,
+        },
+        next,
+    ))
+}
+
+fn flag(value: &str) -> Result<bool> {
+    match value {
+        "Y" | "y" => Ok(true),
+        "N" | "n" => Ok(false),
+        _ => Err(format!("expected Y or N, got {value:?}")),
+    }
+}
+
+fn label(t: &[&str], raw: &str, unit: Unit, barcode: bool) -> Result<(Shape, bool, i64)> {
+    let font_index = if barcode { 4 } else { 3 };
+    let positive = polarity(t, font_index + 1)?;
+    let (placement, next) = placement(t, unit, font_index + 2)?;
+    let (size, value, kind) = if barcode {
+        let [
+            element,
+            _,
+            _,
+            full_ascii,
+            checksum,
+            background,
+            caption,
+            position,
+            value,
+        ] = &t[next..]
+        else {
+            return Err(
+                "B needs E, element width, height, four flags, caption position and text".into(),
+            );
+        };
+        if !t[3].eq_ignore_ascii_case("UPC39") || !element.eq_ignore_ascii_case("E") {
+            return Err("B requires UPC39 with element type E".into());
+        }
+        let top = match *position {
+            "T" | "t" => true,
+            "B" | "b" => false,
+            _ => return Err("barcode caption position must be T or B".into()),
+        };
+        let caption_top = flag(caption)?.then_some(top);
+        (
+            point(t, next + 1, unit)?,
+            *value,
+            LabelKind::Barcode {
+                full_ascii: flag(full_ascii)?,
+                checksum: flag(checksum)?,
+                background: flag(background)?,
+                caption_top,
+            },
+        )
+    } else {
+        let [_, _, _, value, version] = &t[next..] else {
+            return Err("T needs character width, height, width factor, text and version".into());
+        };
+        let centred = match *version {
+            "0" => false,
+            "1" => true,
+            _ => return Err("text version must be 0 or 1".into()),
+        };
+        let stroke = Unit::Inch.size(12.) * num(t, next + 2)?;
+        if !stroke.is_finite() || stroke < 0. {
+            return Err("text width factor must be finite and nonnegative".into());
+        }
+        (
+            point(t, next, unit)?,
+            *value,
+            LabelKind::Text { stroke, centred },
+        )
+    };
+    if !raw.contains('\'') {
+        return Err("text must be enclosed in single quotes".into());
+    }
+    if size.0 <= 0. || size.1 <= 0. || !size.0.is_finite() || !size.1.is_finite() {
+        return Err("text or barcode dimensions must be finite and positive".into());
+    }
+    Ok((
+        Shape::Label(Label {
+            placement,
+            size,
+            font: t[font_index].to_lowercase(),
+            value: value.replace("''", "'"),
+            kind,
+        }),
+        positive,
+        0,
+    ))
 }
 
 pub fn parse(
@@ -410,15 +542,6 @@ pub fn parse(
                     return Ok(());
                 }
             }
-            if matches!(kind, "T" | "B") {
-                warn(
-                    &mut file.diagnostics,
-                    "features.unsupported_record",
-                    format!("{kind} records are outside this parser's scope; ignored"),
-                    path,
-                );
-                return Ok(());
-            }
             if surface.is_some() {
                 return Err("feature record inside an unterminated surface".into());
             }
@@ -513,21 +636,14 @@ pub fn parse(
                     pos += 1;
                     let dcode = integer(&t, pos)?;
                     pos += 1;
-                    let code = integer(&t, pos)?;
-                    let (angle, mirrored) = match code {
-                        0..=7 => ((code % 4) as f64 * 90., code >= 4),
-                        8 | 9 => (num(&t, pos + 1)?.rem_euclid(360.), code == 9),
-                        _ => return Err("invalid orientation definition (expected 0-9)".into()),
-                    };
+                    let (placement, _) = placement(&t, file.unit, pos)?;
                     (
                         Shape::Pad {
-                            origin: point(&t, 1, file.unit)?,
+                            placement,
                             symbol: usize::try_from(si)
                                 .ok()
                                 .and_then(|i| symbol_table.get(&i).cloned()),
                             resize,
-                            angle,
-                            mirrored,
                         },
                         positive,
                         dcode,
@@ -568,6 +684,7 @@ pub fn parse(
                         dcode,
                     )
                 }
+                "T" | "B" => label(&t, secs[0], file.unit, kind == "B")?,
                 _ => (
                     Shape::Surface(Surface::default()),
                     polarity(&t, 1)?,

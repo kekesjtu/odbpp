@@ -155,6 +155,11 @@ def _load(archive: OdbArchive, source: str, opts: LoadOptions, diags: Diagnostic
         # library is attached even when nothing needed preloading, because
         # standard symbols are resolved through it too.
         symbols.preload(_referenced_symbols(symbols, job))
+        product_name = job.info.raw.get("PRODUCT_MODEL_NAME") or job.info.job_name or root.rsplit("/", 1)[-1]
+        symbols.preload_fonts(
+            (layer.features for step in job.steps.values() for layer in step.layers),
+            product_name,
+        )
         if opts.check_symbols:
             from ._pcbkit_native import symbol_cycles
             for chain in symbol_cycles(symbols.files):

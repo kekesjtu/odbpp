@@ -4,6 +4,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 mod compose;
 mod drawing;
 mod geometry;
+mod labeling;
 mod native;
 mod parser;
 mod symbols;
